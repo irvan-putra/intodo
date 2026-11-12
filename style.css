@@ -35,12 +35,15 @@ section p { font-size: 14px; }
 .closing { margin-top: 32px; border-top: 1px solid var(--ds-hairline); padding-top: 12px; font-size: 13px; color: var(--ds-ink-2); }
 .closing a { color: var(--ds-ink); }
 
-/* Review canvas. Height is set from the element's rendered width in JS
-   (ResizeObserver), so the viewport is a true square on every screen -
-   no breakpoint or dvh guessing. */
+/* Review canvas: square at every viewport - height follows the element's
+   own rendered width. CSS aspect-ratio plus a JS px pin (ResizeObserver);
+   no breakpoint or dvh guessing (scaled viewers lie about width). */
 .rc-viewport {
     position: relative;
     width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    min-height: 0;
     overflow: hidden;
     border: 1px solid var(--ds-hairline);
     border-radius: 12px;
