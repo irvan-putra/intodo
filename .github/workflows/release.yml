@@ -49,6 +49,11 @@ jobs:
           [[ "$IN_CODE" =~ ^[0-9]+$ ]] && [ "$IN_CODE" -gt 0 ] || { echo "bad versionCode: $IN_CODE"; exit 1; }
           cur_name=$(grep -oP "versionName '\K[^']+" app/build.gradle)
           cur_code=$(grep -oP 'versionCode \K[0-9]+' app/build.gradle)
+          if [ "$IN_CODE" = "$cur_code" ] && [ "$IN_NAME" = "$cur_name" ]; then
+            echo "already stamped v$IN_NAME ($IN_CODE) by an earlier run; reusing HEAD"
+            echo "STAMP_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+            exit 0
+          fi
           [ "$IN_CODE" -gt "$cur_code" ] || { echo "versionCode $IN_CODE not above current $cur_code"; exit 1; }
           [ "$IN_NAME" != "$cur_name" ] || { echo "versionName unchanged ($cur_name)"; exit 1; }
           # monotonic against the ACTUAL published release, not just the checked-in gradle
