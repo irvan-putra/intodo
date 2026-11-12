@@ -1,0 +1,20 @@
+plugins { id 'com.android.application' }
+android {
+    buildFeatures { buildConfig true }
+    namespace 'com.instinct.widget'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.instinct.widget'
+        minSdk 26
+        targetSdk 34
+        versionCode 3
+        versionName '0.3-test'
+        // The personal sync endpoint is build-time config, not source: put
+        // FEED_URL=https://... in local.properties (gitignored). Public source
+        // builds without it and the app reports "feed URL not configured".
+        def lp = new Properties()
+        def lf = rootProject.file('local.properties')
+        if (lf.exists()) lp.load(lf.newInputStream())
+        buildConfigField 'String', 'FEED_URL', '\"' + lp.getProperty('FEED_URL', '') + '\"'
+    }
+}
