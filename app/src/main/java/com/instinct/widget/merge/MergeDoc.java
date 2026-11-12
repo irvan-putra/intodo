@@ -121,13 +121,18 @@ public final class MergeDoc {
     }
 
     public static final Set<String> FIELDS = new LinkedHashSet<>(java.util.Arrays.asList("title", "note", "due", "done"));
+    // trim decisions are recorded as ordinary field writes named _trim_<field>
+    public static boolean isTrimField(String field) {
+        return field.startsWith("_trim_") && FIELDS.contains(field.substring(6));
+    }
+
     public static final String DELETED = "deleted";
 
     private final Map<String, Item> items = new HashMap<>();
 
     /** Apply one op. Idempotent; older or duplicate stamps are recorded in history, never applied. */
     public void apply(String itemId, String field, String value, Stamp stamp) {
-        if (!FIELDS.contains(field) && !DELETED.equals(field)) {
+        if (!FIELDS.contains(field) && !DELETED.equals(field) && !isTrimField(field)) {
             throw new IllegalArgumentException("unknown field: " + field);
         }
         Item it = items.computeIfAbsent(itemId, Item::new);
