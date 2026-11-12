@@ -56,7 +56,10 @@
 
   function sendOps(ops) {
     // one update may carry several ops; payload stays JSON-serializable
-    window.webxdc.sendUpdate({ payload: { ops }, info: opsInfo(ops) }, '');
+    // href: harmless anchor so Delta Chat keeps every notice as its own
+    // message (core only collapses consecutive infos when href is absent)
+    // and tapping one opens the app. No hash routing, so it opens at root.
+    window.webxdc.sendUpdate({ payload: { ops }, info: opsInfo(ops), href: '#a' }, '');
   }
 
   function opsInfo(ops) {
