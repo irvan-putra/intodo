@@ -19,5 +19,6 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
         </receiver>
         <service android:name=".WidgetService" android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <activity android:name=".canvas.ReviewCanvasActivity" android:exported="false" />
     </application>
 </manifest>

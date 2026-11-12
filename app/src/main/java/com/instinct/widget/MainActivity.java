@@ -41,6 +41,8 @@ public class MainActivity extends Activity {
         listView.setAdapter(adapter);
 
         Button generate = findViewById(R.id.generateKey);
+        findViewById(R.id.openCanvas).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, com.instinct.widget.canvas.ReviewCanvasActivity.class)));
         Button copy = findViewById(R.id.copyKey);
         TextView repair = findViewById(R.id.repair);
         generate.setOnClickListener(v -> generateKeys());

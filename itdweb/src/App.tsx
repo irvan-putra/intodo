@@ -62,11 +62,11 @@ const DEFAULT_POS: Record<string, Pos> = {
     source: { x: 160, y: 620 },
     rule: { x: 1240, y: 620 },
     gaps: { x: 690, y: 820 },
-    property: { x: 40, y: 1100 },
-    mutation: { x: 400, y: 1100 },
-    fuzz: { x: 760, y: 1100 },
-    load: { x: 1120, y: 1100 },
-    smoke: { x: 1420, y: 1100 },
+    property: { x: 40, y: 1200 },
+    mutation: { x: 400, y: 1200 },
+    fuzz: { x: 760, y: 1200 },
+    load: { x: 1120, y: 1200 },
+    smoke: { x: 1420, y: 1200 },
 };
 
 const EDGES: [string, string][] = [
