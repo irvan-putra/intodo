@@ -93,6 +93,39 @@ public class CanvasMathTest {
     }
 
     @Test
+    public void defaultOpenShowsReadableCentralCard() {
+        Random rnd = new Random(5);
+        for (int i = 0; i < 500; i++) {
+            double vpW = 320 + rnd.nextDouble() * 160; // phone widths in dp
+            double vpH = 400 + rnd.nextDouble() * 500;
+            Map<String, CanvasMath.Pos> pos = CanvasMath.defaultPos();
+            CanvasMath.Cam cam = CanvasMath.defaultOpenCam(vpW, pos);
+            assertCamValid(cam);
+            // centered on the "change" card
+            CanvasMath.Pos ctr = CanvasMath.center("change", pos);
+            CanvasMath.Pos s = CanvasMath.toScreen(ctr, cam, vpW, vpH);
+            assertTrue("default x center", near(s.x, vpW / 2));
+            assertTrue("default y center", near(s.y, vpH / 2));
+            // card spans about 90% of the viewport width when unclamped
+            double cardW = CanvasMath.CARD_SIZES.get("change")[0];
+            double idealZ = vpW / (cardW + 40);
+            if (idealZ >= CanvasMath.ZMIN && idealZ <= CanvasMath.ZMAX) {
+                double frac = cardW * cam.z / vpW;
+                assertTrue("default readable width " + frac, frac > 0.85 && frac < 0.95);
+            }
+            // always closer than (or equal to) the whole-world fit
+            assertTrue("default closer than fit", cam.z >= CanvasMath.fitCam(vpW, vpH).z - EPS);
+        }
+    }
+
+    @Test
+    public void defaultOpenCapsZoomOnWideViewports() {
+        Map<String, CanvasMath.Pos> pos = CanvasMath.defaultPos();
+        CanvasMath.Cam cam = CanvasMath.defaultOpenCam(4000, pos);
+        assertTrue("zoom capped at 1.2", cam.z <= 1.2 + EPS);
+    }
+
+    @Test
     public void pinchKeepsAnchorStable() {
         Random rnd = new Random(4);
         for (int i = 0; i < 2000; i++) {

@@ -126,6 +126,18 @@ public final class CanvasMath {
         return clampCam(new Cam(ctr.x, ctr.y, clampZ(Math.min(vpW / (CARD_SIZES.get(id)[0] + 80), 1.2))));
     }
 
+    /**
+     * Default opening view when no layout is stored: the central "change" card
+     * readable at about 90% of the viewport width, instead of the whole-world
+     * fit. The Fit control still gives the overview, and a stored layout always
+     * wins over this default. Android default only;
+     * intentionally not mirrored into the itdxdc/itdweb ports.
+     */
+    public static Cam defaultOpenCam(double vpW, Map<String, Pos> pos) {
+        Pos ctr = center("change", pos);
+        return clampCam(new Cam(ctr.x, ctr.y, clampZ(Math.min(vpW / (CARD_SIZES.get("change")[0] + 40), 1.2))));
+    }
+
     public static Cam zoomCam(Cam cam, double f) {
         return clampCam(new Cam(cam.x, cam.y, clampZ(cam.z * f)));
     }

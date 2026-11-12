@@ -195,9 +195,12 @@ public class ReviewCanvasView extends View {
         if (w <= 0 || h <= 0) return;
         if (!fitted) {
             fitted = true;
-            if (saved == null) cam = CanvasMath.fitCam(w / density, h / density);
+            // No stored layout: open on the readable central card, not the
+            // whole-map fit. A stored custom view always wins (saved != null),
+            // and the Fit control still restores the overview.
+            if (saved == null) cam = CanvasMath.defaultOpenCam(w / density, pos);
         } else if (!viewTouched && saved == null) {
-            cam = CanvasMath.fitCam(w / density, h / density);
+            cam = CanvasMath.defaultOpenCam(w / density, pos);
         }
     }
 
