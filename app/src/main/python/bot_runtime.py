@@ -106,6 +106,47 @@ def _parse_membership(text, bot_addr):
     return None
 
 
+# --- structural membership attribution (rev9.3) ---------------------------
+# Evidence base (core v2.69.0 source):
+#  - mimeparser.rs: a Chat-Group-Member-Added/Removed header sets
+#    SystemMessage MemberAddedToGroup=4 / MemberRemovedFromGroup=5.
+#  - receive_imf.rs: the membership message is inserted with Param::Cmd,
+#    Param::ContactAddedRemoved (affected contact id) and from_id = the
+#    actor; an EMPTY better_msg sends the whole message to ChatId::TRASH
+#    instead of the chat (no visible info message), and implicit
+#    member-list reconciliation adds SELF silently (no info message).
+#  - message.rs: is_info = from/to INFO or cmd != Unknown;
+#    get_info_contact_id reads ContactAddedRemoved; ContactId::SELF == 1;
+#    load_from_db has `AND chat_id!=3` - TRASHED MESSAGES ARE UNREADABLE
+#    through the public message API, so trashed evidence cannot be
+#    recovered client-side (get_message_ids(3) lists ids, get_message refuses each).
+# So text parsing CANNOT be the primary mechanism: the visible text may be
+# absent (trashed) or carry only a display name. Structure first, text as
+# fallback for old cores.
+SELF_CONTACT_ID = 1
+SPECIAL_CONTACT_IDS = {1, 2, 5}   # SELF, INFO, DEVICE
+_CMD_ACTION = {"MemberAddedToGroup": "added",
+               "MemberRemovedFromGroup": "removed"}
+_STOCK_WORDS = frozenset("""
+you were added removed by member group left the a to from image changed
+deleted name description messages are end-to-end encrypted me your
+""".split())
+
+
+def _redact_template(text):
+    """Stock-string TEMPLATE with addresses/names hidden, for on-screen logs."""
+    t = re.sub(r"\S+@\S+", "[e]", (text or "").strip().lower())
+    out = []
+    for tok in t.split():
+        core = tok.strip(".,!\"'")
+        # keep ONLY stock words and punctuation: a numeric/symbol contact
+        # name (e.g. a phone number) must not leak into the screenshot log
+        out.append(tok if (core in _STOCK_WORDS
+                           or not any(ch.isalnum() for ch in core))
+                   else "[w]")
+    return " ".join(out)[:60]
+
+
 def _state_path(files_dir):
     return os.path.join(files_dir, STATE_FILE)
 
@@ -263,35 +304,97 @@ class OwnerControl:
     def _served_chat_ids(self):
         return {int(k) for k in self._st().get("chats", {})}
 
-    def _bot_add_actor(self, chat_id):
-        """(action, actor) of the LATEST membership change affecting the bot.
+    def _membership_scan(self, chat_id):
+        """Structural membership scan of a chat's visible messages.
 
-        Parses the chat's info messages via _parse_membership. None when no
-        such message is visible, e.g. the add predates the relay's
-        retention window. Same inherited limit as the official client:
-        system-message texts are core-generated English here."""
-        from deltachat_rpc_client import Chat
-        latest = None
-        try:
-            msgs = Chat(self.account, chat_id).get_messages()
-        except Exception as e:
-            log.warning("membership scan failed for chat %s: %s", chat_id, e)
-            return None
-        for m in msgs:
+        Returns (events, first_visible_ts, n_scanned, n_info). Each event:
+        {"action", "affected"("self"/"other"/"unknown"), "actor"(addr|None),
+         "ts", "basis"("cmd"/"text"), "tmpl"}. Trashed messages are
+        unreachable by design (message.rs load_from_db excludes chat 3),
+        so only visible evidence can ever attribute."""
+        from deltachat_rpc_client import Chat, Contact
+        events, n_scanned, n_info = [], 0, 0
+        first_visible_ts = None
+        idx = 0   # chat-order tiebreak when snapshots lack timestamps
+
+        def scan(cid, loc):
+            nonlocal first_visible_ts, n_scanned, n_info, idx
             try:
-                snap = m.get_snapshot()
-            except Exception:
-                continue
-            if not snap.get("is_info"):
-                continue
-            parsed = _parse_membership(snap.get("text", "") or "",
-                                       self.bot_addr)
-            if not parsed:
-                continue
-            action, affected, actor = parsed
-            if affected and self.bot_addr and affected.lower() == self.bot_addr.lower():
-                latest = (action, actor)
-        return latest
+                msgs = Chat(self.account, cid).get_messages()
+            except Exception as e:
+                log.info("membership scan: %s chat %s unreadable: %s",
+                         loc, cid, e)
+                return
+            for m in msgs:
+                try:
+                    snap = m.get_snapshot()
+                except Exception:
+                    continue
+                n_scanned += 1
+                idx += 1
+                ts = snap.get("sort_timestamp") or snap.get("timestamp") or 0
+                if loc == "chat" and (first_visible_ts is None
+                                      or ts < first_visible_ts):
+                    first_visible_ts = ts
+                cmd = str(snap.get("system_message_type") or "")
+                action = _CMD_ACTION.get(cmd)
+                text = snap.get("text", "") or ""
+                if action:
+                    icid = snap.get("info_contact_id")
+                    affected = ("self" if icid == SELF_CONTACT_ID
+                                else ("other" if icid else "unknown"))
+                    actor = None
+                    from_id = snap.get("from_id")
+                    if from_id and from_id not in SPECIAL_CONTACT_IDS:
+                        try:
+                            actor = (Contact(self.account, from_id)
+                                     .get_snapshot().get("address"))
+                        except Exception:
+                            actor = None
+                    events.append({"action": action, "affected": affected,
+                                   "actor": actor, "ts": ts, "idx": idx,
+                                   "basis": "cmd",
+                                   "tmpl": _redact_template(text)})
+                elif snap.get("is_info"):
+                    n_info += 1
+                    parsed = _parse_membership(text, self.bot_addr)
+                    if parsed:
+                        action, aff, actor = parsed
+                        affected = ("self" if aff and self.bot_addr and
+                                    aff.lower() in (self.bot_addr.lower(), "me")
+                                    else "other")
+                        events.append({"action": action, "affected": affected,
+                                       "actor": actor, "ts": ts, "idx": idx,
+                                       "basis": "text",
+                                       "tmpl": _redact_template(text)})
+        scan(chat_id, "chat")
+        return events, first_visible_ts, n_scanned, n_info
+
+    def _bot_add_actor(self, chat_id):
+        """(action, actor) of the LATEST membership change affecting the bot,
+        or None. Structural first (cmd + ContactAddedRemoved + from_id);
+        stock-text parse only as fallback for old cores. STRICT boundary:
+        only events the core explicitly marks as affecting SELF count;
+        unknown-affected events (core dropped the member param, or the add
+        was trashed/silent) REFUSE - missing proof never becomes a serve.
+        Every decision logs its basis; refusals dump the redacted evidence
+        for the on-screen log."""
+        events, first_ts, n_scanned, n_info = self._membership_scan(chat_id)
+        strong = [e for e in events if e["affected"] == "self"]
+        if strong:
+            latest = max(strong, key=lambda e: (e["ts"], e["idx"]))
+            log.info("chat %s membership: %s by %s (basis %s, %d scanned)",
+                     chat_id, latest["action"],
+                     latest["actor"] or "no-actor", latest["basis"],
+                     n_scanned)
+            return latest["action"], latest["actor"]
+        log.info("chat %s membership: no attributable add (%d scanned, "
+                 "%d other-info)", chat_id, n_scanned, n_info)
+        for e in sorted(events, key=lambda e: (e["ts"], e["idx"]))[-4:]:
+            log.info("chat %s ev %s affected=%s actor=%s tmpl=%r",
+                     chat_id, e["action"], e["affected"],
+                     "set" if e["actor"] else "none", e["tmpl"])
+        return None
 
     def _serve_chat(self, chat, owner):
         """Owner-attributed DeltaChat trust: serve ONLY chats the core shows
