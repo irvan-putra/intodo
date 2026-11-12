@@ -225,9 +225,17 @@
       for (const l of ch.actionable) html += trimOption(id, field, l.value, l.stamp, false, 0);
       noiseRows.push(...ch.noise.map(e => ({ field, ...e })));
     }
-    if (noiseRows.length) {
+    if (noiseRows.length && !nUnresolved) {
+      // noise-only sheet: the outer "show earlier values" button reveals it directly
       html += '<div class="trim-hist">Earlier values - no decision needed, kept in history:</div>';
       for (const e of noiseRows) html += trimOption(id, e.field, e.value, e.stamp, false, e.count);
+    } else if (noiseRows.length) {
+      // decision sheet: history stays collapsed behind its own nested toggle
+      const hOpen = openSheets.has(id + '|h');
+      html += '<button class="hist-toggle" onclick="toggleHist(\'' + id + '\')">' + (hOpen ? 'hide' : 'show') + ' ' + noiseRows.reduce((n, e) => n + (e.count || 1), 0) + ' earlier value' + (noiseRows.reduce((n, e) => n + (e.count || 1), 0) > 1 ? 's' : '') + '</button>' +
+        '<div id="hist-' + id + '"' + (hOpen ? '' : ' class="hidden"') + '><div class="trim-hist">Earlier values - no decision needed, kept in history:</div>';
+      for (const e of noiseRows) html += trimOption(id, e.field, e.value, e.stamp, false, e.count);
+      html += '</div>';
     }
     if (!html) return { html: '', nUnresolved: 0, nNoise: 0 };
     const cls = openSheets.has(id) ? 'trim' : 'trim hidden';
@@ -244,13 +252,26 @@
       '</div></div>';
   }
 
+  window.toggleHist = function (id) {
+    const el = document.getElementById('hist-' + id);
+    if (!el) return;
+    el.classList.toggle('hidden');
+    const nowHidden = el.classList.contains('hidden');
+    if (nowHidden) openSheets.delete(id + '|h'); else openSheets.add(id + '|h');
+    const hBtn = document.querySelector('button.hist-toggle[onclick="toggleHist(\'' + id + '\')"]');
+    if (hBtn) hBtn.textContent = hBtn.textContent.replace(/^(show|hide)/, nowHidden ? 'show' : 'hide');
+  };
+
   window.toggleTrim = function (id) {
     const el = document.getElementById('trim-' + id);
     if (!el) return;
     el.classList.toggle('hidden');
     if (el.classList.contains('hidden')) openSheets.delete(id); else openSheets.add(id);
+    const hidden = el.classList.contains('hidden');
     const btn = document.querySelector('button.badge[onclick="toggleTrim(\'' + id + '\')"]');
-    if (btn) btn.setAttribute('aria-expanded', el.classList.contains('hidden') ? 'false' : 'true');
+    if (btn) btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+    const hBtn = document.querySelector('button.hist-toggle[onclick="toggleTrim(\'' + id + '\')"]');
+    if (hBtn) hBtn.textContent = hBtn.textContent.replace(/^(show|hide)/, hidden ? 'show' : 'hide');
   };
 
   // ---------- boot ----------
