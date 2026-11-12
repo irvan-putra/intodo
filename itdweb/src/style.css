@@ -5,8 +5,11 @@ body { background: var(--ds-page); }
 .rc-viewport {
     position: relative;
     width: 100%;
-    height: min(600px, calc(100dvh - 140px));
-    min-height: 320px;
+    /* square at every viewport: width is 100%, height follows rendered width
+       (JS also pins px height from clientWidth - breakpoints lie in scaled viewers) */
+    height: auto;
+    aspect-ratio: 1 / 1;
+    min-height: 0;
     overflow: hidden;
     border: 1px solid var(--ds-hairline);
     border-radius: 12px;
@@ -19,14 +22,6 @@ body { background: var(--ds-page); }
     cursor: grab;
 }
 
-/* Phone: square viewport (user request) so header + canvas fit with browser chrome */
-@media (max-width: 700px) {
-    .rc-viewport {
-        height: auto;
-        aspect-ratio: 1 / 1;
-        min-height: 0;
-    }
-}
 .rc-viewport.rc-dragging { cursor: grabbing; }
 .rc-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .rc-edges { position: absolute; top: 0; left: 0; pointer-events: none; }

@@ -133,9 +133,18 @@ function Canvas() {
     useEffect(() => {
         const el = vpRef.current;
         if (!el) return;
-        const ro = new ResizeObserver(() => setVp({ w: el.clientWidth, h: el.clientHeight }));
+        // square from RENDERED width: the canonical viewer can lay out at a
+        // wide CSS width and scale visually, so breakpoints lie; the element's
+        // own clientWidth is the only honest measure. Set explicit px height
+        // so no flex/height rule can override the aspect-ratio.
+        const square = () => {
+            const w = el.clientWidth;
+            if (w > 0) el.style.height = w + 'px';
+            setVp({ w: el.clientWidth, h: el.clientHeight });
+        };
+        const ro = new ResizeObserver(square);
         ro.observe(el);
-        setVp({ w: el.clientWidth, h: el.clientHeight });
+        square();
         return () => ro.disconnect();
     }, []);
 
