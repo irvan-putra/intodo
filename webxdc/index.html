@@ -39,6 +39,12 @@
   .trim-hist { color: #667085; font-size: 11px; margin: 10px 0 2px; }
   .branch-val .dup { color: #667085; font-size: 11px; }
   .empty { color: #98A2B3; font-size: 13px; padding: 24px 12px; text-align: center; }
+  #archived { padding: 0 8px 8px; }
+  .arch-toggle { background: none; border: none; color: #667085; font-size: 12px;
+                 text-decoration: underline; padding: 8px 4px; }
+  .item.arch .title { color: #667085; }
+  .item .restore { background: #1D2939; border: 1px solid #475467; color: #D0D5DD;
+                   border-radius: 6px; font-size: 12px; padding: 5px 10px; }
   #add { display: flex; gap: 8px; padding: 10px 12px 16px; }
   #newTitle { flex: 1; background: #1D2939; border: 1px solid #344054; border-radius: 8px;
               color: #fff; padding: 10px; font-size: 14px; }
@@ -48,14 +54,17 @@
 </head>
 <body>
 <header>
-  <h1>itdxdc <span style="color:#F59E0B;font-size:13px;">v0.4</span></h1>
+  <h1>itdxdc <span style="color:#F59E0B;font-size:13px;">v0.4.3</span></h1>
   <div class="sub">local-first prototype - merges offline edits, you pick what survives a conflict</div>
   <div class="sub"><a href="canvas.html" style="color:#F59E0B">Open the review canvas (prototype)</a></div>
 </header>
 <div class="proto">PROTOTYPE with sample data. Profiles, co-managing with friends and storage on
   other networks are design directions, not built here. The Android widget app stays separate.</div>
+<div id="diag" style="display:none;font-size:11px;color:#888;padding:2px 6px"></div>
+<div id="bindNotice" style="display:none;padding:8px;margin:6px 0;border:1px solid #c90;border-radius:6px;background:#fff8e6;color:#333"></div>
 <div id="who"></div>
 <div id="list"></div>
+<div id="archived"></div>
 <div id="add">
   <input id="newTitle" type="text" placeholder="Add an item" maxlength="200">
   <button id="addBtn" onclick="addItem()">Add</button>
@@ -63,6 +72,7 @@
 <script src="webxdc.js"></script>
 <script src="js/mergedoc.js"></script>
 <script src="js/webxdc-mock.js"></script>
+<script src="js/digest.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
