@@ -2,10 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="itdapk"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
+        android:extractNativeLibs="true"
         android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -21,6 +27,16 @@
         </receiver>
         <service android:name=".WidgetService" android:permission="android.permission.BIND_REMOTEVIEWS" />
         <activity android:name=".canvas.ReviewCanvasActivity" android:exported="false" />
+        <activity android:name=".bot.BotActivity" android:exported="false" />
+        <service android:name=".bot.BotService" android:foregroundServiceType="specialUse" android:exported="false">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Personal DeltaChat delivery bot: keeps a foreground IMAP connection to a chatmail relay to deliver webxdc app updates to chats the owner granted. Started only by explicit user tap; no third-party data collection." />
+        </service>
+        <receiver android:name=".bot.BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <receiver android:name=".InstallStatusReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.instinct.widget.INSTALL_STATUS" />

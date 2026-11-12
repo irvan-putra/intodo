@@ -51,6 +51,17 @@ public class UpdateCheck {
     public static void run(Context context, Callback cb) {
         Handler main = new Handler(Looper.getMainLooper());
         new Thread(() -> {
+            // ABI guard: from 0.4.5 the app bundles the bot's arm64-v8a-only
+            // native runtime (librpcsrv.so). A device without arm64-v8a cannot
+            // run 0.4.5+; never offer it an update it cannot install. (The
+            // already-shipped 0.4.4 updater cannot be retro-guarded; on a
+            // non-arm64 device its install would simply fail harmlessly with
+            // INSTALL_FAILED_NO_MATCHING_ABIS - no data loss, old app intact.)
+            boolean arm64 = false;
+            for (String abi : android.os.Build.SUPPORTED_ABIS) {
+                if ("arm64-v8a".equals(abi)) { arm64 = true; break; }
+            }
+            if (!arm64) { main.post(() -> cb.onResult(null, null, null)); return; }
             String newer = null, assetUrl = null, releaseUrl = null;
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL(LATEST).openConnection();

@@ -56,6 +56,9 @@
     <TextView android:id="@+id/openCanvas" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="8dp" android:text="Open the review canvas (prototype)" android:textColor="#667085"
         android:textSize="13sp" android:padding="8dp" />
+    <TextView android:id="@+id/openBot" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:text="Open the DeltaChat bot" android:textColor="#667085"
+        android:textSize="13sp" android:padding="8dp" />
     <TextView android:id="@+id/updateLine" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="8dp" android:textColor="#F59E0B" android:textSize="12sp"
         android:padding="4dp" android:visibility="gone" />

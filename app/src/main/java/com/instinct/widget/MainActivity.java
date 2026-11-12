@@ -44,6 +44,8 @@ public class MainActivity extends Activity {
         Button generate = findViewById(R.id.generateKey);
         findViewById(R.id.openCanvas).setOnClickListener(v ->
                 startActivity(new android.content.Intent(this, com.instinct.widget.canvas.ReviewCanvasActivity.class)));
+        findViewById(R.id.openBot).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, com.instinct.widget.bot.BotActivity.class)));
         Button copy = findViewById(R.id.copyKey);
         TextView repair = findViewById(R.id.repair);
         EditText feedUrlInput = findViewById(R.id.feedUrlInput);

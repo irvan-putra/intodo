@@ -1,0 +1,336 @@
+{
+ "basic-order": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "Buy oat milk",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "done",
+    "value": "false",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "title",
+    "value": "Call Dad",
+    "stamp": {
+     "hlc": 1700000000002,
+     "device": "phone-b"
+    }
+   }
+  ],
+  "python_digest": "c0081e8eac7dd82f19b9facda22b4a9777aba106e492b1ceb05b7d71b7e93793"
+ },
+ "unicode-bmp": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "Kaffee \u00e9\u00e8\u00ea \u4e2d\u6587 \u0644\u063a\u0629",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-\u00e9",
+    "field": "note",
+    "value": "\u00fcmlaut key",
+    "stamp": {
+     "hlc": 1700000000002,
+     "device": "phone-b"
+    }
+   }
+  ],
+  "python_digest": "653622f3dfbb09149575384625df85db441d18132b224c17a825cfe192a6449c"
+ },
+ "unicode-astral": {
+  "ops": [
+   {
+    "item": "i-\ud83d\ude00",
+    "field": "title",
+    "value": "emoji item \ud83d\ude80",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-\ufffd",
+    "field": "title",
+    "value": "replacement char (BMP, sorts after astral by code-unit, before by code-point)",
+    "stamp": {
+     "hlc": 1700000000002,
+     "device": "phone-a"
+    }
+   }
+  ],
+  "python_digest": "110ff29c293fb53e4d6f3b9052185ae6861bbeca817d24216a4d22ed0506e549"
+ },
+ "control-and-special": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "note",
+    "value": "line\nbreak\ttab\"quote\\backslash",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "note",
+    "value": "separators\u2028\u2029here",
+    "stamp": {
+     "hlc": 1700000000002,
+     "device": "phone-b"
+    }
+   }
+  ],
+  "python_digest": "14014a426ff3c80fd36bf0db39b46a5b280412f0b56cb1a20d5440f1e290b5b7"
+ },
+ "duplicate-ops": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "A",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "A",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   }
+  ],
+  "python_digest": "038de06b860528c4895d6984fa3bbbb117da6a84f00a7e2994cfc0397c0baf92"
+ },
+ "same-stamp-mixed-fields": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "A",
+    "stamp": {
+     "hlc": 1700000000005,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "done",
+    "value": "true",
+    "stamp": {
+     "hlc": 1700000000005,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "note",
+    "value": "n",
+    "stamp": {
+     "hlc": 1700000000005,
+     "device": "phone-b"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "title",
+    "value": "B",
+    "stamp": {
+     "hlc": 1700000000005,
+     "device": "phone-a"
+    }
+   }
+  ],
+  "python_digest": "e302a15cbb43f13d449813762283a31f3af60e65d40cdd1eb6d4fc8841cbed44"
+ },
+ "history-trim-tombstone": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "Buy oat milk",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "Buy oat milk (2%)",
+    "stamp": {
+     "hlc": 1700000000004,
+     "device": "phone-b"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "_trim_title",
+    "value": "Buy oat milk (2%)",
+    "stamp": {
+     "hlc": 1700000000009,
+     "device": "phone-b"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "deleted",
+    "value": "true",
+    "stamp": {
+     "hlc": 1700000000005,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "deleted",
+    "value": "false",
+    "stamp": {
+     "hlc": 1700000000006,
+     "device": "phone-b"
+    }
+   },
+   {
+    "item": "i-3",
+    "field": "title",
+    "value": "Pay electricity bill",
+    "stamp": {
+     "hlc": 1700000000007,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-3",
+    "field": "deleted",
+    "value": "true",
+    "stamp": {
+     "hlc": 1700000000008,
+     "device": "phone-a"
+    }
+   }
+  ],
+  "python_digest": "d0a9d1e97f9f26ea4fc63230df5970ae170af7264be525ae2eb2e3134ff68fbb"
+ },
+ "live-edit-mix": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "Buy oat milk",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": "Buy oat milk (live edit)",
+    "stamp": {
+     "hlc": 1700000000100,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "deleted",
+    "value": "true",
+    "stamp": {
+     "hlc": 1700000000101,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-4",
+    "field": "title",
+    "value": "Brand new item",
+    "stamp": {
+     "hlc": 1700000000102,
+     "device": "device-\ud83d\udcf1"
+    }
+   }
+  ],
+  "python_digest": "b0c0153bdff27e164c5686d7af4c8e30642b58c3351024503aaa35723e87e2d5"
+ },
+ "empty-and-whitespace": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "note",
+    "value": "",
+    "stamp": {
+     "hlc": 1700000000001,
+     "device": "phone-a"
+    }
+   },
+   {
+    "item": "i-1",
+    "field": "title",
+    "value": " ",
+    "stamp": {
+     "hlc": 1700000000002,
+     "device": "phone-a"
+    }
+   }
+  ],
+  "python_digest": "685b1a7d52f52aeef954beacc03cc9ccd6333f38902fa0a9be51bab69fa59409"
+ },
+ "bool-values": {
+  "ops": [
+   {
+    "item": "i-1",
+    "field": "done",
+    "value": true,
+    "stamp": {
+     "hlc": 5,
+     "device": "d"
+    }
+   },
+   {
+    "item": "i-2",
+    "field": "done",
+    "value": false,
+    "stamp": {
+     "hlc": 6,
+     "device": "d"
+    }
+   }
+  ],
+  "python_digest": "d3855c84bde178831f94acb21bfb374bb1215cc7b85facc8858de979bba122c5"
+ },
+ "max-safe-integer": {
+  "ops": [
+   {
+    "item": "i-9",
+    "field": "qty",
+    "value": 9007199254740991,
+    "stamp": {
+     "hlc": 9007199254740991,
+     "device": "d"
+    }
+   }
+  ],
+  "python_digest": "f753e701b29a56983e83eba2727441d0b49f189766332790e59f09d106ab20e8"
+ }
+}

@@ -1,5 +1,6 @@
-plugins { id 'com.android.application' }
+plugins { id 'com.android.application'; id 'com.chaquo.python'; id 'org.jetbrains.kotlin.android' }
 android {
+    testOptions { unitTests { includeAndroidResources = true } }
     buildFeatures { buildConfig true }
     namespace 'com.instinct.widget'
     compileSdk 34
@@ -7,8 +8,12 @@ android {
         applicationId 'com.instinct.widget'
         minSdk 26
         targetSdk 34
-        versionCode 9
-        versionName '0.4.4'
+        versionCode 10
+        versionName '0.4.5'
+        // Bot runtime (DeltaChat core) is bundled for arm64-v8a only, same
+        // constraint as the scratch bot builds; librpcsrv.so exists for no
+        // other ABI yet.
+        ndk { abiFilters 'arm64-v8a' }
         // The personal sync endpoint is build-time config, not source: put
         // FEED_URL=https://... in local.properties (gitignored). Public source
         // builds without it and the app reports "feed URL not configured".
@@ -17,8 +22,20 @@ android {
         if (lf.exists()) lp.load(lf.newInputStream())
         buildConfigField 'String', 'FEED_URL', '\"' + lp.getProperty('FEED_URL', '') + '\"'
     }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    packagingOptions { jniLibs { useLegacyPackaging = true } }
+}
+
+chaquopy {
+    defaultConfig {
+        pip {
+            install 'deltachat-rpc-client==2.69.0'
+            install 'cryptography'
+        }
+    }
 }
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.11.1'
 }
