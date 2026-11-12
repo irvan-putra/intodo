@@ -18,3 +18,7 @@ android {
         buildConfigField 'String', 'FEED_URL', '\"' + lp.getProperty('FEED_URL', '') + '\"'
     }
 }
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
