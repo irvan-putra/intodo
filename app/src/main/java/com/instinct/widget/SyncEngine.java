@@ -114,7 +114,7 @@ public class SyncEngine {
             conn.setInstanceFollowRedirects(false);
             String cookie = cm.getCookie(current);
             if (cookie != null) conn.setRequestProperty("Cookie", cookie);
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) InstinctWidget/0.3");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) InstinctWidget/0.4");
             conn.connect();
             int hopCode = conn.getResponseCode();
             List<String> hopCookies = conn.getHeaderFields().get("Set-Cookie");

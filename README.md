@@ -4,7 +4,7 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 
 ## Status
 
-Test build. v0.1-test failed its first on-device sync ("payload not found on page"); v0.2-test fixed the cause; v0.3-test moves the feed URL out of the source into build config. On-device sync is not yet confirmed - treat everything as experimental until the first successful sync on a real phone.
+Test build. v0.1-test failed its first on-device sync ("payload not found on page"); v0.2-test fixed the cause; v0.3-test moved the feed URL out of the source into build config; sync and decryption are confirmed working on a real phone. v0.4-test fixes the home-screen widget layout at narrow widths (header stayed usable, list starts at the top); that fix is verified by code review, not yet on a phone.
 
 ## How it works
 
@@ -45,7 +45,7 @@ The debug APK lands in `app/build/outputs/apk/debug/`. It is debug-signed; insta
 - Sync is manual only; no background polling or push.
 - If a feed cannot be parsed at all, the freshness check cannot prove staleness (tracked for a future fix).
 - The link-public feed page is ciphertext, but its existence and update cadence are visible to anyone who has the link.
-- On-device sync pending confirmation as of v0.3-test. Public source aids inspection; it is not by itself a security guarantee.
+- Sync/decrypt confirmed on a real Android phone (v0.3-test); the v0.4-test narrow-width widget layout fix is unconfirmed on-device. Public source aids inspection; it is not by itself a security guarantee.
 
 ## Privacy
 

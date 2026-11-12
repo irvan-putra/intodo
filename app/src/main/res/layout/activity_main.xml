@@ -45,5 +45,5 @@
         android:layout_marginTop="8dp" android:text="Re-pair this phone" android:textColor="#667085"
         android:textSize="13sp" android:padding="8dp" android:visibility="gone" />
     <TextView android:id="@+id/version" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="v0.3-test" android:textColor="#475467" android:textSize="11sp" android:gravity="end" />
+        android:text="v0.4-test" android:textColor="#475467" android:textSize="11sp" android:gravity="end" />
 </LinearLayout>
