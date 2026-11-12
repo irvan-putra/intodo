@@ -13,6 +13,9 @@
   'use strict';
 
   const SKEW_WINDOW_MS = 10 * 60 * 1000;
+  // trim decisions are recorded as ordinary field writes named _trim_<field>
+  // so every device converges on which conflicts the user already resolved.
+  const isTrimField = field => field.startsWith('_trim_') && FIELDS.has(field.slice(6));
   const FIELDS = new Set(['title', 'note', 'due', 'done']);
   const DELETED = 'deleted';
 
@@ -28,7 +31,7 @@
     }
 
     apply(itemId, field, value, stamp) {
-      if (!FIELDS.has(field) && field !== DELETED) throw new Error('unknown field: ' + field);
+      if (!FIELDS.has(field) && field !== DELETED && !isTrimField(field)) throw new Error('unknown field: ' + field);
       let it = this.items.get(itemId);
       if (!it) {
         it = { fields: new Map(), deleted: null, history: new Map() };
