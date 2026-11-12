@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>itdweb - Review each change from your phone</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="page">
+
+  <header class="head">
+    <h1>Review each change from your phone</h1>
+    <p class="fact">Interactive design prototype</p>
+    <p class="intro">The best ideas from crev, Unison, Haskell and Lean, merged into one review surface for the intodo project. Cards live on a canvas, not in pages or an endless feed: they stay where you put them, and the layout persists on this device and browser (localStorage).</p>
+  </header>
+
+  <figure class="hero">
+    <img src="photos/review-concept-hero.png" alt="Illustration of a phone showing a change card with review, test and proof markers">
+    <figcaption>Review canvas concept - illustrative concept art, not a screenshot of a working feature.</figcaption>
+  </figure>
+
+  <section>
+    <h2>The idea</h2>
+    <p>Every change becomes a card you can read in under a minute: what changed, which exact code it is, who reviewed it, and what was tested or proved. Cards connect spatially to their evidence, and what has not been checked stays visible in the same size type as what has.</p>
+    <p>The example below uses the real v0.4 narrow-layout change. "Real" chips mark grounded facts; "mock" chips mark illustrative entries. This is a working interactive mockup, not a production review system - nothing is adopted or built into the app.</p>
+  </section>
+
+  <section>
+    <h2>The review canvas</h2>
+    <p class="try">Try it</p>
+    <div id="viewport" class="rc-viewport">
+      <div id="world" class="rc-world">
+        <svg id="edges" class="rc-edges"></svg>
+      </div>
+      <div class="rc-controls">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">-</button>
+        <button type="button" id="fit" class="rc-fit">Fit</button>
+      </div>
+      <div id="minimap" class="rc-minimap"></div>
+    </div>
+    <p class="cap">Drag the background to pan, drag a card to move it, pinch or use + and - to zoom, tap a card's Focus to read it. The canvas is bounded, not infinite. <span id="savemsg"></span></p>
+  </section>
+
+  <footer class="closing">
+    <p>Interactive design prototype, Nov 12, 2026. Adopting this as the project standard is the owner's call - nothing here changes the app or the repo.</p>
+    <p>Source: <a href="https://github.com/irvan-putra/intodo">github.com/irvan-putra/intodo</a></p>
+  </footer>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>
