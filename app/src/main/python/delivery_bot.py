@@ -4,7 +4,7 @@ Delivery: the owner DMs the bot a new .xdc; the bot sends it into granted
 chat(s). The new version appears in Delta Chat - no download, no manual
 re-send (the fatigue this removes).
 
-Continuity (v3, ACK-FREE):
+Continuity (v3, ACK-FREE - contract blocker):
 the webxdc sandbox gives an app NO automatic authenticated channel back:
 sendUpdate is an author-blind broadcast into the shared document, and
 sendToChat is a user-mediated, editable, abortable draft. No ack the app
@@ -492,8 +492,8 @@ class DeliveryBot:
         """Send a new .xdc into `chat` and register it (bot origin).
 
         Never deletes or replaces anything. Uses
-        Chat.send_message(file=..., viewtype=Webxdc) - the exact primitive
-        live-tested. Returns the new (trusted) message id. The
+        Chat.send_message(file=..., viewtype=Webxdc). Returns the new
+        (trusted) message id. The
         caller typically follows with restore_into() so the fresh instance
         already holds full history when the owner first opens it (queued
         status updates are delivered on open).

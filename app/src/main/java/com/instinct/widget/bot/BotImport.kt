@@ -41,8 +41,8 @@ class BotImport(
         AlertDialog.Builder(activity)
             .setTitle("Import bot backup")
             .setMessage(
-                "Move the existing bot (its Delta Chat identity, owner and " +
-                "chats) into itdapk from the .dcmig bundle exported by the " +
+                "Move the existing bot (its Delta Chat identity, chats and " +
+                "per-chat lists) into itdapk from the .dcmig bundle exported by the " +
                 "old app. You will also need the one-time transfer code " +
                 "shown there.\n\nThe bot service stays stopped during the " +
                 "import.")

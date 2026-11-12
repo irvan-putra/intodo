@@ -12,12 +12,11 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import com.chaquo.python.Python;
-import com.chaquo.python.android.AndroidPlatform;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
-import org.json.JSONArray;
+import java.io.InputStream;
 import org.json.JSONObject;
 
 public class BotActivity extends Activity {
@@ -31,20 +30,21 @@ public class BotActivity extends Activity {
         super.onCreate(b);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFF101828); // match the app theme's dark home background
         Button validate = new Button(this); validate.setText("1. Offline validation probe (no network)");
         Button provision = new Button(this); provision.setText("2. Create bot account (ONE-TIME, uses network)");
+        Button importBtn = new Button(this); importBtn.setText("Import bot backup (moves the bot from the old test app)");
         Button live = new Button(this); live.setText("3. Start/restart bot service (network; permanent notification, uses battery)");
         Button invite = new Button(this); invite.setText("4. Show invitation QR (scan it from your DeltaChat)");
         Button stop = new Button(this); stop.setText("Stop service");
+        Button publish = new Button(this); publish.setText("5. Publish new app version (.xdc) to all chats");
         candBox = new LinearLayout(this); candBox.setOrientation(LinearLayout.VERTICAL);
         logView = new TextView(this);
         ScrollView sv = new ScrollView(this); sv.addView(logView);
         TextView steps = new TextView(this);
-        steps.setText("Setup: 1 probe, 2 create account, 3 start bot, 4 show the invitation - on this same phone tap 'Open in DeltaChat' in its dialog (or scan the QR from another device), then send the bot any message (it will not reply yet). Come back here and confirm the owner below. Add the bot to your shared chat; it serves chats it is added to. DM the bot a new .xdc to publish.");
-        Button importBtn = new Button(this); importBtn.setText("Import bot backup (moves the bot from the old test app)");
+        steps.setText("Setup: 1 probe, 2 create account, 3 start bot, 4 show the invitation - on this same phone tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list, kept separate. Button 5 publishes a new .xdc from this app to every chat the bot serves.");
         root.addView(steps);
         root.addView(validate); root.addView(provision); root.addView(importBtn); root.addView(live); root.addView(invite); root.addView(stop);
+        root.addView(publish);
         root.addView(candBox); root.addView(sv);
         setContentView(root);
 
@@ -147,6 +147,26 @@ public class BotActivity extends Activity {
             getSharedPreferences("bot", MODE_PRIVATE).edit().putString("last_mode", "").apply();
             stopService(new Intent(this, BotService.class));
         });
+        publish.setOnClickListener(v -> startPublishFlow());
+
+        // Reattach to a publish that is still in flight across recreation:
+        // the request or its crash-resume checkpoint must still exist, and
+        // the persisted token/sha let the result poll correlate without
+        // re-picking or re-queueing the file.
+        android.content.SharedPreferences prefs = getSharedPreferences("bot", MODE_PRIVATE);
+        String savedToken = prefs.getString("pending_publish_token", null);
+        if (savedToken != null
+                && (new File(getFilesDir(), "PUBLISH_REQ").exists()
+                    || new File(getFilesDir(), "PUBLISH_PROG").exists())) {
+            pendingPublishToken = savedToken;
+            pendingPublishSha = prefs.getString("pending_publish_sha", null);
+            Toast.makeText(this, "A publish is still running - reattached to its result", Toast.LENGTH_SHORT).show();
+            pollPublishResult(System.currentTimeMillis());
+        } else if (savedToken != null) {
+            // Nothing in flight: drop the stale reference. A completed
+            // run's DONE stays as the runtime's dedup input, untouched.
+            prefs.edit().remove("pending_publish_sha").remove("pending_publish_token").apply();
+        }
 
         Runnable tick = new Runnable() { public void run() {
             refresh();
@@ -157,6 +177,18 @@ public class BotActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_PICK_XDC) {
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+            try {
+                queuePublish(getContentResolver().openInputStream(data.getData()));
+                final long tap = System.currentTimeMillis();
+                Toast.makeText(this, "Publishing to all served chats...", Toast.LENGTH_SHORT).show();
+                pollPublishResult(tap);
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not read the picked file: " + e, Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (importer != null) importer.handleActivityResult(requestCode, resultCode, data);
     }
 
@@ -177,45 +209,141 @@ public class BotActivity extends Activity {
         try {
             JSONObject st = new JSONObject(json);
             String botAddr = st.optString("bot_addr", "");
-            String owner = st.optString("owner_addr", "");
             TextView t = new TextView(this);
             if (!botAddr.isEmpty()) t.setText("bot: " + botAddr + "   ");
-            if (!owner.isEmpty()) {
-                t.setText(t.getText() + "owner: " + owner
-                        + " | chats: " + st.optString("chats", "{}"));
-                candBox.addView(t);
+            t.setText(t.getText() + "chats served: " + st.optString("chats", "{}"));
+            candBox.addView(t);
+        } catch (Exception ignored) {}
+    }
+
+    // ---- publish flow (app-side only: the runtime refuses chat-originated publishing) ----
+    private static final int REQ_PICK_XDC = 43;
+    private String pendingPublishSha = null;
+    private String pendingPublishToken = null;
+
+    private void startPublishFlow() {
+        File stf = new File(getFilesDir(), "bot_state.json");
+        String js = stf.exists() ? read(stf) : "";
+        boolean prov = false;
+        try { prov = new JSONObject(js).optBoolean("provisioned", false); } catch (Exception ignored) {}
+        if (!prov) {
+            Toast.makeText(this, "Create the bot account first (button 2)", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (!new File(getFilesDir(), "RUNNING").exists()) {
+            Toast.makeText(this, "Start the bot service first (button 3)", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Publish new app version")
+            .setMessage("Pick the new .xdc file. The bot sends it to EVERY chat it serves (each group and each direct chat with the bot).")
+            .setPositiveButton("Pick .xdc", (d, w) -> {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("*/*");
+                startActivityForResult(i, REQ_PICK_XDC);
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void pollPublishResult(final long tap) {
+        final Runnable[] poll = new Runnable[1];
+        poll[0] = new Runnable() { public void run() {
+            File done = new File(getFilesDir(), "PUBLISH_DONE");
+            if (done.exists()) {
+                try {
+                    JSONObject r = new JSONObject(read(done));
+                    // Correlate the result with THIS request: the request
+                    // token is echoed back by the runtime, so a DONE from an
+                    // earlier publish never shows as this one's result.
+                    String doneReq = r.optString("request", "");
+                    if (pendingPublishToken == null || !pendingPublishToken.equals(doneReq)) {
+                        if (System.currentTimeMillis() - tap < 60000) handler.postDelayed(poll[0], 1000);
+                        return;
+                    }
+                    String doneSha = r.optString("sha256", "");
+                    if (pendingPublishSha != null && !doneSha.isEmpty()
+                            && !pendingPublishSha.equals(doneSha)) {
+                        if (System.currentTimeMillis() - tap < 60000) handler.postDelayed(poll[0], 1000);
+                        return;
+                    }
+                    JSONObject pub = r.optJSONObject("published");
+                    JSONObject skip = r.optJSONObject("skipped");
+                    JSONObject errs = r.optJSONObject("errors");
+                    int nPub = pub == null ? 0 : pub.length();
+                    int nSkip = skip == null ? 0 : skip.length();
+                    StringBuilder msg = new StringBuilder();
+                    msg.append("Published to ").append(nPub).append(" chat(s).");
+                    if (nSkip > 0) msg.append(" Already had this exact file: ").append(nSkip).append(".");
+                    if (errs != null && errs.length() > 0) {
+                        msg.append("\n\nErrors:");
+                        java.util.Iterator<String> it = errs.keys();
+                        while (it.hasNext()) {
+                            String k = it.next();
+                            msg.append("\nchat ").append(k).append(": ").append(errs.optString(k));
+                        }
+                    }
+                    getSharedPreferences("bot", MODE_PRIVATE).edit()
+                        .remove("pending_publish_sha")
+                        .remove("pending_publish_token")
+                        .apply();
+                    new android.app.AlertDialog.Builder(BotActivity.this)
+                        .setTitle("Publish result")
+                        .setMessage(msg.toString())
+                        .setPositiveButton("OK", null)
+                        .show();
+                } catch (Exception e) {
+                    Toast.makeText(BotActivity.this, "Publish result unreadable: " + e, Toast.LENGTH_LONG).show();
+                }
                 return;
             }
-            candBox.addView(t);
-            JSONArray cands = st.optJSONArray("owner_candidates");
-            if (cands == null || cands.length() == 0) return;
-            TextView h = new TextView(this);
-            h.setText("Confirm the owner (they must message the bot from their DeltaChat first):");
-            candBox.addView(h);
-            for (int i = 0; i < cands.length(); i++) {
-                JSONObject c = cands.getJSONObject(i);
-                final String addr = c.getString("addr");
-                final String name = c.optString("name", "");
-                Button cb = new Button(this);
-                cb.setText("Owner = " + name + " <" + addr + ">");
-                cb.setOnClickListener(v -> {
-                    new android.app.AlertDialog.Builder(this)
-                        .setTitle("Confirm owner")
-                        .setMessage("This gives " + addr + " FULL control of this bot: publishing app updates into every chat the bot serves and managing list identity. This is the address Delta Chat itself verified for that contact. Confirm only if it is your own DeltaChat address.")
-                        .setPositiveButton("Confirm owner", (d, w) -> {
-                            try {
-                                if (!Python.isStarted()) Python.start(new AndroidPlatform(this));
-                                Python.getInstance().getModule("bot_runtime")
-                                        .callAttr("confirm_owner", getFilesDir().getAbsolutePath(), addr);
-                            } catch (Exception ignored) {}
-                            lastStateJson = ""; // force refresh
-                        })
-                        .setNegativeButton("Cancel", null)
-                        .show();
-                });
-                candBox.addView(cb);
+            if (System.currentTimeMillis() - tap < 60000) {
+                handler.postDelayed(poll[0], 1000);
+            } else {
+                Toast.makeText(BotActivity.this, "Publish timed out - is the bot service running?", Toast.LENGTH_LONG).show();
             }
-        } catch (Exception ignored) {}
+        }};
+        handler.postDelayed(poll[0], 1000);
+    }
+
+    // No network/core calls: the runtime watches the request file.
+    void queuePublish(InputStream input) throws Exception {
+        File req = new File(getFilesDir(), "PUBLISH_REQ");
+        File prog = new File(getFilesDir(), "PUBLISH_PROG");
+        if (req.exists() || prog.exists()) {
+            input.close();
+            throw new java.io.IOException("A publish is still pending; wait for it or restart the bot to resume");
+        }
+        File stage = new File(getFilesDir(), "publish-" + java.util.UUID.randomUUID() + ".tmp");
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        try (InputStream in = input; FileOutputStream out = new FileOutputStream(stage)) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) != -1) { md.update(buf, 0, n); out.write(buf, 0, n); }
+            out.getFD().sync();
+        } catch (Exception e) { stage.delete(); throw e; }
+        StringBuilder hex = new StringBuilder();
+        for (byte bb : md.digest()) hex.append(String.format("%02x", bb));
+        pendingPublishSha = hex.toString();
+        pendingPublishToken = java.util.UUID.randomUUID().toString();
+        File immutable = new File(getFilesDir(), "publish-" + pendingPublishSha + ".xdc");
+        if (immutable.exists()) { stage.delete(); }
+        else if (!stage.renameTo(immutable)) throw new java.io.IOException("Could not retain publish file");
+        // Never overwrite an older current_app's bytes, nor delete DONE's dedup input.
+        File tmp = new File(getFilesDir(), "PUBLISH_REQ.tmp");
+        try (FileOutputStream out = new FileOutputStream(tmp)) {
+            out.write((immutable.getName() + "\n" + pendingPublishToken).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            out.getFD().sync();
+        }
+        if (!tmp.renameTo(req)) throw new java.io.IOException("Could not queue publish request");
+        // Persist the pending reference privately: if the activity is
+        // recreated while the bot is still working, the new instance
+        // reattaches to THIS operation instead of losing correlation.
+        getSharedPreferences("bot", MODE_PRIVATE).edit()
+            .putString("pending_publish_sha", pendingPublishSha)
+            .putString("pending_publish_token", pendingPublishToken)
+            .apply();
     }
 
     private static String read(File f) {

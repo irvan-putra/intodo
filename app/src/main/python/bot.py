@@ -102,11 +102,15 @@ class BridgeBot:
                 and not self.gate.chat_allowed(snap.chat_id)
                 and self._maybe_dm_app_message(snap)):
             return
-        reply = self.gate.handle_private_message(
-            sender, snap.text or "",
-            restore_cb=lambda mid: self.gate.restore_into(mid, self.send_update))
-        if reply:
-            snap.chat.send_message(text=reply)
+        # DM command surface: with no owner identity (r12) nobody is
+        # authorized, so this is always silent - skip the per-message
+        # "non-owner" log noise and the call entirely.
+        if self.gate.is_authorized(sender):
+            reply = self.gate.handle_private_message(
+                sender, snap.text or "",
+                restore_cb=lambda mid: self.gate.restore_into(mid, self.send_update))
+            if reply:
+                snap.chat.send_message(text=reply)
         # A fresh owner registration must ingest the instance's EXISTING
         # update history NOW (migration of pre-bot ops), not wait for the
         # next live update. Entries clear only AFTER their ingest commits
