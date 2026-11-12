@@ -1,0 +1,130 @@
+# itdapk public release build - REVIEW DRAFT, not yet active.
+# Builds an UNCONFIGURED APK (no FEED_URL: public source default) and signs it with
+# the project's existing keystore held ONLY in GitHub Actions secrets (write-only,
+# set directly by the repo owner on their own device; never in repo, logs, artifacts,
+# or agent messages):
+#   KEYSTORE_BASE64   - base64 of the itdapk keystore file
+#   KEYSTORE_PASSWORD - keystore passphrase
+#   KEY_ALIAS         - key alias inside the keystore
+#   KEY_PASSWORD      - key passphrase
+# Manual trigger only. The tag and the stamped binary version always match the inputs.
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'versionName, dotted numeric, e.g. 0.4.3'
+        required: true
+      version_code:
+        description: 'versionCode, positive integer, must exceed the current one'
+        required: true
+
+permissions:
+  contents: write
+
+# one release build at a time - two concurrent runs must not race stamps or tags
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Validate and stamp version (inputs via env, never interpolated into the shell)
+        env:
+          IN_NAME: ${{ inputs.version_name }}
+          IN_CODE: ${{ inputs.version_code }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$IN_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad versionName: $IN_NAME"; exit 1; }
+          [[ "$IN_CODE" =~ ^[0-9]+$ ]] && [ "$IN_CODE" -gt 0 ] || { echo "bad versionCode: $IN_CODE"; exit 1; }
+          cur_name=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          cur_code=$(grep -oP 'versionCode \K[0-9]+' app/build.gradle)
+          [ "$IN_CODE" -gt "$cur_code" ] || { echo "versionCode $IN_CODE not above current $cur_code"; exit 1; }
+          [ "$IN_NAME" != "$cur_name" ] || { echo "versionName unchanged ($cur_name)"; exit 1; }
+          # monotonic against the ACTUAL published release, not just the checked-in gradle
+          pub_tag=$(gh api repos/{owner}/{repo}/releases/latest --jq .tag_name 2>/dev/null || echo "")
+          if [ -n "$pub_tag" ]; then
+            pub_name=${pub_tag#v}
+            top=$(printf '%s\n%s\n' "$pub_name" "$IN_NAME" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            [ "$top" = "$IN_NAME" ] && [ "$pub_name" != "$IN_NAME" ] || { echo "versionName $IN_NAME not above published $pub_name"; exit 1; }
+          fi
+          sed -i "s/versionName '.*'/versionName '$IN_NAME'/" app/build.gradle
+          sed -i "s/versionCode .*/versionCode $IN_CODE/" app/build.gradle
+          grep -n "versionName\|versionCode" app/build.gradle
+          # commit the stamp BEFORE tagging so every tag's source reproduces its binary
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle
+          git commit -m "release: stamp v$IN_NAME ($IN_CODE)"
+          git push origin HEAD:main
+          echo "STAMP_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Run JVM unit tests (merge engine, canvas math, chrome rects)
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Build unsigned release APK (unconfigured, no FEED_URL in source or env)
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Verify the APK is strictly unconfigured
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*-unsigned.apk)
+          SCAN="$RUNNER_TEMP/apkscan"; mkdir -p "$SCAN"
+          unzip -q "$APK" -d "$SCAN"
+          # code: no configured feed address in ANY classes*.dex. The bare host is the
+          # SyncEngine allowlist constant and is allowed; a non-empty BuildConfig.FEED_URL
+          # would appear here as a full URL string. (-a: dex is binary, grep skips it otherwise)
+          if grep -rla 'https://files.instinct.com/' "$SCAN"/classes*.dex; then
+            echo "REFUSED: configured feed address in code (BuildConfig.FEED_URL must be empty)"; exit 1
+          fi
+          # resources + everything else: no private feed slug anywhere. The pairing-pane
+          # hint placeholder (https://files.instinct.com/...) carries no slug and is allowed.
+          if grep -rla -e 'wfoiv9v4bu5u' -e '03j503om7zd3' -e 'instinct-widget-sync' "$SCAN"; then
+            echo "REFUSED: private feed address embedded in public build"; exit 1
+          fi
+          rm -rf "$SCAN"
+          echo "unconfigured check passed (all entries scanned)"
+
+      - name: Decode keystore, sign (passwords via env, never argv), verify, always clean up
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          IN_NAME: ${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$RUNNER_TEMP/ks.jks"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+          chmod 600 "$RUNNER_TEMP/ks.jks"
+          APK=$(ls app/build/outputs/apk/release/*-unsigned.apk)
+          OUT="itdapk-v$IN_NAME.apk"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" sign \
+            --ks "$RUNNER_TEMP/ks.jks" \
+            --ks-pass "env:KEYSTORE_PASSWORD" \
+            --key-pass "env:KEY_PASSWORD" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --out "$OUT" "$APK"
+          "$BT/apksigner" verify --print-certs "$OUT" | head -3
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IN_NAME: ${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          gh release create "v$IN_NAME" "itdapk-v$IN_NAME.apk" \
+            --target "$STAMP_SHA" \
+            --title "itdapk v$IN_NAME" \
+            --notes "Built from commit $STAMP_SHA with version v$IN_NAME stamped into the source at that tag, so checking out the tag reproduces this binary. Unconfigured public build: enter your feed address in the app after install. Same signer as earlier builds: installs over them, keeping pairing and data (per Android same-signer upgrade behavior)."

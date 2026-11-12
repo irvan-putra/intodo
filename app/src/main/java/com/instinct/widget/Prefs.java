@@ -30,4 +30,10 @@ public class Prefs {
     public static String feedGen(Context c) { return get(c).getString("feed_gen", ""); }
     public static void saveStatus(Context c, String s) { get(c).edit().putString("status", s).apply(); }
     public static String status(Context c) { return get(c).getString("status", "never synced"); }
+    public static void saveInstallSession(Context c, int id) { get(c).edit().putInt("install_session", id).commit(); } // synchronous: must be durable before session.commit returns
+    public static int installSession(Context c) { return get(c).getInt("install_session", -1); }
+    public static void clearInstallSession(Context c) { get(c).edit().remove("install_session").apply(); }
+    /** On-device feed address (unconfigured public builds). Empty = use build-time config. */
+    public static String feedUrl(Context c) { return get(c).getString("feed_url", ""); }
+    public static void saveFeedUrl(Context c, String url) { get(c).edit().putString("feed_url", url == null ? "" : url.trim()).apply(); }
 }

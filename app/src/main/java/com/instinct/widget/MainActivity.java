@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.ListView;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.security.KeyPair;
@@ -45,6 +46,34 @@ public class MainActivity extends Activity {
                 startActivity(new android.content.Intent(this, com.instinct.widget.canvas.ReviewCanvasActivity.class)));
         Button copy = findViewById(R.id.copyKey);
         TextView repair = findViewById(R.id.repair);
+        EditText feedUrlInput = findViewById(R.id.feedUrlInput);
+        // The feed-address field only matters on public builds with no built-in address;
+        // hide it where build config already provides one so behavior stays unambiguous.
+        boolean unconfigured = SyncEngine.FEED_URL == null || SyncEngine.FEED_URL.isEmpty();
+        feedUrlInput.setVisibility(unconfigured ? View.VISIBLE : View.GONE);
+        findViewById(R.id.saveFeedUrl).setVisibility(unconfigured ? View.VISIBLE : View.GONE);
+        feedUrlInput.setText(Prefs.feedUrl(this));
+        findViewById(R.id.saveFeedUrl).setOnClickListener(v -> {
+            String url = feedUrlInput.getText().toString().trim();
+            if (!url.isEmpty() && !url.startsWith("https://")) {
+                Toast.makeText(this, "Feed address must start with https://", Toast.LENGTH_LONG).show();
+                return;
+            }
+            Prefs.saveFeedUrl(this, url);
+            Toast.makeText(this, "Feed address saved", Toast.LENGTH_SHORT).show();
+        });
+        findViewById(R.id.updateLine).setOnClickListener(v -> {
+            Object asset = v.getTag();
+            if (!(asset instanceof String) || ((String) asset).isEmpty()) return;
+            TextView line = (TextView) v;
+            if (!UpdateInstall.canInstall(this)) {
+                line.setText("Allow installs from this app, then tap again");
+                UpdateInstall.openInstallPermissionSettings(this);
+                return;
+            }
+            line.setText("downloading update...");
+            UpdateInstall.downloadAndInstall(this, (String) asset, line::setText);
+        });
         generate.setOnClickListener(v -> generateKeys());
         if (Prefs.isPaired(this)) generate.setText("Replace pairing key");
         copy.setOnClickListener(v -> copyKey());
@@ -61,6 +90,8 @@ public class MainActivity extends Activity {
             getIntent().removeExtra("sync");
             sync();
         }
+        ((TextView) findViewById(R.id.version)).setText("v" + BuildConfig.VERSION_NAME);
+        checkForUpdate();
     }
 
     private void showPairing() {
@@ -122,6 +153,20 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "Public key copied. Send it to Instinct on WhatsApp.", Toast.LENGTH_LONG).show();
     }
 
+    // Update-check cadence: on app open and on each manual sync, never in the background.
+    private void checkForUpdate() {
+        UpdateCheck.run(this, (newer, assetUrl, releaseUrl) -> {
+            TextView line = findViewById(R.id.updateLine);
+            if (newer != null) {
+                line.setText("Update available: v" + newer + " - tap to download and install (Android asks you to confirm)");
+                line.setTag(assetUrl);
+                line.setVisibility(View.VISIBLE);
+            } else {
+                line.setVisibility(View.GONE);
+            }
+        });
+    }
+
     private void sync() {
         syncNow.setEnabled(false);
         lastSync.setText("Syncing...");
@@ -134,6 +179,7 @@ public class MainActivity extends Activity {
             int[] ids = awm.getAppWidgetIds(new ComponentName(this, WidgetProvider.class));
             awm.notifyAppWidgetViewDataChanged(ids, R.id.widget_list);
             WidgetProvider.updateAll(this);
+            checkForUpdate(); // manual sync doubles as an update check, as the comment above says
         });
     }
 

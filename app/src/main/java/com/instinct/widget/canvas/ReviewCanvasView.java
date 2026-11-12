@@ -201,13 +201,20 @@ public class ReviewCanvasView extends View {
         }
     }
 
+    // Chrome rects live in dp (CanvasMath owns the layout, JVM-tested); every
+    // draw path must convert dp -> px exactly once. The first native build drew
+    // dp values onto the px canvas, putting controls at 1/density of their
+    // intended position (overlapping stack) and clipping the minimap.
     private void layoutChrome(float wDp, float hDp) {
-        float m = 12, size = 44, gap = 8;
-        zoomInRect.set(wDp - m - size, hDp - m - 3 * size - 2 * gap, wDp - m, hDp - m - 2 * size - 2 * gap);
-        zoomOutRect.set(wDp - m - size, hDp - m - 2 * size - gap, wDp - m, hDp - m - size - gap);
-        fitRect.set(wDp - m - size, hDp - m - size, wDp - m, hDp - m);
-        float mh = (float) CanvasMath.miniHeight();
-        minimapRect.set(m, hDp - m - mh, m + CanvasMath.MINI_W, hDp - m);
+        CanvasMath.Rect[] c = CanvasMath.controlRects(wDp, hDp);
+        setRect(zoomInRect, c[0]);
+        setRect(zoomOutRect, c[1]);
+        setRect(fitRect, c[2]);
+        setRect(minimapRect, CanvasMath.minimapRect(wDp, hDp));
+    }
+
+    private static void setRect(RectF out, CanvasMath.Rect r) {
+        out.set((float) r.left, (float) r.top, (float) (r.left + r.width), (float) (r.top + r.height));
     }
 
     // ---- drawing ----
@@ -345,13 +352,14 @@ public class ReviewCanvasView extends View {
     }
 
     private void drawMinimap(Canvas canvas) {
-        RectF mr = minimapRect;
-        canvas.drawRoundRect(mr, 8 * density, 8 * density, chromeFill);
-        canvas.drawRoundRect(mr, 8 * density, 8 * density, chromeStroke);
+        RectF mr = minimapRect; // dp
         canvas.save();
-        canvas.clipRect(mr);
-        canvas.translate(mr.left, mr.top);
+        canvas.translate(mr.left * density, mr.top * density); // dp -> px, once
         canvas.scale(density, density);
+        RectF local = new RectF(0, 0, mr.width(), mr.height());
+        canvas.drawRoundRect(local, 8, 8, chromeFill);
+        canvas.drawRoundRect(local, 8, 8, chromeStroke);
+        canvas.clipRect(local); // overflow hidden, like the CSS minimap
         double ms = CanvasMath.miniScale();
         for (CanvasContent.Card card : CanvasContent.CARDS) {
             CanvasMath.Pos p = pos.get(card.id);
@@ -379,7 +387,7 @@ public class ReviewCanvasView extends View {
 
     private void drawChromeButton(Canvas canvas, RectF r, String label, float textSize) {
         canvas.save();
-        canvas.translate(r.left, r.top);
+        canvas.translate(r.left * density, r.top * density); // dp -> px, once
         canvas.scale(density, density);
         RectF local = new RectF(0, 0, r.width(), r.height());
         canvas.drawRoundRect(local, 8, 8, chromeFill);

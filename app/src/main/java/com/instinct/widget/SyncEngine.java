@@ -32,13 +32,19 @@ public class SyncEngine {
     // Build-time config (local.properties -> BuildConfig), never hardcoded in source:
     // the public repo ships without an endpoint and reports "feed URL not configured".
     public static final String FEED_URL = BuildConfig.FEED_URL;
+    /** Effective feed address: an on-device entry (public unconfigured builds) wins over build config. */
+    public static String effectiveFeedUrl(Context c) {
+        String onDevice = Prefs.feedUrl(c);
+        return onDevice.isEmpty() ? FEED_URL : onDevice;
+    }
     private static final Pattern PAYLOAD = Pattern.compile("IFW1\\.([A-Za-z0-9_\\-]{40,})");
     private static final long TIMEOUT_MS = 90000;
 
     public interface Callback { void onDone(boolean ok, String message); }
 
     public static void run(Context context, Callback cb) {
-        if (FEED_URL == null || FEED_URL.isEmpty()) {
+        final String feedUrl = effectiveFeedUrl(context);
+        if (feedUrl == null || feedUrl.isEmpty()) {
             Prefs.saveStatus(context, "sync failed: feed URL not configured");
             cb.onDone(false, "feed URL not configured");
             return;
@@ -90,7 +96,7 @@ public class SyncEngine {
                     main.postDelayed(() -> finish(view, finished, found, context, cb, "payload not found on page"), 15000);
                 }
             });
-            web.loadUrl(FEED_URL);
+            web.loadUrl(feedUrl);
         });
     }
 

@@ -168,6 +168,22 @@ public final class CanvasMath {
         return clampCam(new Cam((mx - MINI_PAD) / ms, (my - MINI_PAD) / ms, cam.z));
     }
 
+    /** Screen-chrome layout in dp: [zoom-in, zoom-out, fit] bottom-right, stacked. */
+    public static Rect[] controlRects(double wDp, double hDp) {
+        double m = 12, size = 44, gap = 8;
+        return new Rect[]{
+            new Rect(wDp - m - size, hDp - m - 3 * size - 2 * gap, size, size),
+            new Rect(wDp - m - size, hDp - m - 2 * size - gap, size, size),
+            new Rect(wDp - m - size, hDp - m - size, size, size),
+        };
+    }
+
+    /** Minimap chrome rect in dp, bottom-left. */
+    public static Rect minimapRect(double wDp, double hDp) {
+        double m = 12;
+        return new Rect(m, hDp - m - miniHeight(), MINI_W, miniHeight());
+    }
+
     public static Cam defaultCam() { return new Cam(WORLD_W / 2, WORLD_H / 2, 0.25); }
 
     public static Map<String, Pos> defaultPos() {

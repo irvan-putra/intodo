@@ -269,6 +269,35 @@ public class CanvasMathTest {
         }
     }
 
+    private static boolean overlap(CanvasMath.Rect a, CanvasMath.Rect b) {
+        return a.left < b.left + b.width && b.left < a.left + a.width
+            && a.top < b.top + b.height && b.top < a.top + a.height;
+    }
+
+    @Test
+    public void chromeRectsStayInBoundsAndDisjoint() {
+        Random rnd = new Random(11);
+        for (int i = 0; i < 1000; i++) {
+            double w = 200 + rnd.nextDouble() * 1200, h = 320 + rnd.nextDouble() * 900;
+            CanvasMath.Rect[] c = CanvasMath.controlRects(w, h);
+            CanvasMath.Rect mm = CanvasMath.minimapRect(w, h);
+            assertEquals(3, c.length);
+            for (CanvasMath.Rect r : c) {
+                assertEquals(44, r.width, EPS);
+                assertEquals(44, r.height, EPS);
+                assertTrue("control in bounds " + i, r.left >= -EPS && r.top >= -EPS
+                    && r.left + r.width <= w + EPS && r.top + r.height <= h + EPS);
+            }
+            for (int a = 0; a < 3; a++)
+                for (int b = a + 1; b < 3; b++)
+                    assertFalse("controls disjoint " + i, overlap(c[a], c[b]));
+            assertTrue("minimap in bounds " + i, mm.left >= -EPS && mm.top >= -EPS
+                && mm.left + mm.width <= w + EPS && mm.top + mm.height <= h + EPS);
+            assertEquals(CanvasMath.miniHeight(), mm.height, EPS);
+            for (CanvasMath.Rect r : c) assertFalse("minimap vs controls disjoint " + i, overlap(r, mm));
+        }
+    }
+
     private static double fuzzNum(Random rnd) {
         switch (rnd.nextInt(6)) {
             case 0: return Double.NaN;

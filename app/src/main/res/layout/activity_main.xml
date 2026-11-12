@@ -26,6 +26,15 @@
             android:background="#1D2939" android:padding="12dp" android:visibility="gone" />
         <Button android:id="@+id/copyKey" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:text="Copy public key" android:visibility="gone" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="Feed address (only for public builds without one built in):"
+            android:textColor="#98A2B3" android:textSize="12sp" />
+        <EditText android:id="@+id/feedUrlInput" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" android:hint="https://files.instinct.com/..." android:textColor="#FFFFFF"
+            android:textColorHint="#475467" android:textSize="13sp" android:background="#1D2939" android:padding="12dp"
+            android:inputType="textUri" />
+        <Button android:id="@+id/saveFeedUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="Save feed address" />
     </LinearLayout>
 
     <LinearLayout android:id="@+id/listPane" android:layout_width="match_parent" android:layout_height="0dp"
@@ -47,6 +56,9 @@
     <TextView android:id="@+id/openCanvas" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="8dp" android:text="Open the review canvas (prototype)" android:textColor="#667085"
         android:textSize="13sp" android:padding="8dp" />
+    <TextView android:id="@+id/updateLine" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:textColor="#F59E0B" android:textSize="12sp"
+        android:padding="4dp" android:visibility="gone" />
     <TextView android:id="@+id/version" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="v0.4.2" android:textColor="#475467" android:textSize="11sp" android:gravity="end" />
+        android:text="" android:textColor="#475467" android:textSize="11sp" android:gravity="end" />
 </LinearLayout>
