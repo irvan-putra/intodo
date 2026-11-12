@@ -7,8 +7,8 @@ android {
         applicationId 'com.instinct.widget'
         minSdk 26
         targetSdk 34
-        versionCode 7
-        versionName '0.4.2'
+        versionCode 8
+        versionName '0.4.3'
         // The personal sync endpoint is build-time config, not source: put
         // FEED_URL=https://... in local.properties (gitignored). Public source
         // builds without it and the app reports "feed URL not configured".
