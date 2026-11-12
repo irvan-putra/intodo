@@ -167,6 +167,27 @@ def pack_list_identity(xdc_path, list_id, out_dir=None):
     return out
 
 
+class CandidateUncertainError(Exception):
+    """A candidate instance check could not be COMPLETED (transient RPC /
+    read failure). Fail-closed: the caller must NOT treat the candidate as
+    disqualified - an uncertain read is different from a candidate that was
+    fully read and definitely does not qualify. Publish aborts the chat with
+    an explicit retryable error instead of adopting an older bubble or
+    sending a duplicate."""
+
+
+def _is_missing_entry_error(exc, name):
+    """True ONLY for the core's structured 'zip entry absent' error:
+    JSON-RPC code -1 with the exact message 'no entry found for <name>'
+    (real core 2.69 raises JsonRpcError(response["error"]), so args[0] is
+    the error dict). A definite negative - the file is provably not in the
+    webxdc. ANY other error (timeout, transport, different code/message)
+    stays uncertain and must raise CandidateUncertainError instead."""
+    err = exc.args[0] if getattr(exc, "args", None) else None
+    return (isinstance(err, dict) and err.get("code") == -1
+            and err.get("message") == "no entry found for %s" % name)
+
+
 class DeliveryBot:
     """Sends new app versions and replays stored history into trusted instances.
 
@@ -257,8 +278,9 @@ class DeliveryBot:
         return chat_id in self.allowed_chat_ids
 
     def _register_trusted(self, chat_id, msg_id, version, origin, author):
-        """Internal: only callable paths are publish_version (bot origin) and
-        owner_register (owner origin). There is no other way in."""
+        """Internal: only callable paths are publish_version (bot origin),
+        owner_register (owner origin) and adopt_existing_instance (bot
+        origin, recovered in-chat). There is no other way in."""
         if not version:
             raise ValueError("registered version must be non-empty (manifest-derived)")
         if not self.chat_allowed(chat_id):
@@ -520,14 +542,119 @@ class DeliveryBot:
 
     # ---- read-only version detection (source-verified, NOT run live) -------
 
+    def registered_instance_for(self, chat_id, version):
+        """msg id of an already-registered instance of `version` in `chat_id`,
+        or None. Lets a retried publish COMPLETE into the existing instance
+        (replay) instead of sending a duplicate bubble for the same version."""
+        for mid, inst in self._instances.items():
+            if inst.get("chat_id") == chat_id and inst.get("version") == version:
+                return mid
+        return None
+
     def list_app_instances(self, chat_id):
-        """All webxdc message ids in a chat, oldest first. Read-only."""
-        return self.account._rpc.get_chat_media(self.account.id, chat_id, "Webxdc", None, None)
+        """All webxdc message ids in a chat, oldest first. Raises
+        CandidateUncertainError when the listing itself cannot be read."""
+        try:
+            return self.account._rpc.get_chat_media(self.account.id, chat_id, "Webxdc", None, None)
+        except Exception as e:
+            raise CandidateUncertainError(
+                "webxdc listing for chat %s unreadable: %s" % (chat_id, e)) from e
 
     def instance_version(self, msg_id):
-        """Version string from a live instance's manifest. Read-only."""
-        b64 = self.account._rpc.get_webxdc_blob(self.account.id, msg_id, "manifest.toml")
+        """Version string from a live instance's manifest. Raises
+        CandidateUncertainError when the blob cannot be READ; returns None
+        when a successfully read manifest does not parse (definitely not a
+        versioned instance)."""
+        try:
+            b64 = self.account._rpc.get_webxdc_blob(self.account.id, msg_id, "manifest.toml")
+        except Exception as e:
+            if _is_missing_entry_error(e, "manifest.toml"):
+                return None  # provably no manifest: not a versioned instance
+            raise CandidateUncertainError(
+                "manifest of msg %s unreadable: %s" % (msg_id, e)) from e
         return parse_manifest_version_from_blob(b64)
+
+    def instance_list_id(self, msg_id):
+        """list.json pin from a live instance. Raises
+        CandidateUncertainError when the blob cannot be READ (an unreadable
+        pin is NOT the same as a missing pin); '' when a successfully read
+        list.json is absent or unparseable (definitely not pinned)."""
+        import base64
+        try:
+            b64 = self.account._rpc.get_webxdc_blob(self.account.id, msg_id,
+                                                    "list.json")
+        except Exception as e:
+            if _is_missing_entry_error(e, "list.json"):
+                return ""  # provably no pin file: definitely not pinned
+            raise CandidateUncertainError(
+                "list.json of msg %s unreadable: %s" % (msg_id, e)) from e
+        try:
+            data = json.loads(base64.b64decode(
+                b64 + "=" * (-len(b64) % 4)).decode())
+        except Exception:
+            return ""
+        return data.get("list_id", "") if isinstance(data, dict) else ""
+
+    def instance_sent_by_self(self, msg_id):
+        """True only when the core says THIS account authored the message
+        (snapshot from_id == SELF contact; the client's AttrDict snapshot
+        normalizes the raw camelCase RPC keys). Raises
+        CandidateUncertainError when the snapshot cannot be READ - False is
+        reserved for a successfully read, definitively different author, so
+        a transient failure can never silently disqualify a candidate."""
+        from deltachat_rpc_client import Message
+        try:
+            snap = Message(self.account, msg_id).get_snapshot()
+        except Exception as e:
+            raise CandidateUncertainError(
+                "snapshot of msg %s unreadable: %s" % (msg_id, e)) from e
+        from_id = (snap.get("from_id") if hasattr(snap, "get")
+                   else getattr(snap, "from_id", None))
+        return from_id == 1  # DC_CONTACT_SELF
+
+    def adopt_existing_instance(self, chat_id, version):
+        """Upgrade-gap recovery: adopt an ALREADY-DELIVERED instance of
+        `version` in `chat_id` whose registration was lost (crash between
+        send and persist). STRICT, all read-only checks:
+          1. instance is a webxdc message IN THIS CHAT (chat-scoped listing)
+          2. sender is the bot itself (core from_id == SELF)
+          3. manifest parses to EXACTLY `version`
+          4. list.json exists, parses, and pins EXACTLY this gate's list_id
+        Among matching candidates the HIGHEST msg id (latest send) wins;
+        replay is idempotent, nothing is sent or deleted. On adoption the
+        instance is registered bot-origin and persisted immediately, so
+        boot hints and replay work from this point on. Returns the adopted
+        msg id, or None when every candidate was READ and none qualifies.
+        Raises CandidateUncertainError when ANY candidate cannot be fully
+        verified: fail-closed, never skip-and-adopt-older on doubt."""
+        if not version or not self.chat_allowed(chat_id):
+            return None
+        matches = []
+        for msg_id in self.list_app_instances(chat_id):
+            if not self.instance_sent_by_self(msg_id):
+                continue
+            if self.instance_version(msg_id) != version:
+                continue
+            if self.instance_list_id(msg_id) != self.list_id:
+                continue
+            matches.append(msg_id)
+        if not matches:
+            return None
+        chosen = max(matches)
+        self._register_trusted(chat_id, chosen, version, ORIGIN_BOT,
+                               self.bot_addr)
+        # One-shot strict adoption ingest: the store has never seen this
+        # instance's pre-adoption updates (edits made while it was
+        # orphaned), and live incremental ingest only covers FUTURE
+        # updates. Queue a full-history pull exactly once; the entry
+        # clears only after the ingest commits (watermark advanced), so a
+        # crash retries it and watermark/dedup make any retry a no-op.
+        if chosen not in self._pending_ingest:
+            self._pending_ingest.append(chosen)
+            self._persist()
+        log.info("instance %s adopted in chat %s (v%s, %d candidate(s))",
+                 chosen, chat_id, version, len(matches))
+        return chosen
 
     # ---- boot handling (hint only, throttled) -------------------------------
 

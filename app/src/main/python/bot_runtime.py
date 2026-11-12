@@ -671,7 +671,7 @@ def _app_publish(files_dir, control, name, request=None):
       the same packed list id, registration is additive, and the store's
       canonical-op dedup makes ops from either instance apply once.
     """
-    result = {"published": {}, "errors": {}, "skipped": {},
+    result = {"published": {}, "errors": {}, "skipped": {}, "partial": {},
               "file": name, "request": request}
     if (not name or "/" in name or name in (".", "..")
             or not name.lower().endswith(".xdc")):
@@ -702,25 +702,115 @@ def _app_publish(files_dir, control, name, request=None):
         result["skipped"] = {k: prior["published"][k]
                              for k in prior.get("published", {})}
     from deltachat_rpc_client import Chat
+    from delivery_bot import CandidateUncertainError, parse_manifest_version
+    try:
+        want_version = parse_manifest_version(path)
+    except Exception:
+        want_version = None  # the per-chat publish_version call refuses it
     for key, rec in control._st().get("chats", {}).items():
         if key in already or rec.get("revoked"):
             continue  # revoked = out of scope until re-added
         cid = int(key)
         try:
             rt = control._runtime_for(cid, rec["list_id"])
-            msg, sent = rt.gate.publish_and_restore(
-                Chat(control.account, cid), path, rt.bridge.send_update)
-            result["published"][key] = {"msg_id": msg.id,
-                                        "ops_replayed": sent}
-            prog.setdefault("done", []).append(key)
+            existing = (rt.gate.registered_instance_for(cid, want_version)
+                        if want_version else None)
+            adopted = None
+            if existing is None and want_version:
+                # Upgrade-gap recovery BEFORE any send: an earlier run may
+                # have delivered this exact version's bubble but died before
+                # registration was durable (the r12 crash). Adopting the
+                # chat-local, bot-authored, list-pinned, version-exact
+                # instance preserves the already-edited bubble and avoids a
+                # duplicate. Nothing qualifies -> normal send path below.
+                adopted = rt.gate.adopt_existing_instance(cid, want_version)
+            if adopted is not None:
+                # Strict one-shot adoption ingest BEFORE replay: pull the
+                # adopted instance's full pre-adoption history into the
+                # store (its watermark starts at 0), so edits made while
+                # it was orphaned become canonical and join this replay
+                # and all future ones. A failure leaves the queued ingest
+                # for the drain/boot retry; it never blocks the replay.
+                ingest_pending = False
+                try:
+                    rt.bridge.process_instance(adopted)
+                    rt.gate.ingest_done(adopted)
+                except Exception:
+                    log.exception("adoption ingest of %s failed; left queued",
+                                  adopted)
+                    ingest_pending = True
+                try:
+                    sent = rt.gate.restore_into(adopted, rt.bridge.send_update)
+                except Exception as e:
+                    result["partial"][key] = {"msg_id": adopted,
+                                              "error": str(e)}
+                    continue
+                result["published"][key] = {"msg_id": adopted,
+                                            "ops_replayed": sent,
+                                            "adopted": True}
+                if ingest_pending:
+                    # Replay succeeded, but the adopted instance's older
+                    # history is still queued for the store - honest flag so
+                    # the UI does not imply the recovery is fully complete.
+                    result["published"][key]["ingest_pending"] = True
+                prog.setdefault("done", []).append(key)
+            elif existing is not None:
+                # This version is ALREADY delivered and registered in the
+                # chat (e.g. a previous run sent the instance but failed
+                # during replay): complete into the EXISTING instance
+                # instead of sending a duplicate bubble for the same bytes.
+                sent = rt.gate.restore_into(existing, rt.bridge.send_update)
+                result["published"][key] = {"msg_id": existing,
+                                            "ops_replayed": sent,
+                                            "existing": True}
+                prog.setdefault("done", []).append(key)
+            else:
+                # send first; if the SEND fails nothing left the device and
+                # the chat stays a plain error.
+                try:
+                    msg = rt.gate.publish_version(Chat(control.account, cid), path)
+                except Exception as e:
+                    result["errors"][key] = str(e)
+                    continue
+                # The instance is sent and registered BEFORE the replay is
+                # attempted; checkpoint that immediately, so a crash or a
+                # replay failure can never cause a duplicate bubble: a retry
+                # of the SAME bytes finds the registration above.
+                prog.setdefault("sent", {})[key] = msg.id
+                tmp = prog_path + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump(prog, f)
+                os.replace(tmp, prog_path)  # atomic per-chat send checkpoint
+                try:
+                    sent = rt.gate.restore_into(msg.id, rt.bridge.send_update)
+                except Exception as e:
+                    # Honest third state: delivered but NOT replayed. Not
+                    # prog["done"]: a same-bytes retry finishes the replay
+                    # via the registered-instance path (no duplicate send).
+                    result["partial"][key] = {"msg_id": msg.id,
+                                              "error": str(e)}
+                    continue
+                result["published"][key] = {"msg_id": msg.id,
+                                            "ops_replayed": sent}
+                prog.setdefault("done", []).append(key)
             tmp = prog_path + ".tmp"
             with open(tmp, "w") as f:
                 json.dump(prog, f)
             os.replace(tmp, prog_path)  # atomic per-chat checkpoint
+        except CandidateUncertainError as e:
+            # Fail-closed: a candidate check could not be COMPLETED
+            # (transient RPC/read failure). Never fall through to
+            # adopt-older or to a duplicate send on doubt - report an
+            # explicit retryable error for this chat instead.
+            result["errors"][key] = (
+                "could not verify this chat's existing app bubbles "
+                "(temporary read failure: %s); nothing was sent - publish "
+                "the SAME file again to retry" % e)
+            continue
         except Exception as e:
             result["errors"][key] = str(e)
     result["sha256"] = sha
-    if result["published"]:
+    if result["published"] or result["partial"]:
         # latest-version tracking (idea from the public PixelSocial bot):
         # remember the app-side-published current version so chats that
         # missed it (new chat, revoked at the time, relay failure) can be

@@ -37,14 +37,16 @@ public class BotActivity extends Activity {
         Button invite = new Button(this); invite.setText("4. Show invitation QR (scan it from your DeltaChat)");
         Button stop = new Button(this); stop.setText("Stop service");
         Button publish = new Button(this); publish.setText("5. Publish new app version (.xdc) to all chats");
+        Button fetchXdc = new Button(this); fetchXdc.setText("6. Get latest app version (.xdc) from GitHub");
         candBox = new LinearLayout(this); candBox.setOrientation(LinearLayout.VERTICAL);
         logView = new TextView(this);
         ScrollView sv = new ScrollView(this); sv.addView(logView);
         TextView steps = new TextView(this);
-        steps.setText("Setup: 1 probe, 2 create account, 3 start bot, 4 show the invitation - on this same phone tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list, kept separate. Button 5 publishes a new .xdc from this app to every chat the bot serves.");
+        steps.setText("Setup: 1 probe, 2 create account, 3 start bot, 4 show the invitation - on this same phone tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list, kept separate. Button 5 publishes a new .xdc from this app to every chat the bot serves; button 6 downloads the newest .xdc from GitHub so you do not have to pick a file yourself.");
         root.addView(steps);
         root.addView(validate); root.addView(provision); root.addView(importBtn); root.addView(live); root.addView(invite); root.addView(stop);
         root.addView(publish);
+        root.addView(fetchXdc);
         root.addView(candBox); root.addView(sv);
         setContentView(root);
 
@@ -148,6 +150,7 @@ public class BotActivity extends Activity {
             stopService(new Intent(this, BotService.class));
         });
         publish.setOnClickListener(v -> startPublishFlow());
+        fetchXdc.setOnClickListener(v -> startFetchFlow());
 
         // Reattach to a publish that is still in flight across recreation:
         // the request or its crash-resume checkpoint must still exist, and
@@ -160,12 +163,14 @@ public class BotActivity extends Activity {
                     || new File(getFilesDir(), "PUBLISH_PROG").exists())) {
             pendingPublishToken = savedToken;
             pendingPublishSha = prefs.getString("pending_publish_sha", null);
+            pendingPublishName = prefs.getString("pending_publish_name", null);
             Toast.makeText(this, "A publish is still running - reattached to its result", Toast.LENGTH_SHORT).show();
             pollPublishResult(System.currentTimeMillis());
         } else if (savedToken != null) {
             // Nothing in flight: drop the stale reference. A completed
             // run's DONE stays as the runtime's dedup input, untouched.
-            prefs.edit().remove("pending_publish_sha").remove("pending_publish_token").apply();
+            prefs.edit().remove("pending_publish_sha").remove("pending_publish_token")
+                .remove("pending_publish_name").apply();
         }
 
         Runnable tick = new Runnable() { public void run() {
@@ -180,6 +185,7 @@ public class BotActivity extends Activity {
         if (requestCode == REQ_PICK_XDC) {
             if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
             try {
+                pendingPublishName = displayNameOf(data.getData());
                 queuePublish(getContentResolver().openInputStream(data.getData()));
                 final long tap = System.currentTimeMillis();
                 Toast.makeText(this, "Publishing to all served chats...", Toast.LENGTH_SHORT).show();
@@ -220,6 +226,7 @@ public class BotActivity extends Activity {
     private static final int REQ_PICK_XDC = 43;
     private String pendingPublishSha = null;
     private String pendingPublishToken = null;
+    private String pendingPublishName = null;
 
     private void startPublishFlow() {
         File stf = new File(getFilesDir(), "bot_state.json");
@@ -236,7 +243,7 @@ public class BotActivity extends Activity {
         }
         new android.app.AlertDialog.Builder(this)
             .setTitle("Publish new app version")
-            .setMessage("Pick the new .xdc file. The bot sends it to EVERY chat it serves (each group and each direct chat with the bot).")
+            .setMessage("Pick the new .xdc file (or use button 6 to fetch the latest from GitHub). The bot sends it to EVERY chat it serves (each group and each direct chat with the bot).")
             .setPositiveButton("Pick .xdc", (d, w) -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -245,6 +252,127 @@ public class BotActivity extends Activity {
             })
             .setNegativeButton("Cancel", null)
             .show();
+    }
+
+    // Manual-tap fetch of the newest .xdc from the pinned GitHub repo, then a
+    // deliberate Publish tap. Nothing polls in the background and nothing is
+    // published automatically.
+    private void startFetchFlow() {
+        Toast.makeText(this, "Checking GitHub for the latest app version...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            final XdcFetch.Found f;
+            final String version;
+            final File out;
+            try {
+                f = XdcFetch.fetchLatest();
+                File dir = new File(getFilesDir(), "fetched-xdc");
+                //noinspection ResultOfMethodCallIgnored
+                dir.mkdirs();
+                out = new File(dir, f.name);
+                version = XdcFetch.downloadTo(dir, f, out);
+            } catch (final XdcFetch.FetchException fe) {
+                runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+                    .setTitle("Could not get the app version")
+                    .setMessage(fe.getMessage())
+                    .setPositiveButton("OK", null).show());
+                return;
+            }
+            runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+                .setTitle("App version ready")
+                .setMessage("Fetched " + f.name + " (release " + f.tag + ", app version " + version + ").\n\n"
+                    + "Publish it to EVERY chat the bot serves now?")
+                .setPositiveButton("Publish", (d, w) -> {
+                    File stf = new File(getFilesDir(), "bot_state.json");
+                    String js = stf.exists() ? read(stf) : "";
+                    boolean prov = false;
+                    try { prov = new JSONObject(js).optBoolean("provisioned", false); } catch (Exception ignored) {}
+                    if (!prov) {
+                        Toast.makeText(this, "Create the bot account first (button 2)", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    if (!new File(getFilesDir(), "RUNNING").exists()) {
+                        Toast.makeText(this, "Start the bot service first (button 3)", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    try {
+                        pendingPublishName = f.name;
+                        queuePublish(new FileInputStream(out));
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Could not read the fetched file", Toast.LENGTH_LONG).show();
+                    }
+                })
+                .setNegativeButton("Not now", (d, w) -> out.delete())
+                .show());
+        }).start();
+    }
+
+    /** THE production publish-result composition. The dialog shows exactly
+     *  what this returns, and PublishDialogRenderTest asserts the rendered
+     *  dialog text equals this method's output, so the rendered pixels are
+     *  the real production wording, never a duplicated test copy. */
+    static String composePublishSummary(JSONObject r, String publishName) {
+        JSONObject pub = r.optJSONObject("published");
+        JSONObject skip = r.optJSONObject("skipped");
+        JSONObject errs = r.optJSONObject("errors");
+        JSONObject part = r.optJSONObject("partial");
+        int nPub = pub == null ? 0 : pub.length();
+        int nSkip = skip == null ? 0 : skip.length();
+        int nPart = part == null ? 0 : part.length();
+        int nAdopt = 0, nHist = 0;
+        if (pub != null) {
+            java.util.Iterator<String> ait = pub.keys();
+            while (ait.hasNext()) {
+                JSONObject ao = pub.optJSONObject(ait.next());
+                if (ao != null && ao.optBoolean("adopted", false)) nAdopt++;
+                if (ao != null && ao.optBoolean("ingest_pending", false)) nHist++;
+            }
+        }
+        StringBuilder msg = new StringBuilder();
+        if (nPart > 0) {
+            // Delivered count and fully-ready count stay DISTINCT: a partial
+            // run DID deliver the bubble, it just did not finish the replay.
+            // Never open with "Published to 0" for a delivered app.
+            msg.append("Delivered to ").append(nPub + nPart)
+               .append(" chat(s); fully ready in ").append(nPub).append(".");
+        } else {
+            msg.append("Published to ").append(nPub).append(" chat(s).");
+        }
+        if (nSkip > 0) msg.append(" Already had this exact file: ").append(nSkip).append(".");
+        if (nAdopt > 0) msg.append(" Recovered the already-delivered app bubble without sending a duplicate: ").append(nAdopt).append(".");
+        if (nHist > 0) msg.append(" Earlier history recovery is pending in ").append(nHist).append(" chats.");
+        if (part != null && part.length() > 0) {
+            // Third state: the app WAS delivered (bubble sent + registered)
+            // but the history replay failed. Retrying the SAME file completes
+            // the replay into the existing instance - no duplicate bubble.
+            msg.append("\n\nDelivered but history replay failed in ")
+               .append(part.length())
+               .append(" chat(s); retry the SAME file to finish:");
+            java.util.Iterator<String> pit = part.keys();
+            while (pit.hasNext()) {
+                String pk = pit.next();
+                JSONObject po = part.optJSONObject(pk);
+                msg.append("\nchat ").append(pk).append(": ")
+                   .append(po == null ? "" : po.optString("error"));
+            }
+        }
+        if (errs != null && errs.length() > 0) {
+            StringBuilder raw = new StringBuilder();
+            String lead = null;
+            java.util.Iterator<String> it = errs.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                String e = errs.optString(k);
+                raw.append("\nchat ").append(k).append(": ").append(e);
+                if (lead == null) lead = PublishErrors.friendlyLead(e, publishName);
+            }
+            if (lead != null) {
+                msg.append("\n\n").append(lead)
+                   .append("\n\nTechnical details:").append(raw);
+            } else {
+                msg.append("\n\nErrors:").append(raw);
+            }
+        }
+        return msg.toString();
     }
 
     private void pollPublishResult(final long tap) {
@@ -268,25 +396,12 @@ public class BotActivity extends Activity {
                         if (System.currentTimeMillis() - tap < 60000) handler.postDelayed(poll[0], 1000);
                         return;
                     }
-                    JSONObject pub = r.optJSONObject("published");
-                    JSONObject skip = r.optJSONObject("skipped");
-                    JSONObject errs = r.optJSONObject("errors");
-                    int nPub = pub == null ? 0 : pub.length();
-                    int nSkip = skip == null ? 0 : skip.length();
-                    StringBuilder msg = new StringBuilder();
-                    msg.append("Published to ").append(nPub).append(" chat(s).");
-                    if (nSkip > 0) msg.append(" Already had this exact file: ").append(nSkip).append(".");
-                    if (errs != null && errs.length() > 0) {
-                        msg.append("\n\nErrors:");
-                        java.util.Iterator<String> it = errs.keys();
-                        while (it.hasNext()) {
-                            String k = it.next();
-                            msg.append("\nchat ").append(k).append(": ").append(errs.optString(k));
-                        }
-                    }
+                    StringBuilder msg = new StringBuilder(
+                            composePublishSummary(r, pendingPublishName));
                     getSharedPreferences("bot", MODE_PRIVATE).edit()
                         .remove("pending_publish_sha")
                         .remove("pending_publish_token")
+                        .remove("pending_publish_name")
                         .apply();
                     new android.app.AlertDialog.Builder(BotActivity.this)
                         .setTitle("Publish result")
@@ -305,6 +420,17 @@ public class BotActivity extends Activity {
             }
         }};
         handler.postDelayed(poll[0], 1000);
+    }
+
+    // The picker's own display name, for plain-language result messages.
+    private String displayNameOf(android.net.Uri uri) {
+        try (android.database.Cursor c = getContentResolver().query(uri, null, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                int i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (i >= 0) return c.getString(i);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     // No network/core calls: the runtime watches the request file.
@@ -343,6 +469,7 @@ public class BotActivity extends Activity {
         getSharedPreferences("bot", MODE_PRIVATE).edit()
             .putString("pending_publish_sha", pendingPublishSha)
             .putString("pending_publish_token", pendingPublishToken)
+            .putString("pending_publish_name", pendingPublishName)
             .apply();
     }
 

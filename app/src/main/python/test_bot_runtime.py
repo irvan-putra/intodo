@@ -74,6 +74,9 @@ class FakeAccount:
             def get_message_ids(self, aid, cid, info_only, add_daymarker):
                 return [mid for mid, _t in acct._chats[cid][5]]
 
+            def get_chat_media(self, aid, cid, media_type, a, b):
+                return []  # no webxdc instances in the fake chat by default
+
             def get_message(self, aid, mid):
                 for c in acct._chats.values():
                     for iid, text in c[5]:
@@ -681,16 +684,21 @@ def test_app_publish_watcher():
         f.write("v2.xdc")
     calls = []
     import delivery_bot
-    orig = delivery_bot.DeliveryBot.publish_and_restore
+    orig_pv = delivery_bot.DeliveryBot.publish_version
+    orig_ri = delivery_bot.DeliveryBot.restore_into
 
     class M:
         id = 4242
 
-    def fake_publish(self, chat, path, send_update, note=""):
+    def fake_publish_version(self, chat, path, note=""):
         calls.append((chat.id, os.path.basename(path)))
-        return M(), 3
+        return M()
 
-    delivery_bot.DeliveryBot.publish_and_restore = fake_publish
+    def fake_restore(self, msg_id, send_update):
+        return 3
+
+    delivery_bot.DeliveryBot.publish_version = fake_publish_version
+    delivery_bot.DeliveryBot.restore_into = fake_restore
     try:
         t = _th.Thread(target=br._publish_watcher, args=(d, ctl), daemon=True)
         t.start()
@@ -701,7 +709,8 @@ def test_app_publish_watcher():
         open(os.path.join(d, br.STOP_FLAG), "w").close()
         t.join(timeout=5)
     finally:
-        delivery_bot.DeliveryBot.publish_and_restore = orig
+        delivery_bot.DeliveryBot.publish_version = orig_pv
+        delivery_bot.DeliveryBot.restore_into = orig_ri
     assert sorted(calls) == [(77, "v2.xdc"), (78, "v2.xdc")], calls
     res = json.load(open(os.path.join(d, br.PUBLISH_DONE)))
     assert sorted(res["published"]) == ["77", "78"], res
@@ -745,14 +754,16 @@ def test_app_publish_retry_dedup_and_resume():
     class M:
         id = 4242
 
-    def fake_publish(self, chat, path, send_update, note=""):
+    def fake_publish_version(self, chat, path, note=""):
         calls.append(chat.id)
         if chat.id == 78:
             raise RuntimeError("relay down")
-        return M(), 1
+        return M()
 
-    orig = delivery_bot.DeliveryBot.publish_and_restore
-    delivery_bot.DeliveryBot.publish_and_restore = fake_publish
+    orig_pv = delivery_bot.DeliveryBot.publish_version
+    orig_ri = delivery_bot.DeliveryBot.restore_into
+    delivery_bot.DeliveryBot.publish_version = fake_publish_version
+    delivery_bot.DeliveryBot.restore_into = lambda self, msg_id, send_update: 1
     try:
         r1 = br._app_publish(d, ctl, "v2.xdc")  # 77 ok, 78 errors
         assert r1["published"].keys() == {"77"} and r1["errors"].keys() == {"78"}
@@ -780,7 +791,8 @@ def test_app_publish_retry_dedup_and_resume():
         r4 = br._app_publish(d, ctl, "v3.xdc")
         assert sorted(calls) == [77, 78], calls
     finally:
-        delivery_bot.DeliveryBot.publish_and_restore = orig
+        delivery_bot.DeliveryBot.publish_version = orig_pv
+        delivery_bot.DeliveryBot.restore_into = orig_ri
     print("publish retry/resume ok")
 
 
@@ -800,16 +812,19 @@ def test_publish_skips_revoked_and_correlates():
     class M:
         id = 4242
 
-    def fake_publish(self, chat, path, send_update, note=""):
+    def fake_publish_version(self, chat, path, note=""):
         calls.append(chat.id)
-        return M(), 0
+        return M()
 
-    orig = delivery_bot.DeliveryBot.publish_and_restore
-    delivery_bot.DeliveryBot.publish_and_restore = fake_publish
+    orig_pv = delivery_bot.DeliveryBot.publish_version
+    orig_ri = delivery_bot.DeliveryBot.restore_into
+    delivery_bot.DeliveryBot.publish_version = fake_publish_version
+    delivery_bot.DeliveryBot.restore_into = lambda self, msg_id, send_update: 0
     try:
         res = br._app_publish(d, ctl, "v2.xdc", request="req-123")
     finally:
-        delivery_bot.DeliveryBot.publish_and_restore = orig
+        delivery_bot.DeliveryBot.publish_version = orig_pv
+        delivery_bot.DeliveryBot.restore_into = orig_ri
     assert calls == [77], calls
     assert res["request"] == "req-123" and res["file"] == "v2.xdc"
     assert sorted(res["published"]) == ["77"]
@@ -817,6 +832,26 @@ def test_publish_skips_revoked_and_correlates():
 
 
 
+
+
+def _fake_publish_version_recording(calls, register=True):
+    """New-seam fake for _app_publish tests: fakes the SEND (publish_version),
+    keeps restore real-shaped via a stub; registration mirrors the real flow."""
+    import delivery_bot
+
+    class M:
+        id = 5555
+
+    def fake_pv(self, chat, path, note=""):
+        calls.append((chat.id, os.path.basename(path)))
+        if register:  # real flow registers the sent instance with its version
+            from delivery_bot import parse_manifest_version
+            self._instances[M.id + len(calls)] = {
+                "chat_id": chat.id, "list_id": self.list_id,
+                "version": parse_manifest_version(path)}
+        return M()
+
+    return fake_pv
 
 
 def _fake_publish_recording(calls, register=True):
@@ -854,13 +889,16 @@ def test_app_publish_records_current_app():
     ctl.on_new_message(event_for(77, "me@x", "hi"))
     _real_xdc(d, "v2.xdc", "2.0.0")
     import delivery_bot
-    orig = delivery_bot.DeliveryBot.publish_and_restore
+    orig_pv = delivery_bot.DeliveryBot.publish_version
+    orig_ri = delivery_bot.DeliveryBot.restore_into
     calls = []
-    delivery_bot.DeliveryBot.publish_and_restore = _fake_publish_recording(calls)
+    delivery_bot.DeliveryBot.publish_version = _fake_publish_version_recording(calls)
+    delivery_bot.DeliveryBot.restore_into = lambda self, msg_id, send_update: 2
     try:
         res = br._app_publish(d, ctl, "v2.xdc", request="tok1")
     finally:
-        delivery_bot.DeliveryBot.publish_and_restore = orig
+        delivery_bot.DeliveryBot.publish_version = orig_pv
+        delivery_bot.DeliveryBot.restore_into = orig_ri
     assert res["current_version"] == "2.0.0", res
     app = br.load_state(d)["current_app"]
     assert app["file"] == "v2.xdc" and app["version"] == "2.0.0", app
@@ -984,13 +1022,16 @@ def test_publish_prog_preserves_request_token():
     with open(os.path.join(d, br.PUBLISH_PROG), "w") as f:
         json.dump({"sha256": sha, "file": "v2.xdc", "done": [],
                    "request": "tok-orig"}, f)
-    orig = delivery_bot.DeliveryBot.publish_and_restore
+    orig_pv = delivery_bot.DeliveryBot.publish_version
+    orig_ri = delivery_bot.DeliveryBot.restore_into
     calls = []
-    delivery_bot.DeliveryBot.publish_and_restore = _fake_publish_recording(calls)
+    delivery_bot.DeliveryBot.publish_version = _fake_publish_version_recording(calls)
+    delivery_bot.DeliveryBot.restore_into = lambda self, msg_id, send_update: 2
     try:
         res = br._app_publish(d, ctl, "v2.xdc", request=None)  # resume path
     finally:
-        delivery_bot.DeliveryBot.publish_and_restore = orig
+        delivery_bot.DeliveryBot.publish_version = orig_pv
+        delivery_bot.DeliveryBot.restore_into = orig_ri
     assert res["request"] == "tok-orig", res
     assert res["published"].get("77"), res
     print("PROG request-token preservation ok")
@@ -1005,9 +1046,11 @@ def test_publish_done_write_failure_keeps_prog():
     ctl, acct, d = _control(chats, {"provisioned": True})
     ctl.on_new_message(event_for(77, "me@x", "hi"))
     _real_xdc(d, "v2.xdc", "2.0.0")
-    orig_pub = delivery_bot.DeliveryBot.publish_and_restore
+    orig_pv = delivery_bot.DeliveryBot.publish_version
+    orig_ri = delivery_bot.DeliveryBot.restore_into
     calls = []
-    delivery_bot.DeliveryBot.publish_and_restore = _fake_publish_recording(calls)
+    delivery_bot.DeliveryBot.publish_version = _fake_publish_version_recording(calls)
+    delivery_bot.DeliveryBot.restore_into = lambda self, msg_id, send_update: 2
     real_replace = os.replace
     done_path = os.path.join(d, br.PUBLISH_DONE)
     prog_path = os.path.join(d, br.PUBLISH_PROG)
@@ -1044,12 +1087,500 @@ def test_publish_done_write_failure_keeps_prog():
         t1.join(timeout=5)
     finally:
         br.os.replace = real_replace
-        delivery_bot.DeliveryBot.publish_and_restore = orig_pub
+        delivery_bot.DeliveryBot.publish_version = orig_pv
+        delivery_bot.DeliveryBot.restore_into = orig_ri
     assert calls == [(77, "v2.xdc")], calls  # no duplicate send on retry
     res = json.load(open(done_path))
     assert res["request"] == "tok-2", res
     assert not os.path.exists(prog_path)
     print("DONE-failure PROG durability ok")
+
+
+
+
+def _mk_op(i):
+    return {"item": "t%d" % i, "field": "title",
+            "stamp": {"hlc": i, "device": "dev1"}, "value": "task %d" % i}
+
+
+def _versioned_xdc(d, name, version):
+    p = os.path.join(d, name)
+    with zipfile.ZipFile(p, "w") as z:
+        z.writestr("manifest.toml", 'version = "%s"\nname = "t"\n' % version)
+        z.writestr("index.html", "hi")
+    return p
+
+
+def test_app_publish_cross_thread_real_store():
+    # REAL regression for the r12 phone failure: the chat runtime (and its
+    # OpsStore connection) is built on the MAIN/bot-loop thread, then the
+    # app-side publish fan-out runs on the publish watcher's OWN thread.
+    # Pre-fix the replay died with sqlite3 ProgrammingError. Real OpsStore
+    # (forced stdlib sqlite3 = the phone path), real DeliveryBot gate,
+    # real restore - only the RPC send and the bridge update send are faked.
+    import threading as _th
+    os.environ["OPS_STORE_FORCE_SQLITE"] = "1"
+    chats = [(77, "Group", "Shared List", [], False, [(9001, OWNER_ADD)])]
+    ctl, acct, d = _control(chats, {"provisioned": True})
+    ctl.on_new_message(event_for(77, "me@x", "hi"))
+    rt = ctl._runtime_for(77, br.load_state(d)["chats"]["77"]["list_id"])
+    # seed 5 real ops on the MAIN thread, as loop-thread ingest would
+    rt.bridge.store.apply_updates(
+        4242, [{"serial": i + 1, "payload": {"ops": [_mk_op(i + 1)]}, "info": ""}
+               for i in range(5)])
+    assert rt.bridge.store.count() == 5
+    _versioned_xdc(d, "v3.xdc", "9.9.9-test")
+
+    from deltachat_rpc_client import Chat as RealChat
+    orig_sm = RealChat.send_message
+    sends = []
+
+    class M:
+        id = 4242
+
+    def fake_sm(self, text=None, file=None, viewtype=None):
+        sends.append(viewtype)
+        return M()
+
+    updates = []
+    rt.bridge.send_update = lambda msg_id, payload, info="": updates.append(payload)
+    RealChat.send_message = fake_sm
+    res = {}
+    try:
+        t = _th.Thread(target=lambda: res.update(br._app_publish(d, ctl, "v3.xdc")))
+        t.start()
+        t.join(timeout=30)
+        assert not t.is_alive(), "publish fan-out hung"
+    finally:
+        RealChat.send_message = orig_sm
+    assert res["errors"] == {}, res
+    assert res["partial"] == {}, res
+    assert res["published"]["77"]["ops_replayed"] == 5, res
+    assert sends == ["Webxdc"], sends
+    assert len(updates) >= 1 and updates[-1]["ops"], "no restore batches sent"
+    assert rt.gate._instances[4242]["version"] == "9.9.9-test"
+    assert br.load_state(d)["current_app"]["version"] == "9.9.9-test"
+    print("cross-thread real-store publish ok")
+
+
+def test_store_concurrent_ingest_and_replay_reads():
+    # loop-thread WRITES (ingest) race watcher-thread READS (replay): two
+    # connections, SQLite locking + busy_timeout - no ProgrammingError, no
+    # SQLITE_BUSY, no lost rows.
+    import threading as _th
+    os.environ["OPS_STORE_FORCE_SQLITE"] = "1"
+    from ops_store import OpsStore
+    d = fresh()
+    s = OpsStore(os.path.join(d, "ops.db"))
+    s.bind_list("list-t")
+    s.apply_updates(1, [{"serial": 1, "payload": {"ops": [_mk_op(1)]}, "info": ""}])
+    errors = []
+
+    def writer():
+        try:
+            for i in range(2, 27):  # 25 appends while the reader replays
+                s.apply_updates(1, [{"serial": i,
+                                     "payload": {"ops": [_mk_op(i)]}, "info": ""}])
+        except Exception as e:
+            errors.append(("writer", e))
+
+    def reader():
+        try:
+            for _ in range(40):
+                s.ops_since(0)
+        except Exception as e:
+            errors.append(("reader", e))
+
+    r = _th.Thread(target=reader)
+    w = _th.Thread(target=writer)
+    r.start(); w.start()
+    w.join(timeout=30); r.join(timeout=30)
+    assert not w.is_alive() and not r.is_alive()
+    assert not errors, errors
+    assert s.count() == 26, s.count()
+    print("concurrent ingest/replay ok")
+
+
+def test_app_publish_partial_then_retry_no_duplicate():
+    # send OK + replay fails => honest "partial" (msg_id recorded), an
+    # immediate sent-checkpoint in PUBLISH_PROG, current_app still tracked;
+    # a SAME-BYTES retry completes into the EXISTING instance - no second
+    # bubble, no duplicate send.
+    chats = [(77, "Group", "Shared List", [], False, [(9001, OWNER_ADD)])]
+    ctl, acct, d = _control(chats, {"provisioned": True})
+    ctl.on_new_message(event_for(77, "me@x", "hi"))
+    _versioned_xdc(d, "v3.xdc", "9.9.9-test")
+
+    from deltachat_rpc_client import Chat as RealChat
+    orig_sm = RealChat.send_message
+    sends = []
+
+    class M:
+        id = 4242
+
+    def fake_sm(self, text=None, file=None, viewtype=None):
+        sends.append(viewtype)
+        return M()
+
+    import delivery_bot
+    orig_ri = delivery_bot.DeliveryBot.restore_into
+    state = {"fail": True}
+
+    def flaky_restore(self, msg_id, send_update):
+        if state["fail"]:
+            raise RuntimeError("replay blew up")
+        return 0
+
+    RealChat.send_message = fake_sm
+    delivery_bot.DeliveryBot.restore_into = flaky_restore
+    try:
+        r1 = br._app_publish(d, ctl, "v3.xdc")
+        assert r1["published"] == {} and r1["errors"] == {}, r1
+        assert r1["partial"]["77"]["msg_id"] == 4242, r1
+        assert "replay blew up" in r1["partial"]["77"]["error"], r1
+        prog = json.load(open(os.path.join(d, br.PUBLISH_PROG)))
+        assert prog["sent"]["77"] == 4242, prog
+        assert "77" not in prog.get("done", []), prog
+        assert br.load_state(d)["current_app"]["version"] == "9.9.9-test"
+        # retry the SAME bytes: replay now works
+        state["fail"] = False
+        r2 = br._app_publish(d, ctl, "v3.xdc")
+        assert len(sends) == 1, "retry sent a duplicate bubble: %r" % sends
+        assert r2["errors"] == {} and r2["partial"] == {}, r2
+        assert r2["published"]["77"]["msg_id"] == 4242, r2
+        assert r2["published"]["77"]["existing"] is True, r2
+        prog2 = json.load(open(os.path.join(d, br.PUBLISH_PROG)))
+        assert "77" in prog2.get("done", []), prog2
+    finally:
+        RealChat.send_message = orig_sm
+        delivery_bot.DeliveryBot.restore_into = orig_ri
+    print("partial + no-duplicate retry ok")
+
+
+
+
+# ---------------------------------------------------------- adoption (r12 upgrade gap)
+class _AdoptFakeGate:
+    """Minimal gate fake for _app_publish adoption tests: no durable
+    registration (registered_instance_for misses), canned adopt result."""
+    def __init__(self, adopt_result):
+        self._adopt_result = adopt_result
+        self.adopt_calls = []
+        self.send_calls = []
+        self.restore_calls = []
+        self.list_id = "list-x"
+        self.bot_addr = "bot@nine.testrun.org"
+    def registered_instance_for(self, cid, version):
+        return None
+    def adopt_existing_instance(self, cid, version):
+        self.adopt_calls.append((cid, version))
+        return self._adopt_result
+    def publish_version(self, chat, path, note=""):
+        self.send_calls.append(chat.id)
+        class M: id = 9999
+        return M()
+    def restore_into(self, msg_id, send_update):
+        self.restore_calls.append(msg_id)
+        return 3
+    def ingest_done(self, msg_id):
+        pass
+
+def _ctl_with_gate(d, gate, chats=None):
+    """Control whose _runtime_for(cid, list_id) serves a fake gate."""
+    ctl, acct, _ = _control(chats or [(77, "Group", "Shared List", [], False, [])],
+                            {"provisioned": True})
+    ctl.on_new_message(event_for(77, "me@x", "hi"))
+    class RT: pass
+    rt = RT(); rt.gate = gate
+    rt.bridge = type("B", (), {"send_update": staticmethod(lambda *a, **k: None),
+                               "process_instance": staticmethod(lambda mid: 0)})()
+    orig = br.ChatControl._runtime_for
+    br.ChatControl._runtime_for = lambda self, cid, lid: rt
+    return ctl, orig
+
+def test_app_publish_adopts_orphaned_instance():
+    # r12 upgrade gap: bubble delivered by an older run, registration lost.
+    # Fixed retry must ADOPT (zero sends) and replay into the adopted bubble.
+    _real_xdc(d := tempfile.mkdtemp(), "v2.xdc", "2.0.0")
+    gate = _AdoptFakeGate(adopt_result=4242)
+    ctl, orig = _ctl_with_gate(d, gate)
+    try:
+        res = br._app_publish(d, ctl, "v2.xdc", request="ad1")
+    finally:
+        br.ChatControl._runtime_for = orig
+    assert gate.send_calls == [], ("duplicate send!", res)
+    assert gate.adopt_calls and gate.restore_calls == [4242], gate.restore_calls
+    pub = res["published"]["77"]
+    assert pub["msg_id"] == 4242 and pub["adopted"] is True and pub["ops_replayed"] == 3, res
+    print("adopt orphaned bubble, zero sends ok")
+
+def test_app_publish_adoption_miss_sends_once():
+    # nothing adoptable (e.g. only foreign/unpinned bubbles): normal send.
+    _real_xdc(d := tempfile.mkdtemp(), "v2.xdc", "2.0.0")
+    gate = _AdoptFakeGate(adopt_result=None)
+    ctl, orig = _ctl_with_gate(d, gate)
+    try:
+        res = br._app_publish(d, ctl, "v2.xdc", request="ad2")
+    finally:
+        br.ChatControl._runtime_for = orig
+    assert gate.adopt_calls, "adoption scan must run before send"
+    assert gate.send_calls == [77] and "77" in res["published"], res
+    assert "adopted" not in res["published"]["77"], res
+    print("adoption miss -> single send ok")
+
+def test_app_publish_adopt_replay_failure_is_partial():
+    # adopted but replay failed: honest partial, adopted msg_id recorded,
+    # no send, and a same-bytes retry finds registration (existing path).
+    _real_xdc(d := tempfile.mkdtemp(), "v2.xdc", "2.0.0")
+    gate = _AdoptFakeGate(adopt_result=4242)
+    gate.restore_into = lambda *a: (_ for _ in ()).throw(RuntimeError("relay down"))
+    ctl, orig = _ctl_with_gate(d, gate)
+    try:
+        res = br._app_publish(d, ctl, "v2.xdc", request="ad3")
+    finally:
+        br.ChatControl._runtime_for = orig
+    assert gate.send_calls == [], res
+    assert res["partial"]["77"]["msg_id"] == 4242, res
+    print("adopt replay failure -> partial ok")
+
+
+def test_adopt_existing_instance_strict_checks():
+    # delivery_bot-level: SELF-authorship, exact version, exact pin; highest
+    # msg id among matches; registration persisted bot-origin.
+    import delivery_bot as dbm
+    from ops_store import OpsStore
+    os.environ["OPS_STORE_FORCE_SQLITE"] = "1"
+    store = OpsStore(os.path.join(tempfile.mkdtemp(), "s.db"))
+    bot = dbm.DeliveryBot.__new__(dbm.DeliveryBot)
+    bot.account = None; bot.store = store; bot.owner_addr = "me@x"
+    bot.allowed_chat_ids = {77}; bot.list_id = "list-x"
+    bot.bot_addr = "bot@nine.testrun.org"; bot.min_restore_interval = 0
+    bot._now = __import__("time").time
+    bot._instances = {}; bot._last_restore = {}; bot._send_counter = {}
+    bot._last_listing = []; bot._pending_download = None
+    bot._publishes = {}; bot._pending_ingest = []
+    selfy = {11: True, 22: True, 33: True, 44: False, 55: True}
+    vers = {11: "2.0.0", 22: "2.0.0", 33: "1.0.0", 44: "2.0.0", 55: "2.0.0"}
+    pins = {11: "list-x", 22: "list-x", 33: "list-x", 44: "list-x", 55: "list-OTHER"}
+    bot.list_app_instances = lambda cid: [11, 22, 33, 44, 55]
+    bot.instance_sent_by_self = lambda m: selfy[m]
+    bot.instance_version = lambda m: vers[m]
+    bot.instance_list_id = lambda m: pins[m]
+    # 11+22 match (11 older), 33 wrong version, 44 not self, 55 wrong pin
+    got = bot.adopt_existing_instance(77, "2.0.0")
+    assert got == 22, got  # highest matching msg id
+    inst = bot._instances[22]
+    assert inst["origin"] == dbm.ORIGIN_BOT and inst["author"] == "bot@nine.testrun.org", inst
+    raw = store.get_meta(bot._META_KEY)
+    assert raw and '"22"' in raw or "22" in raw  # persisted immediately
+    # none qualify -> None (caller sends instead)
+    assert bot.adopt_existing_instance(77, "9.9.9") is None
+    # ungranted chat -> None
+    assert bot.adopt_existing_instance(78, "2.0.0") is None
+    # empty version -> None
+    assert bot.adopt_existing_instance(77, "") is None
+    print("adopt strict checks ok")
+
+
+
+
+def test_candidate_helpers_raise_on_read_failure():
+    # Real helpers: a READ failure is UNCERTAIN (raises
+    # CandidateUncertainError), never "definitely not qualifying".
+    # instance_sent_by_self previously returned False on any exception,
+    # which silently skipped an unverifiable candidate - the S4-style
+    # mechanism that can adopt an older bubble or fall through to a
+    # duplicate send.
+    import delivery_bot as dbm
+    bot = dbm.DeliveryBot.__new__(dbm.DeliveryBot)
+    class _Rpc:
+        @staticmethod
+        def get_chat_media(*a, **k): raise RuntimeError("relay down")
+        @staticmethod
+        def get_webxdc_blob(*a, **k): raise RuntimeError("relay down")
+        @staticmethod
+        def get_message(*a, **k): raise RuntimeError("relay down")
+    class _Acct:
+        id = 1
+        _rpc = _Rpc
+    bot.account = _Acct()
+    checks = [
+        ("list_app_instances", lambda: bot.list_app_instances(77)),
+        ("instance_version", lambda: bot.instance_version(11)),
+        ("instance_list_id", lambda: bot.instance_list_id(11)),
+        ("instance_sent_by_self", lambda: bot.instance_sent_by_self(11)),
+    ]
+    for name, fn in checks:
+        try:
+            fn()
+            raise AssertionError(name + " must raise CandidateUncertainError")
+        except dbm.CandidateUncertainError:
+            pass
+    print("candidate helpers fail-closed ok")
+
+
+def test_app_publish_candidate_uncertain_sends_nothing():
+    # Publish fan-out: an unverifiable candidate check must land as an
+    # explicit retryable error for that chat - NO send, NO adopt, NO
+    # skip-to-older.
+    import delivery_bot as dbm
+    os.environ["OPS_STORE_FORCE_SQLITE"] = "1"
+    chats = [(77, "Group", "Shared List", [], False, [])]
+    ctl, acct, d = _control(chats, {"provisioned": True})
+    ctl.on_new_message(event_for(77, "me@x", "hi"))
+    _real_xdc(d, "v2.xdc", "2.0.0")
+    rt = ctl._runtime_for(77, ctl._st()["chats"]["77"]["list_id"])
+    def uncertain(cid, version):
+        raise dbm.CandidateUncertainError("snapshot read timed out")
+    rt.gate.adopt_existing_instance = uncertain
+    sent = []
+    rt.gate.publish_version = lambda chat, path: sent.append(1)
+    res = br._app_publish(d, ctl, "v2.xdc", request="u1")
+    assert res["published"] == {} and res["partial"] == {}, res
+    assert "77" in res["errors"], res
+    assert "nothing was sent" in res["errors"]["77"] and "retry" in res["errors"]["77"], res
+    assert sent == [], res
+    # recovery: the same retry succeeds once the read works again
+    rt.gate.adopt_existing_instance = lambda cid, version: 4242
+    class FakeMessage:
+        def __init__(self, account, msg_id): self.msg_id = msg_id
+        def get_webxdc_status_updates(self, wm): return []
+    import bot as bot_mod
+    orig_msg = bot_mod.Message
+    bot_mod.Message = FakeMessage
+    try:
+        res2 = br._app_publish(d, ctl, "v2.xdc", request="u2")
+    finally:
+        bot_mod.Message = orig_msg
+    assert res2["published"]["77"]["msg_id"] == 4242, res2
+    print("publish candidate-uncertain fail-closed ok")
+
+
+def test_candidate_absent_entry_is_definite_negative():
+    # The core's STRUCTURED missing-entry error (JsonRpcError code -1,
+    # exact message 'no entry found for <name>') is a DEFINITE negative:
+    # absent manifest -> version None, absent list.json -> pin ''. Only
+    # that exact shape maps to negative; any other error stays
+    # CandidateUncertainError (fail-closed). Regression: absent entries
+    # must NOT become retryable-forever publish blockers.
+    import delivery_bot as dbm
+    from deltachat_rpc_client import JsonRpcError
+    bot = dbm.DeliveryBot.__new__(dbm.DeliveryBot)
+    def missing(name):
+        return JsonRpcError({"code": -1, "message": "no entry found for %s" % name})
+    class _Rpc:
+        @staticmethod
+        def get_webxdc_blob(acc, mid, name): raise missing(name)
+    class _Acct:
+        id = 1
+        _rpc = _Rpc
+    bot.account = _Acct()
+    assert bot.instance_version(11) is None
+    assert bot.instance_list_id(11) == ""
+    # a code -1 with a DIFFERENT message is NOT a definite negative
+    class _Rpc2:
+        @staticmethod
+        def get_webxdc_blob(acc, mid, name):
+            raise JsonRpcError({"code": -1, "message": "io error: timed out"})
+    class _Acct2:
+        id = 1
+        _rpc = _Rpc2
+    bot.account = _Acct2()
+    for fn in (lambda: bot.instance_version(11), lambda: bot.instance_list_id(11)):
+        try:
+            fn()
+            raise AssertionError("timeout must raise CandidateUncertainError")
+        except dbm.CandidateUncertainError:
+            pass
+    # adoption: an absent-pin candidate is SKIPPED (definite negative),
+    # not uncertain - and a same-version pinned candidate still wins
+    from ops_store import OpsStore
+    os.environ["OPS_STORE_FORCE_SQLITE"] = "1"
+    store = OpsStore(os.path.join(tempfile.mkdtemp(), "s.db"))
+    bot.store = store; bot.owner_addr = "me@x"
+    bot.allowed_chat_ids = {77}; bot.list_id = "list-x"
+    bot.bot_addr = "bot@nine.testrun.org"; bot.min_restore_interval = 0
+    bot._now = __import__("time").time
+    bot._instances = {}; bot._last_restore = {}; bot._send_counter = {}
+    bot._last_listing = []; bot._pending_download = None
+    bot._publishes = {}; bot._pending_ingest = []
+    bot.list_app_instances = lambda cid: [11, 22]
+    bot.instance_sent_by_self = lambda m: True
+    bot.instance_version = lambda m: "2.0.0"
+    bot.account = _Acct()  # list.json provably ABSENT for every candidate
+    bot.instance_list_id = dbm.DeliveryBot.instance_list_id.__get__(bot)
+    assert bot.adopt_existing_instance(77, "2.0.0") is None  # no raise, no adopt
+    assert bot._instances == {}
+    print("absent-entry definite negative ok")
+
+
+def test_app_publish_adoption_ingests_orphan_edits():
+    # THE proof for the blocking gap: an edit made in the orphaned instance
+    # (registration lost) becomes canonical store history at adoption and
+    # is replayed - edit => store => replay, zero duplicate sends.
+    import bot as bot_mod
+    import delivery_bot as dbm
+    os.environ["OPS_STORE_FORCE_SQLITE"] = "1"
+    chats = [(77, "Group", "Shared List", [], False, [(9001, OWNER_ADD)])]
+    ctl, acct, d = _control(chats, {"provisioned": True})
+    ctl.on_new_message(event_for(77, "me@x", "hi"))
+    _real_xdc(d, "v2.xdc", "2.0.0")
+    orphan_op = {"item": "t1", "field": "title", "value": "task 1",
+                 "stamp": {"hlc": 4242, "device": "devZ"}}
+    class FakeMessage:
+        def __init__(self, account, msg_id): self.msg_id = msg_id
+        def get_webxdc_status_updates(self, wm):
+            ups = [{"serial": 1, "payload": {"ops": [orphan_op]}, "info": ""}]
+            return [u for u in ups if u["serial"] > wm]
+    orig_msg = bot_mod.Message
+    bot_mod.Message = FakeMessage
+    sent_payloads = []
+    orig_sm = None
+    try:
+        rt = ctl._runtime_for(77, ctl._st()["chats"]["77"]["list_id"])
+        # adoption scan primitives stubbed to "one valid orphaned bubble"
+        rt.gate.list_app_instances = lambda cid: [4242]
+        rt.gate.instance_sent_by_self = lambda m: True
+        rt.gate.instance_version = lambda m: "2.0.0"
+        rt.gate.instance_list_id = lambda m: rt.gate.list_id
+        rt.bridge.send_update = lambda mid, payload, info="": sent_payloads.append(payload)
+        res = br._app_publish(d, ctl, "v2.xdc", request="proof1")
+    finally:
+        bot_mod.Message = orig_msg
+    pub = res["published"]["77"]
+    assert pub.get("adopted") is True and pub["msg_id"] == 4242, res
+    assert "ingest_pending" not in pub, res  # clean ingest: no caveat flag
+    # edit reached the store (canonical) and watermark advanced
+    ops = [json.loads(r[0]) for r in rt.bridge.store.conn.execute(
+        "SELECT payload FROM webxdc_ops").fetchall()]
+    assert any(o.get("value") == "task 1" for o in ops), ops
+    assert rt.bridge.store.watermark(4242) == 1
+    # ingest queue cleared after the committed one-shot ingest
+    assert 4242 not in rt.gate.pending_ingest()
+    # ...and the same edit was replayed into the adopted instance
+    replayed = [op for p in sent_payloads for op in (p.get("ops") or [])]
+    assert any(o.get("value") == "task 1" for o in replayed), sent_payloads
+    print("orphan edit -> store -> replay proof ok")
+
+
+def test_app_publish_adoption_ingest_failure_still_replays():
+    # ingest failure must not block the replay and must leave the one-shot
+    # ingest queued for the drain/boot retry.
+    _real_xdc(d := tempfile.mkdtemp(), "v2.xdc", "2.0.0")
+    gate = _AdoptFakeGate(adopt_result=4242)
+    ctl, orig = _ctl_with_gate(d, gate)
+    rt = ctl._runtime_for(77, "list-x")
+    rt.bridge.process_instance = lambda mid: (_ for _ in ()).throw(RuntimeError("rpc down"))
+    gate._pending_ingest = [4242]
+    try:
+        res = br._app_publish(d, ctl, "v2.xdc", request="proof2")
+    finally:
+        br.ChatControl._runtime_for = orig
+    pub = res["published"]["77"]
+    assert pub["adopted"] is True and pub.get("ingest_pending") is True, res
+    assert gate.restore_calls == [4242]
+    assert gate._pending_ingest == [4242]  # left queued for retry
+    print("ingest failure -> replay continues, ingest queued ok")
 
 
 if __name__ == "__main__":
@@ -1090,4 +1621,16 @@ if __name__ == "__main__":
     test_revoked_straggler_does_not_resume()
     test_publish_prog_preserves_request_token()
     test_publish_done_write_failure_keeps_prog()
+    test_app_publish_cross_thread_real_store()
+    test_store_concurrent_ingest_and_replay_reads()
+    test_app_publish_partial_then_retry_no_duplicate()
+    test_app_publish_adopts_orphaned_instance()
+    test_app_publish_adoption_miss_sends_once()
+    test_app_publish_adopt_replay_failure_is_partial()
+    test_adopt_existing_instance_strict_checks()
+    test_app_publish_adoption_ingests_orphan_edits()
+    test_app_publish_adoption_ingest_failure_still_replays()
+    test_candidate_helpers_raise_on_read_failure()
+    test_app_publish_candidate_uncertain_sends_nothing()
+    test_candidate_absent_entry_is_definite_negative()
     print("ALL WRAPPER TESTS PASS")

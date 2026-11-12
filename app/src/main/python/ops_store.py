@@ -41,6 +41,7 @@ import json
 import os
 import re
 import time
+import threading
 
 SCHEMA_V2 = """
 CREATE TABLE IF NOT EXISTS webxdc_ops (
@@ -159,22 +160,60 @@ def extract_ops(payload):
 
 class OpsStore:
     def __init__(self, url="ops.db", auth_token=None):
-        force_sqlite = os.environ.get("OPS_STORE_FORCE_SQLITE") == "1"
-        if auth_token or url.startswith(("libsql://", "https://")):
+        self._url = url
+        self._auth_token = auth_token
+        self._force_sqlite = os.environ.get("OPS_STORE_FORCE_SQLITE") == "1"
+        self._local = threading.local()
+        # Open the creating thread's connection eagerly so a bad URL or
+        # schema failure surfaces here, not later on another thread.
+        self._local.conn = self._new_conn()
+
+    def _new_conn(self):
+        force_sqlite = self._force_sqlite
+        if self._auth_token or self._url.startswith(("libsql://", "https://")):
             import libsql_experimental as libsql
-            self.conn = libsql.connect(url, auth_token=auth_token) if auth_token else libsql.connect(url)
+            conn = libsql.connect(self._url, auth_token=self._auth_token) if self._auth_token else libsql.connect(self._url)
         elif not force_sqlite:
             try:
                 import libsql_experimental as libsql
-                self.conn = libsql.connect(url)
+                conn = libsql.connect(self._url)
             except ImportError:
                 force_sqlite = True
         if force_sqlite:
             # Termux/phone path: stdlib sqlite3 (libSQL is SQLite-compatible).
             import sqlite3
-            self.conn = sqlite3.connect(url)
-        self.conn.executescript(SCHEMA_V2)
-        self._migrate_v1()
+            conn = sqlite3.connect(self._url)
+        try:
+            # The bot loop thread WRITES (ingest, watermarks) while the
+            # app-publish watcher thread READS (history replay): these are
+            # separate connections, and SQLite's own file locking serializes
+            # them. busy_timeout makes a reader wait out a writer's brief
+            # commit instead of failing with SQLITE_BUSY. Atomicity and
+            # single-writer semantics stay with SQLite, unchanged.
+            conn.execute("PRAGMA busy_timeout=5000")
+        except Exception:
+            pass  # remote libsql connections serialize server-side instead
+        conn.executescript(SCHEMA_V2)
+        self._migrate_v1(conn)
+        return conn
+
+    @property
+    def conn(self):
+        """One connection PER THREAD.
+
+        A sqlite3 connection is thread-bound (check_same_thread): sharing
+        one across threads raises ProgrammingError, and disabling that check
+        on a SHARED connection would corrupt interleaved cursors. All
+        OpsStore state lives in the database itself - there is no in-memory
+        cache or cursor held between calls - so a fresh connection per
+        thread is both safe and consistent: committed writes are visible to
+        every connection, and concurrent access is serialized by SQLite's
+        own locking (plus busy_timeout above), not by disabling checks."""
+        c = getattr(self._local, "conn", None)
+        if c is None:
+            c = self._new_conn()
+            self._local.conn = c
+        return c
 
     # ---- single-list invariant ------------------------------------------------
 
@@ -190,23 +229,23 @@ class OpsStore:
 
     # ---- v1 -> v2 migration ------------------------------------------------
 
-    def _migrate_v1(self):
-        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(webxdc_ops)").fetchall()]
+    def _migrate_v1(self, conn):
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(webxdc_ops)").fetchall()]
         if "seq" in cols:
             return  # already v2 (or a fresh v2 database)
         # v1 layout: serial INTEGER PRIMARY KEY, payload = whole update.
-        rows = self.conn.execute(
+        rows = conn.execute(
             "SELECT serial, payload, info, received_at FROM webxdc_ops ORDER BY serial"
         ).fetchall()
-        self.conn.execute("ALTER TABLE webxdc_ops RENAME TO webxdc_ops_v1")
-        self.conn.executescript(SCHEMA_V2)
+        conn.execute("ALTER TABLE webxdc_ops RENAME TO webxdc_ops_v1")
+        conn.executescript(SCHEMA_V2)
         for serial, payload, info, received_at in rows:
             try:
                 ops = extract_ops(json.loads(payload)) or []
             except Exception:
                 ops = []
             for idx, op in enumerate(ops):
-                self.conn.execute(
+                conn.execute(
                     "INSERT OR IGNORE INTO webxdc_ops"
                     "(instance_msg_id, serial, op_index, op_key, payload, info, received_at)"
                     " VALUES (?,?,?,?,?,?,?)",
@@ -214,19 +253,19 @@ class OpsStore:
                      json.dumps(canonical_op(op), sort_keys=True, separators=(",", ":")),
                      info, received_at),
                 )
-        old_wm = self.conn.execute(
+        old_wm = conn.execute(
             "SELECT value FROM webxdc_meta WHERE key='last_serial'").fetchone()
         if old_wm:
-            self.conn.execute(
+            conn.execute(
                 "INSERT INTO webxdc_meta(key,value) VALUES(?,?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 ("wm:%d" % _LEGACY_INSTANCE, old_wm[0]))
         # v1 restore state (delivery:v1) was keyed by v1 serials, which do not
         # map onto v2 seqs: drop it. No v1 database was ever deployed outside
         # tests; a real bot would re-register instances and replay idempotently.
-        self.conn.execute("DELETE FROM webxdc_meta WHERE key IN ('last_serial','delivery:v1')")
-        self.conn.execute("DROP TABLE webxdc_ops_v1")
-        self.conn.commit()
+        conn.execute("DELETE FROM webxdc_meta WHERE key IN ('last_serial','delivery:v1')")
+        conn.execute("DROP TABLE webxdc_ops_v1")
+        conn.commit()
 
     # ---- ingestion ---------------------------------------------------------
 
