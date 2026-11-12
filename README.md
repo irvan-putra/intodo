@@ -1,4 +1,8 @@
-# Instinct Widget (Android)
+# intodo
+
+Personal reminder/todo tooling: **itdapk** (Android app + home-screen widget, `app/`), **itdxdc** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **itdweb** (hosted review-canvas page source, `itdweb/`).
+
+## itdapk - Android widget
 
 A home-screen widget and companion app that shows my Instinct reminders and todos on my phone. The list syncs through an encrypted page that only the paired phone can read.
 

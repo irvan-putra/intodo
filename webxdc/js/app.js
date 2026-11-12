@@ -1,4 +1,4 @@
-// app.js - Instinct Shared List webxdc prototype.
+// app.js - itdxdc shared-list webxdc prototype.
 // PROTOTYPE with invented sample data. Profile/membership and multi-network
 // layers are NOT built - this proves shared-list updates, merge convergence and
 // conflict trimming inside one chat. The native Android widget stays separate.
