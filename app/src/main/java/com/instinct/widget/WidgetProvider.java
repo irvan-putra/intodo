@@ -15,6 +15,7 @@ public class WidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager awm, int[] ids) {
+        FeedSyncScheduler.schedule(context);
         for (int id : ids) updateOne(context, awm, id);
     }
 

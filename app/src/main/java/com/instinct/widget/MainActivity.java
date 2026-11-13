@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        FeedSyncScheduler.schedule(this);
         lastSync = findViewById(R.id.lastSync);
         listView = findViewById(R.id.list);
         empty = findViewById(R.id.empty);
