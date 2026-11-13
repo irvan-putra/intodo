@@ -82,3 +82,75 @@ a, .rc-card a { color: var(--ds-ink); }
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 12px;
 }
+
+/* Concept view when zoomed out (below LO_Z in App.tsx), endless-paper
+   style: per-file detail collapses, and the concept level (icon, title,
+   mark badge) plus the connection lines counter-scale with --camz so they
+   stay readable instead of shrinking into noise. Zooming back in past the
+   threshold restores the full detail cards. */
+.rc-lo .rc-card > :not(.rc-cardhead):not(.rc-badge) { display: none; }
+.rc-lo .rc-focus { display: none; }
+.rc-lo .rc-cardhead { cursor: pointer; }
+.rc-lo .rc-card h3 {
+    font-size: min(calc(13px / var(--camz)), 72px);
+    line-height: 1.15;
+}
+.rc-lo .rc-icon { font-size: min(calc(18px / var(--camz)), 84px); }
+/* tag drops out at the section level: at this distance it only collided
+   with neighbouring titles; the grouping it named is the context level */
+.rc-lo .rc-tag { display: none; }
+.rc-lo .rc-badge { font-size: min(calc(10px / var(--camz)), 44px); }
+.rc-lo .rc-edges line {
+    stroke: var(--ds-teal);
+    stroke-width: min(calc(2px / var(--camz)), 12px);
+    opacity: 0.55;
+}
+
+/* Context level (furthest out): section cards and their edges give way to
+   one node per section group plus the aggregated group-to-group
+   connections. Node text counter-scales with --camz like the section
+   titles do, so the overview stays readable at phone fit zoom. */
+.rc-groups { display: none; }
+.rc-gedges { display: none; }
+.rc-grp .rc-world .rc-card, .rc-grp .rc-edges { display: none; }
+.rc-grp .rc-groups { display: block; }
+.rc-grp .rc-gedges { display: block; }
+.rc-gedges { position: absolute; top: 0; left: 0; pointer-events: none; }
+.rc-grp .rc-gedges line {
+    stroke: var(--ds-teal);
+    stroke-width: min(calc(2.5px / var(--camz)), 16px);
+    opacity: 0.5;
+}
+.rc-grpnode {
+    position: absolute; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center;
+    gap: min(calc(3px / var(--camz)), 18px);
+    padding: min(calc(10px / var(--camz)), 56px) min(calc(20px / var(--camz)), 112px);
+    background: var(--ds-page);
+    border: min(calc(1.5px / var(--camz)), 9px) solid var(--ds-teal);
+    border-radius: min(calc(14px / var(--camz)), 78px);
+    font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.rc-grplabel {
+    font-family: Aime, Georgia, serif; color: var(--ds-ink);
+    font-size: min(calc(15px / var(--camz)), 84px); line-height: 1.15;
+}
+.rc-grpcount {
+    color: var(--ds-ink-2);
+    font-size: min(calc(10px / var(--camz)), 56px);
+}
+
+/* Group sheet (phones): a tapped group opens as a readable list of its
+   sections; a row opens that section's focus overlay. */
+.rc-gsheet-title { margin: 4px 0 2px; font-size: 22px; }
+.rc-gsheet-sub { margin: 0 0 12px; font-size: 13px; color: var(--ds-ink-2); }
+.rc-grow {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    min-height: 52px; padding: 8px 12px; margin-bottom: 8px;
+    font: inherit; text-align: left; cursor: pointer;
+    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 10px;
+}
+.rc-growtext { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.rc-growtitle { font-size: 16px; line-height: 22px; color: var(--ds-ink); font-weight: 600; }
+.rc-growtag { font-size: 11px; color: var(--ds-ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.rc-grow .rc-icon { font-size: 20px; }
