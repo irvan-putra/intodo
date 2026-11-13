@@ -217,7 +217,7 @@ const FLOW_NODES: C4Node[] = [
     { id: 'f-xdc', label: 'itdxdc - webxdc app', sub: "a member's shared list", kind: 'container', frac: { fx: 0.14, fy: 0.28 } },
     { id: 'f-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.16 } },
     { id: 'f-app', label: 'itdapk bot host', sub: 'Android app, python bot', kind: 'container', frac: { fx: 0.86, fy: 0.28 } },
-    { id: 'f-xdc2', label: 'Other members', sub: 'their itdxdc apps', kind: 'container', frac: { fx: 0.5, fy: 0.74 } },
+    { id: 'f-xdc2', label: "Other members' itdxdc apps", sub: 'their shared lists', kind: 'container', frac: { fx: 0.5, fy: 0.74 } },
 ];
 const FLOW_STEPS: C4Rel[] = [
     { a: 'f-xdc', b: 'f-dc', label: 'member edit sent as one webxdc status update {ops} · webxdc/js/app.js sendOps' },
@@ -253,6 +253,18 @@ const DEPLOY_RELS: C4Rel[] = [
     { a: 'd-devmachine', b: 'd-files', label: 'publishes feed page (manual)' },      // tools/encrypt_feed.py output handoff
 ];
 const VIEW_SETS = { flow: { nodes: FLOW_NODES, rels: FLOW_STEPS }, flowfeed: { nodes: FEED_NODES, rels: FEED_STEPS }, deploy: { nodes: DEPLOY_NODES, rels: DEPLOY_RELS } } as const;
+// c4model.com-style element vocabulary: a kind tag on every node and frame
+// (so color is never the only cue) plus a per-kind outline hue sampled from
+// the owner's c4-static.png reference and a stick-figure silhouette for
+// people. Numeric contrast of every hue vs the page ground is in the
+// patch notes; all outline hues pass 3:1, all tag inks pass 4.5:1.
+const KIND_TAG: Record<string, string> = { container: '\u00abcontainer\u00bb', support: '\u00absupporting\u00bb', external: '\u00abexternal system\u00bb', person: '\u00abperson\u00bb', system: '\u00absoftware system\u00bb' };
+const C4_PERSON_ICON = (
+    <svg className="rc-personicon" viewBox="0 0 20 26" aria-hidden="true">
+        <circle cx="10" cy="5" r="4.2" />
+        <path d="M10 10.4c-4.6 0-7.4 2.8-7.4 6.6v4.4h14.8v-4.4c0-3.8-2.8-6.6-7.4-6.6z" />
+    </svg>
+);
 type Rect = { x: number; y: number; w: number; h: number };
 type GroupNode = { g: C4Node; x: number; y: number; hw: number; hh: number };
 // Screen-constant metrics: every size is device px, divided by the zoom to
@@ -1068,9 +1080,11 @@ function Canvas() {
                     {groupLayout.filter((n) => n.g.kind === 'external' || n.g.kind === 'person').map((n) => {
                         const g = n.g;
                         return (
-                            <div key={g.id} data-nid={g.id} className="rc-grpnode rc-node-ext" style={{ left: n.x, top: n.y }}>
+                            <div key={g.id} data-nid={g.id} className={`rc-grpnode rc-node-${g.kind}`} style={{ left: n.x, top: n.y }}>
+                                {g.kind === 'person' ? C4_PERSON_ICON : null}
                                 <span className="rc-grplabel">{g.label}</span>
                                 <span className="rc-grpcount">{g.sub}</span>
+                                <span className={`rc-kindtag rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span>
                             </div>
                         );
                     })}
@@ -1110,8 +1124,10 @@ function Canvas() {
                         const g = n.g;
                         const cls = `rc-grpnode rc-node-${g.kind}`;
                         const inner = <>
+                            {g.kind === 'person' ? C4_PERSON_ICON : null}
                             <span className="rc-grplabel">{g.label}</span>
                             <span className="rc-grpcount">{g.sub}</span>
+                            <span className={`rc-kindtag rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span>
                         </>;
                         return g.kind === 'system' ? (
                             <button key={g.id} data-nid={g.id} type="button" className={`${cls} rc-node-boundary`} style={{ left: n.x, top: n.y, width: n.hw * 2, height: n.hh * 2 }} onClick={() => {
@@ -1150,9 +1166,11 @@ function Canvas() {
                 </svg>
                 <div className="rc-viewnodes">
                     {viewLayout.map((n) => (
-                        <div key={n.g.id} data-nid={n.g.id} className={`rc-grpnode${n.g.kind === 'external' || n.g.kind === 'person' ? ' rc-node-ext' : ''}`} style={{ left: n.x, top: n.y }}>
+                        <div key={n.g.id} data-nid={n.g.id} className={`rc-grpnode rc-node-${n.g.kind}`} style={{ left: n.x, top: n.y }}>
+                            {n.g.kind === 'person' ? C4_PERSON_ICON : null}
                             <span className="rc-grplabel">{n.g.label}</span>
                             <span className="rc-grpcount">{n.g.sub}</span>
+                            <span className={`rc-kindtag rc-kindtag-${n.g.kind}`}>{KIND_TAG[n.g.kind]}</span>
                         </div>
                     ))}
                 </div>
@@ -1177,9 +1195,9 @@ function Canvas() {
                             return (
                                 <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid), height: NEST_EST.frames[gid].h }}
                                     onClick={band === 'grp' ? () => focusGroup(gid) : undefined}>
-                                    <div className="rc-frame-label">{g.label}<span className="rc-frame-sub">{g.sub}</span><span className="rc-frame-count">{(() => { const n = (g.members?.length ?? 0) + (g.attached?.length ?? 0); return `${n} ${n === 1 ? 'item' : 'items'}`; })()}</span>{evp.w < 560 ? (
-                                        <button type="button" className="rc-frame-list" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSheetGroup(gid); }}>List</button>
-                                    ) : null}</div>
+                                    <div className="rc-frame-label"><span className="rc-frame-row1"><span className="rc-frame-title">{g.label}</span>{evp.w < 560 ? (
+                                        <button type="button" className="rc-frame-list" onClick={(e) => { e.stopPropagation(); setSheetGroup(gid); }}>List</button>
+                                    ) : null}</span><span className="rc-frame-row2"><span className="rc-frame-sub">{g.sub}</span><span className={`rc-frame-kind rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span><span className="rc-frame-count">{(() => { const n = (g.members?.length ?? 0) + (g.attached?.length ?? 0); return `${n} ${n === 1 ? 'item' : 'items'}`; })()}</span></span></div>
                                     <div className="rc-frame-cards">
                                         {/* legacy saved positions (draggable era) migrate into the frame
                                             as reading order - top to bottom, then left to right - instead
@@ -1221,6 +1239,9 @@ function Canvas() {
                 ))}
                 {view === 'structure' ? (
                     <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>{band === 'grp' ? 'designed, not active / no runtime link' : 'designed, not active (draft workflows)'}</span>
+                ) : null}
+                {view === 'structure' ? (
+                    <span className="rc-legend-item rc-legend-key rc-legend-shapes">Shapes: <span className="rc-kindchip rc-kindchip-person">{C4_PERSON_ICON}person</span> <span className="rc-kindchip rc-kindchip-system">software system</span> <span className="rc-kindchip rc-kindchip-container">container</span> <span className="rc-kindchip rc-kindchip-external">external system</span> <span className="rc-kindchip rc-kindchip-support">supporting</span></span>
                 ) : null}
             </div>
         ) : null}

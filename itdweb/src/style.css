@@ -17,8 +17,9 @@ body { background: var(--ds-page); }
         radial-gradient(circle, var(--ds-hairline) 1px, transparent 1px) 0 0 / 28px 28px,
         var(--ds-page);
     touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
+    /* touch-action:none alone owns gesture hijack protection; card prose,
+       reference links and findings fields inside the canvas stay selectable
+       and copyable (accessibility review 14 Nov). */
     cursor: grab;
 }
 
