@@ -14,7 +14,7 @@
   const DELETED = window.MERGE_DELETED;
   const STORE_KEY = 'instinct-shared-list-doc-v1';
   const BIND_KEY = 'instinct-shared-list-binding-v1';
-  const APP_VERSION = '0.4.5'; // keep in step with manifest.toml version
+  const APP_VERSION = '0.4.6'; // keep in step with manifest.toml version
   // List binding: an instance only accepts restore envelopes for its bound
   // list_id. Binding comes from trusted packaging (list.json packed by the
   // bot at publish) or an explicit in-app owner confirmation - NEVER from
@@ -107,10 +107,12 @@
 
   function sendOps(ops) {
     // one update may carry several ops; payload stays JSON-serializable
-    // href: harmless anchor so Delta Chat keeps every notice as its own
-    // message (core only collapses consecutive infos when href is absent)
-    // and tapping one opens the app. No hash routing, so it opens at root.
-    window.webxdc.sendUpdate({ payload: { ops }, info: opsInfo(ops), href: '#a' }, '');
+    // href: keeps every notice as its own message (core only collapses
+    // consecutive infos when href is absent) and makes tapping one open
+    // the app. The file part is REQUIRED: a pure-fragment href makes the
+    // messenger's webview request "/" (not a zip entry) and show
+    // "Webxdc Request Error: \"/\" not found" instead of the app.
+    window.webxdc.sendUpdate({ payload: { ops }, info: opsInfo(ops), href: 'index.html#a' }, '');
   }
 
   function opsInfo(ops) {
