@@ -30,7 +30,10 @@ public class UpdateCheck {
             "https://github.com/irvan-putra/intodo/releases/download/";
     private static final long TIMEOUT_MS = 15000;
 
-    public interface Callback { void onResult(String newerVersion, String assetUrl, String releaseUrl); }
+    public interface Callback {
+        /** assetSha256 is GitHub's reported digest for the asset (no "sha256:" prefix), null when absent. */
+        void onResult(String newerVersion, String assetUrl, String releaseUrl, String assetSha256);
+    }
 
     /** Strict dotted-numeric compare: returns true only when candidate > current. */
     static boolean isNewer(String candidate, String current) {
@@ -61,8 +64,8 @@ public class UpdateCheck {
             for (String abi : android.os.Build.SUPPORTED_ABIS) {
                 if ("arm64-v8a".equals(abi)) { arm64 = true; break; }
             }
-            if (!arm64) { main.post(() -> cb.onResult(null, null, null)); return; }
-            String newer = null, assetUrl = null, releaseUrl = null;
+            if (!arm64) { main.post(() -> cb.onResult(null, null, null, null)); return; }
+            String newer = null, assetUrl = null, releaseUrl = null, assetSha = null;
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL(LATEST).openConnection();
                 conn.setConnectTimeout((int) TIMEOUT_MS);
@@ -91,6 +94,8 @@ public class UpdateCheck {
                                         newer = latest;
                                         assetUrl = dl;
                                         releaseUrl = rel.optString("html_url", "");
+                                        String digest = a.optString("digest", "");
+                                        assetSha = digest.startsWith("sha256:") ? digest.substring(7) : null;
                                         break;
                                     }
                                 }
@@ -100,8 +105,8 @@ public class UpdateCheck {
                 } // 404 (no releases yet) and any other status: no update info, not an error
                 conn.disconnect();
             } catch (Exception ignored) { /* offline or blocked: no update info, not an error */ }
-            final String fN = newer, fA = assetUrl, fR = releaseUrl;
-            main.post(() -> cb.onResult(fN, fA, fR));
+            final String fN = newer, fA = assetUrl, fR = releaseUrl, fS = assetSha;
+            main.post(() -> cb.onResult(fN, fA, fR, fS));
         }).start();
     }
 }

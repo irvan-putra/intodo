@@ -85,25 +85,28 @@ jobs:
       - name: Build unsigned release APK (unconfigured, no FEED_URL in source or env)
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Verify the APK is strictly unconfigured
+      - name: Verify source and APK contain no concrete feed URL
         run: |
           set -euo pipefail
+          # Scan source before shipping; exclude VCS metadata and generated/build
+          # outputs. Run a local pre-push scan too: CI only runs after the push.
+          if grep -RliEa 'https?://files\.instinct\.com/[A-Za-z0-9_-]{4,}' \
+              --exclude-dir=.git --exclude-dir=build --exclude-dir=.gradle --exclude-dir=.idea .; then
+            echo "REFUSED: a concrete feed URL is present in source"
+            exit 1
+          fi
+
           APK=$(ls app/build/outputs/apk/release/*-unsigned.apk)
           SCAN="$RUNNER_TEMP/apkscan"; mkdir -p "$SCAN"
           unzip -q "$APK" -d "$SCAN"
-          # code: no configured feed address in ANY classes*.dex. The bare host is the
-          # SyncEngine allowlist constant and is allowed; a non-empty BuildConfig.FEED_URL
-          # would appear here as a full URL string. (-a: dex is binary, grep skips it otherwise)
-          if grep -rla 'https://files.instinct.com/' "$SCAN"/classes*.dex; then
-            echo "REFUSED: configured feed address in code (BuildConfig.FEED_URL must be empty)"; exit 1
-          fi
-          # resources + everything else: no private feed slug anywhere. The pairing-pane
-          # hint placeholder (https://files.instinct.com/...) carries no slug and is allowed.
-          if grep -rla -e 'wfoiv9v4bu5u' -e '03j503om7zd3' -e 'instinct-widget-sync' "$SCAN"; then
-            echo "REFUSED: private feed address embedded in public build"; exit 1
+          # Check DEX, resources and assets. Case-insensitive; even a short
+          # concrete path is refused. The ellipsis UI placeholder is allowed.
+          if grep -RliEa 'https?://files\.instinct\.com/[A-Za-z0-9_-]{4,}' "$SCAN"; then
+            echo "REFUSED: a concrete feed URL is present in the public APK"
+            exit 1
           fi
           rm -rf "$SCAN"
-          echo "unconfigured check passed (all entries scanned)"
+          echo "source and APK feed-URL checks passed"
 
       - name: Decode keystore, sign (passwords via env, never argv), verify, always clean up
         env:

@@ -23,6 +23,11 @@ import org.json.JSONObject;
 public class BotActivity extends Activity {
     private TextView logView;
     private TextView statusView;
+    private android.widget.Button fetchXdcBtn;
+    private TextView fetchStatus;
+    private android.widget.ProgressBar fetchBar;
+    private boolean fetchRunning = false;
+    private int fetchGen = 0;
     private TextView setupHeader;
     private TextView logsHeader;
     private LinearLayout setupBox;
@@ -56,11 +61,25 @@ public class BotActivity extends Activity {
 
         LinearLayout updates = new LinearLayout(this);
         updates.setOrientation(LinearLayout.HORIZONTAL);
-        Button fetchXdc = new Button(this); fetchXdc.setText("Get latest app"); fetchXdc.setAllCaps(false);
+        fetchXdcBtn = new Button(this); fetchXdcBtn.setText("Get latest app"); fetchXdcBtn.setAllCaps(false);
         Button publish = new Button(this); publish.setText("Publish update"); publish.setAllCaps(false);
-        updates.addView(fetchXdc, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        updates.addView(fetchXdcBtn, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         updates.addView(publish, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         root.addView(updates);
+        // Fetch progress: a REAL bar plus the bytes line, wired to the actual
+        // download listener. Known total = determinate percent; unknown total =
+        // indeterminate with honest bytes; terminal success retains 100% + bytes;
+        // resumed bytes appear before the network starts.
+        fetchStatus = new TextView(this);
+        fetchStatus.setTextSize(12);
+        fetchStatus.setPadding(pad, 0, pad, 0);
+        fetchStatus.setVisibility(android.view.View.GONE);
+        root.addView(fetchStatus);
+        fetchBar = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        fetchBar.setMax(100);
+        fetchBar.setIndeterminate(true);
+        fetchBar.setVisibility(android.view.View.GONE);
+        root.addView(fetchBar);
 
         // Witness: on-device report of what the bot independently observed
         // in its served chats, plus the user deletion control. No report
@@ -356,7 +375,7 @@ public class BotActivity extends Activity {
             stopService(new Intent(this, BotService.class));
         });
         publish.setOnClickListener(v -> startPublishFlow());
-        fetchXdc.setOnClickListener(v -> startFetchFlow());
+        fetchXdcBtn.setOnClickListener(v -> startFetchFlow());
 
         // Reattach to a publish that is still in flight across recreation:
         // the request or its crash-resume checkpoint must still exist, and
@@ -483,9 +502,37 @@ public class BotActivity extends Activity {
 
     // Manual-tap fetch of the newest .xdc from the pinned GitHub repo, then a
     // deliberate Publish tap. Nothing polls in the background and nothing is
-    // published automatically.
+    // published automatically. The progress line is wired to the actual download
+    // listener: resumed bytes appear before the network starts, a percent only
+    // when the server stated a length, and every terminal path re-enables the
+    // button. fetchGen drops late callbacks from a previous attempt.
     private void startFetchFlow() {
-        Toast.makeText(this, "Checking GitHub for the latest app version...", Toast.LENGTH_SHORT).show();
+        if (fetchRunning) return;
+        fetchRunning = true;
+        final int gen = ++fetchGen;
+        fetchXdcBtn.setEnabled(false);
+        fetchStatus.setVisibility(android.view.View.VISIBLE);
+        fetchStatus.setText("Checking GitHub for the latest app version...");
+        fetchBar.setIndeterminate(true); // until the server states a length
+        fetchBar.setProgress(0);
+        fetchBar.setVisibility(android.view.View.VISIBLE);
+        android.os.Handler main = new android.os.Handler(getMainLooper());
+        com.instinct.widget.ProgressPump pump = new com.instinct.widget.ProgressPump(main,
+                (done, total) -> { // already on the main thread (pump guarantees it)
+                    if (gen != fetchGen || !fetchRunning) return; // late event
+                    fetchBar.setVisibility(android.view.View.VISIBLE);
+                    if (total > 0) {
+                        int pct = (int) (done * 100 / total);
+                        fetchBar.setIndeterminate(false);
+                        fetchBar.setProgress(pct);
+                        fetchStatus.setText("Fetching app: " + kbText(done) + " / " + kbText(total)
+                                + " (" + pct + "%)");
+                    } else {
+                        // honest unknown total: indeterminate bar + bytes, never a fake percent
+                        fetchBar.setIndeterminate(true);
+                        fetchStatus.setText("Fetching app: " + kbText(done));
+                    }
+                });
         new Thread(() -> {
             final XdcFetch.Found f;
             final String version;
@@ -496,15 +543,29 @@ public class BotActivity extends Activity {
                 //noinspection ResultOfMethodCallIgnored
                 dir.mkdirs();
                 out = new File(dir, f.name);
-                version = XdcFetch.downloadTo(dir, f, out);
+                version = XdcFetch.downloadTo(dir, f, out, pump::offer);
             } catch (final XdcFetch.FetchException fe) {
-                runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
-                    .setTitle("Could not get the app version")
-                    .setMessage(fe.getMessage())
-                    .setPositiveButton("OK", null).show());
+                runOnUiThread(() -> {
+                    if (gen != fetchGen) return;
+                    fetchRunning = false;
+                    fetchXdcBtn.setEnabled(true);
+                    fetchStatus.setVisibility(android.view.View.GONE);
+                    fetchBar.setVisibility(android.view.View.GONE); // failure: dialog explains, no fake final state
+                    new android.app.AlertDialog.Builder(this)
+                        .setTitle("Could not get the app version")
+                        .setMessage(fe.getMessage())
+                        .setPositiveButton("OK", null).show();
+                });
                 return;
             }
-            runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+            runOnUiThread(() -> {
+                if (gen != fetchGen) return;
+                fetchRunning = false;
+                fetchXdcBtn.setEnabled(true);
+                fetchBar.setIndeterminate(false);
+                fetchBar.setProgress(100); // terminal success retains the full bar
+                fetchStatus.setText("Fetched " + f.name);
+                new android.app.AlertDialog.Builder(this)
                 .setTitle("App version ready")
                 .setMessage("Fetched " + f.name + " (release " + f.tag + ", app version " + version + ").\n\n"
                     + "Publish it to EVERY chat the bot serves now?")
@@ -529,7 +590,8 @@ public class BotActivity extends Activity {
                     }
                 })
                 .setNegativeButton("Not now", (d, w) -> out.delete())
-                .show());
+                .show();
+            });
         }).start();
     }
 
@@ -707,6 +769,12 @@ public class BotActivity extends Activity {
             int n = in.read(buf); in.close();
             return n > 0 ? new String(buf, 0, n) : "";
         } catch (Exception e) { return ""; }
+    }
+
+    private static String kbText(long bytes) {
+        if (bytes < 0) return "?";
+        if (bytes < 1024 * 1024) return (bytes / 1024) + " KB";
+        return String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0);
     }
 
     private String readLog() {

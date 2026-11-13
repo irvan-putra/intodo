@@ -40,7 +40,16 @@ public class SyncEngine {
     private static final Pattern PAYLOAD = Pattern.compile("IFW1\\.([A-Za-z0-9_\\-]{40,})");
     private static final long TIMEOUT_MS = 90000;
 
-    public interface Callback { void onDone(boolean ok, String message); }
+    public interface Callback {
+        void onDone(boolean ok, String message);
+        /**
+         * Honest progress only: stage "page" = the WebView's own page-load
+         * progress (done/total = percent/100); stage "data" = bytes actually
+         * read from a feed subresource fetch (total = its Content-Length, -1
+         * when the server gave none). No invented totals. Default: ignore.
+         */
+        default void onProgress(String stage, long done, long total) {}
+    }
 
     public static void run(Context context, Callback cb) {
         final String feedUrl = effectiveFeedUrl(context);
@@ -67,6 +76,12 @@ public class SyncEngine {
             main.postDelayed(timeout, TIMEOUT_MS);
             final boolean[] settleScheduled = {false};
 
+            web.setWebChromeClient(new android.webkit.WebChromeClient() {
+                @Override
+                public void onProgressChanged(WebView view, int newProgress) {
+                    cb.onProgress("page", newProgress, 100);
+                }
+            });
             web.setWebViewClient(new WebViewClient() {
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
@@ -78,7 +93,7 @@ public class SyncEngine {
                     if (!"GET".equals(req.getMethod())) return null;
                     if (!url.contains("instinctusercontent.com")) return null; // let WebView handle viewer/nav
                     try {
-                        return fetch(url, cm, found);
+                        return fetch(url, cm, found, main, cb, finished);
                     } catch (Exception e) {
                         return null; // fall back to WebView's own fetch
                     }
@@ -110,7 +125,8 @@ public class SyncEngine {
                 || (host != null && host.endsWith(".instinctusercontent.com"));
     }
 
-    private static WebResourceResponse fetch(String url, CookieManager cm, String[] found) throws Exception {
+    private static WebResourceResponse fetch(String url, CookieManager cm, String[] found,
+                                             Handler main, Callback cb, boolean[] finished) throws Exception {
         String current = url;
         HttpURLConnection conn = null;
         for (int hops = 0; hops < 4; hops++) {
@@ -118,6 +134,8 @@ public class SyncEngine {
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(15000);
             conn.setInstanceFollowRedirects(false);
+            // identity: byte counts and Content-Length must mean the same thing
+            conn.setRequestProperty("Accept-Encoding", "identity");
             String cookie = cm.getCookie(current);
             if (cookie != null) conn.setRequestProperty("Cookie", cookie);
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) InstinctWidget/0.4");
@@ -143,12 +161,30 @@ public class SyncEngine {
         int code = conn.getResponseCode();
         InputStream in = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
         if (in == null) return null;
+        final long declaredBody = conn.getContentLengthLong(); // -1 when the server gives none
+        // Coalesced progress: the 8 KiB read loop would otherwise flood the main
+        // handler with hundreds of posts. At most one queued runnable carries the
+        // newest values; events after finish() are dropped (finished guard), so a
+        // late byte count can never overwrite the terminal state.
+        final long[] latest = {0, declaredBody};
+        final boolean[] queued = {false};
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         byte[] chunk = new byte[8192];
         int n;
         while ((n = in.read(chunk)) != -1) {
             buf.write(chunk, 0, n);
             if (buf.size() > MAX_BODY) { in.close(); return null; }
+            if (main != null && cb != null) {
+                synchronized (latest) { latest[0] = buf.size(); }
+                boolean schedule;
+                synchronized (queued) { schedule = !queued[0]; if (schedule) queued[0] = true; }
+                if (schedule) main.post(() -> {
+                    long soFar;
+                    synchronized (latest) { soFar = latest[0]; }
+                    synchronized (queued) { queued[0] = false; }
+                    if (!finished[0]) cb.onProgress("data", soFar, declaredBody);
+                });
+            }
         }
         in.close();
         byte[] body = buf.toByteArray();

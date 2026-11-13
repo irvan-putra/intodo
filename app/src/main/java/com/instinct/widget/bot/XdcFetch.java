@@ -4,18 +4,15 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.security.MessageDigest;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
+import com.instinct.widget.net.Resumable;
 
 /**
  * Manual-tap "get the latest app version (.xdc) from GitHub" for the bot
@@ -58,6 +55,9 @@ public class XdcFetch {
     public static class FetchException extends Exception {
         FetchException(String plainMessage) { super(plainMessage); }
     }
+
+    /** Bytes so far and expected total (-1 when the server gave no length). */
+    public interface ProgressListener { void onProgress(long done, long total); }
 
     /**
      * Walks every listed release and picks the qualified asset with the MAX
@@ -142,83 +142,56 @@ public class XdcFetch {
     }
 
     /**
-     * Download + verify into dir. Returns the staged file and the manifest
-     * version it carries. Any failed check deletes the partial file and
-     * throws FetchException with plain wording.
+     * Download + verify with progress reporting and safe resume, via the shared
+     * Resumable core (its class doc is the full contract):
+     *  - an interrupted download keeps a .part file plus a .meta sidecar bound to
+     *    the asset URL, this asset's NAME (which pins the version), and the
+     *    expected sha256 (when GitHub reported one). A partial that does not
+     *    bind to the CURRENT pick is discarded, never patched onto;
+     *  - resume sends Range + If-Range and accepts a 206 only with an exact
+     *    Content-Range (offset, end, total) and the same validator; otherwise
+     *    the partial is discarded and the body is restarted from zero;
+     *  - the byte count must match the server's stated length exactly - a
+     *    truncated file is INCOMPLETE and kept for resume (when resumable),
+     *    never verified as if complete;
+     *  - the sha256 check (when GitHub reported a digest) and the
+     *    manifest/name checks run on the COMPLETE staged file, and only after
+     *    every check passes does it replace any previously fetched file - a
+     *    failed fetch never deletes a good earlier download;
+     *  - unknown length with no checksum is refused (completeness unprovable).
+     * Returns the manifest version of the verified file.
      */
-    public static String downloadTo(File dir, Found f, File out) throws FetchException {
-        HttpURLConnection conn = null;
+    public static String downloadTo(File dir, Found f, File out, ProgressListener pl) throws FetchException {
+        Resumable.Spec s = new Resumable.Spec();
+        s.url = f.url;
+        s.allowedPrefix = DOWNLOAD_PREFIX;
+        s.allowedHosts = ALLOWED_HOSTS;
+        s.maxBytes = MAX_BYTES;
+        s.expectedSha256 = f.sha256;
+        s.requireDigest = false; // old releases predate GitHub's digest field; size equality still enforced
+        s.out = out;
+        s.extraMeta = java.util.Collections.singletonMap("name", f.name);
+        s.verifier = part -> {
+            String version = manifestVersion(part);
+            if (version == null) throw new Resumable.Refused(
+                    "The fetched file has no version number inside (manifest.toml). It would be refused at publish time.");
+            if (!f.name.startsWith("itdxdc-v" + version)) throw new Resumable.Refused(
+                    "The fetched file's name (" + f.name + ") does not match the version inside it ("
+                    + version + "). Not using it.");
+        };
+        s.progress = pl == null ? null : pl::onProgress;
         try {
-            String current = f.url;
-            for (int hops = 0; hops <= 3; hops++) {
-                URL u = new URL(current);
-                if (!"https".equals(u.getProtocol()))
-                    throw new FetchException("Download refused: not HTTPS.");
-                if (!ALLOWED_HOSTS.contains(u.getHost()))
-                    throw new FetchException("Download refused: unexpected host.");
-                conn = (HttpURLConnection) u.openConnection();
-                conn.setConnectTimeout((int) TIMEOUT_MS);
-                conn.setReadTimeout((int) TIMEOUT_MS);
-                conn.setInstanceFollowRedirects(false);
-                conn.setRequestProperty("User-Agent", "itdapk-xdc-fetch");
-                int code = conn.getResponseCode();
-                if (code >= 300 && code < 400) {
-                    String loc = conn.getHeaderField("Location");
-                    conn.disconnect(); conn = null;
-                    if (loc == null || !loc.startsWith("https://"))
-                        throw new FetchException("Download refused: unsafe redirect.");
-                    current = loc;
-                    continue;
-                }
-                if (code != 200) throw new FetchException("Download failed (HTTP " + code + ").");
-                break;
-            }
-            if (conn == null) throw new FetchException("Download refused: too many redirects.");
-            long declared = conn.getContentLengthLong();
-            if (declared > MAX_BYTES) throw new FetchException("Download refused: file too large.");
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            long total = 0;
-            try (InputStream in = conn.getInputStream(); OutputStream o = new FileOutputStream(out)) {
-                byte[] buf = new byte[65536]; int n;
-                while ((n = in.read(buf)) != -1) {
-                    total += n;
-                    if (total > MAX_BYTES) {
-                        conn.disconnect(); out.delete();
-                        throw new FetchException("Download refused: file too large.");
-                    }
-                    md.update(buf, 0, n);
-                    o.write(buf, 0, n);
-                }
-            }
-            conn.disconnect(); conn = null;
-            if (f.sha256 != null) {
-                String got = hex(md.digest());
-                if (!got.equalsIgnoreCase(f.sha256)) {
-                    out.delete();
-                    throw new FetchException(
-                            "Download verification failed: the file does not match GitHub's checksum.");
-                }
-            }
-            String version = manifestVersion(out);
-            if (version == null) {
-                out.delete();
-                throw new FetchException(
-                        "The fetched file has no version number inside (manifest.toml). It would be refused at publish time.");
-            }
-            if (!f.name.startsWith("itdxdc-v" + version)) {
-                out.delete();
-                throw new FetchException(
-                        "The fetched file's name (" + f.name + ") does not match the version inside it ("
-                        + version + "). Not using it.");
-            }
-            return version;
-        } catch (FetchException fe) {
-            throw fe;
+            Resumable.Result r = Resumable.get(s);
+            return manifestVersion(r.file);
+        } catch (Resumable.Incomplete i) {
+            throw new FetchException("Download incomplete: " + kb(i.done)
+                    + (i.total > 0 ? " / " + kb(i.total) : "")
+                    + (i.resumable ? ". It is kept on the phone - tap Get latest app again to resume."
+                                   : ". This server cannot resume - tap Get latest app again to restart."));
+        } catch (Resumable.Refused rf) {
+            throw new FetchException(rf.getMessage());
         } catch (Exception e) {
-            out.delete();
             throw new FetchException("Download failed. Check your connection and try again.");
-        } finally {
-            if (conn != null) conn.disconnect();
         }
     }
 
@@ -250,9 +223,9 @@ public class XdcFetch {
         return null;
     }
 
-    private static String hex(byte[] b) {
-        StringBuilder s = new StringBuilder();
-        for (byte x : b) s.append(String.format("%02x", x));
-        return s.toString();
+    private static String kb(long bytes) {
+        if (bytes < 0) return "?";
+        if (bytes < 1024 * 1024) return (bytes / 1024) + " KB";
+        return String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0);
     }
 }

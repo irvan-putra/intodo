@@ -14,6 +14,7 @@ import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.security.KeyPair;
@@ -23,6 +24,15 @@ import java.util.List;
 public class MainActivity extends Activity {
 
     private TextView lastSync;
+    private String pendingAssetDigest;
+    // Operation guards: each new update download / sync bumps its generation, so
+    // late callbacks queued from a previous operation are dropped, and a terminal
+    // status can never be overwritten by a late progress event.
+    private int updateGen = 0;
+    private boolean updateRunning = false;
+    private int syncGen = 0;
+    private boolean syncRunning = false;
+    private boolean syncDataStarted = false;
     // Background syncs write prefs in this process; refresh the visible UI on change.
     private final SharedPreferences.OnSharedPreferenceChangeListener syncPrefsListener =
             (prefs, key) -> runOnUiThread(() -> { reload(); refreshStatus(); });
@@ -69,14 +79,46 @@ public class MainActivity extends Activity {
         findViewById(R.id.updateLine).setOnClickListener(v -> {
             Object asset = v.getTag();
             if (!(asset instanceof String) || ((String) asset).isEmpty()) return;
+            if (updateRunning) return; // one download at a time; the core also locks
             TextView line = (TextView) v;
+            ProgressBar bar = findViewById(R.id.updateProgress);
             if (!UpdateInstall.canInstall(this)) {
                 line.setText("Allow installs from this app, then tap again");
                 UpdateInstall.openInstallPermissionSettings(this);
                 return;
             }
+            updateRunning = true;
+            final int gen = ++updateGen;
+            line.setEnabled(false);
             line.setText("downloading update...");
-            UpdateInstall.downloadAndInstall(this, (String) asset, line::setText);
+            bar.setIndeterminate(true); // until the server states a length
+            bar.setProgress(0);
+            bar.setVisibility(View.VISIBLE);
+            UpdateInstall.downloadAndInstall(this, (String) asset, pendingAssetDigest,
+                    new UpdateInstall.Callback() {
+                        @Override public void onStatus(String message) {
+                            if (gen != updateGen) return; // stale operation
+                            updateRunning = false;
+                            line.setEnabled(true);
+                            bar.setVisibility(View.GONE); // every terminal path hides the bar
+                            line.setText(message);
+                        }
+                        @Override public void onProgress(long done, long total) {
+                            if (gen != updateGen || !updateRunning) return; // late event
+                            bar.setVisibility(View.VISIBLE);
+                            if (total > 0) {
+                                int pct = (int) (done * 100 / total);
+                                bar.setIndeterminate(false);
+                                bar.setProgress(pct);
+                                line.setText("downloading update: " + UpdateInstall.mb(done)
+                                        + " / " + UpdateInstall.mb(total) + " (" + pct + "%)");
+                            } else {
+                                // honest unknown total: bytes only, never a fake percent
+                                bar.setIndeterminate(true);
+                                line.setText("downloading update: " + UpdateInstall.mb(done));
+                            }
+                        }
+                    });
         });
         generate.setOnClickListener(v -> generateKeys());
         if (Prefs.isPaired(this)) generate.setText("Replace pairing key");
@@ -166,8 +208,10 @@ public class MainActivity extends Activity {
 
     // Update-check cadence: on app open and on each manual sync, never in the background.
     private void checkForUpdate() {
-        UpdateCheck.run(this, (newer, assetUrl, releaseUrl) -> {
+        UpdateCheck.run(this, (newer, assetUrl, releaseUrl, assetSha256) -> {
+            if (updateRunning) return; // never stomp an active download's line or digest
             TextView line = findViewById(R.id.updateLine);
+            pendingAssetDigest = assetSha256;
             if (newer != null) {
                 line.setText("Update available: v" + newer + " - tap to download and install (Android asks you to confirm)");
                 line.setTag(assetUrl);
@@ -179,15 +223,52 @@ public class MainActivity extends Activity {
     }
 
     private void sync() {
+        if (syncRunning) return;
+        syncRunning = true;
+        syncDataStarted = false;
+        final int gen = ++syncGen;
         syncNow.setEnabled(false);
         lastSync.setText("Syncing...");
-        SyncEngine.run(this, (ok, message) -> {
-            syncNow.setEnabled(true);
-            reload();
-            refreshStatus();
-            Toast.makeText(this, ok ? "Synced" : message, Toast.LENGTH_LONG).show();
-            WidgetProvider.refreshAll(this);
-            checkForUpdate(); // manual sync doubles as an update check, as the comment above says
+        ProgressBar bar = findViewById(R.id.syncProgress);
+        bar.setVisibility(View.VISIBLE);
+        bar.setIndeterminate(true);
+        SyncEngine.run(this, new SyncEngine.Callback() {
+            @Override public void onDone(boolean ok, String message) {
+                if (gen != syncGen) return; // stale operation
+                syncRunning = false;
+                syncNow.setEnabled(true); // re-enabled on every terminal path
+                bar.setVisibility(View.GONE);
+                reload();
+                refreshStatus();
+                Toast.makeText(MainActivity.this, ok ? "Synced" : message, Toast.LENGTH_LONG).show();
+                WidgetProvider.refreshAll(MainActivity.this);
+                checkForUpdate(); // manual sync doubles as an update check, as the comment above says
+            }
+            @Override public void onProgress(String stage, long done, long total) {
+                if (gen != syncGen || !syncRunning) return; // late event after terminal
+                // Two DISTINCT stages, never merged into an invented overall percent:
+                // "page" = the viewer page's own load percent; "data" = the actual
+                // list-payload bytes. Once real data flows, late page events are
+                // ignored so the WebView's percent cannot overwrite the real bytes.
+                if ("page".equals(stage)) {
+                    if (syncDataStarted) return;
+                    bar.setIndeterminate(false);
+                    bar.setProgress((int) done);
+                    lastSync.setText("Syncing: loading feed page " + done + "%");
+                } else {
+                    syncDataStarted = true;
+                    if (total > 0) {
+                        int pct = (int) (done * 100 / total);
+                        bar.setIndeterminate(false);
+                        bar.setProgress(pct);
+                        lastSync.setText("Syncing: list data " + UpdateInstall.mb(done)
+                                + " / " + UpdateInstall.mb(total) + " (" + pct + "%)");
+                    } else {
+                        bar.setIndeterminate(true); // honest unknown total: bytes only
+                        lastSync.setText("Syncing: list data " + UpdateInstall.mb(done));
+                    }
+                }
+            }
         });
     }
 
