@@ -29,7 +29,10 @@ send's outcome.
 - **Idempotent dedupe.** `record_inbound` and `plan_reply` are idempotent:
   the same message id or the same planned reply never creates a duplicate
   record. Exactly one caller wins a race to plan the same reply
-  (`DuplicateReply` for the rest), enforced across processes.
+  (`DuplicateReply` for the rest), enforced across processes. There is one
+  reply intent per inbound message, irrespective of body: a reworded reply
+  cannot bypass the block on a pending, sent or unresolved plan, and the
+  planned body is fixed at planning time.
 - **Crash-safe file writes.** The ledger is written to a temporary file that
   is atomically renamed over the old one, so a kill mid-write cannot leave a
   truncated file. A stable sidecar lock file (`<ledger>.lock`, never
@@ -37,10 +40,19 @@ send's outcome.
   on the data file itself because the atomic rename swaps its inode.
 - **No blind retries.** `plan_reply` refuses to plan over a `pending` or
   `unknown` record. Settling is evidence-based and asymmetric:
-  - `reconcile(plan, observed_messages)` is **positive-only**: it marks the
-    plan `sent` when the actual reply text is observed in the chat, and
-    otherwise returns `"unresolved"` and changes nothing. Absence in a
-    possibly stale or partial observation is not failure evidence.
+  - `reconcile(plan, observed_messages)` is **positive-only and
+    evidence-checked**. Observed messages are dicts with `id`, `chat`,
+    `outgoing`, `text` and `quote` keys. A plan settles `sent` only on a
+    message that is outgoing per the transport's own authorship, is in the
+    plan's chat, carries the planned text, AND explicitly quotes the plan's
+    inbound message. A same-text message without that exact association -
+    a peer's message, a different chat, an old unrelated bot reply, or
+    anything relying on id recency alone - settles nothing: there is no
+    ordering fallback. Otherwise reconcile returns `"unresolved"` and
+    changes nothing. Absence in a possibly stale or partial observation is
+    not failure evidence. A transport that cannot expose quote/reply
+    linkage cannot settle plans through reconcile at all; fail closed is
+    the design.
   - `mark_failed(plan, reason)` is the only path to `failed`, and is for a
     transport-authoritative terminal failure of that specific message: the
     message reached the transport's own failed state, or the send call was
@@ -55,9 +67,11 @@ send's outcome.
   re-plan, which counts the attempt.
 - **Fails closed.** A corrupt or unreadable ledger raises `LedgerError`
   rather than silently resetting to "nothing seen".
-- **No plaintext kept.** Only a SHA-256 hash of the reply text is stored —
-  enough to detect a different reply to the same inbound, not enough to read
-  the conversation.
+- **Message bodies are hashed, not kept.** Only a SHA-256 hash of inbound
+  and reply text is stored. The ledger DOES retain operational metadata:
+  sender address, chat and message ids, timestamps, attempt counts and
+  failure reasons — protect the file accordingly (it is a record of who
+  wrote when, not of what they said).
 
 ## Non-guarantees
 
@@ -78,6 +92,29 @@ send's outcome.
   host on one filesystem. Coordinating bots across hosts needs a shared store
   this library does not provide.
 
+## Crash recovery recipe
+
+A plan left `pending` when the process restarts means "we intended to send
+and do not know whether we did". On startup:
+
+```python
+for rec in ledger.unresolved():
+    # each record: {"plan": plan_id, "chat": chat_id, "msg": msg_id,
+    #               "state": "pending" | "unknown"}
+    if rec["state"] == "pending":
+        ledger.mark_unknown(rec["plan"])   # pending -> unknown: honest state
+    outcome = ledger.reconcile(rec["plan"],
+                               transport.read_chat(int(rec["chat"])))
+    # "sent" -> the reply is really there (quote-correlated); done
+    # "unresolved" -> stays blocked; only a transport-authoritative
+    # terminal failure (mark_failed) makes it retryable
+```
+
+Only `pending` is passed to `mark_unknown` (it accepts no other state);
+already-`unknown` plans go straight to reconcile. Each record carries its
+own chat, so plans from different chats are each reconciled against the
+right conversation.
+
 ## API sketch
 
 ```python
@@ -95,15 +132,26 @@ if ledger.record_inbound(chat_id, msg_id, sender, text):   # False = already see
     else:
         ledger.mark_unknown(plan)
 
-# on startup, settle leftovers from a crash:
-for plan_id in ledger.unresolved():
-    outcome = ledger.reconcile(plan_id, transport.read_chat(chat_id))
-    # "sent" -> done; "unresolved" -> stays blocked, inspect manually or
-    # wait for a transport-authoritative failure, then mark_failed(plan_id)
+# observed-evidence shape for reconcile():
+#   {"id": 201, "chat": 14, "outgoing": True, "text": "...", "quote": 100}
 ```
 
-`unresolved()` lists plans stuck in `pending` or `unknown` (oldest first),
-and `is_answered(chat, msg)` reports whether an inbound has a sent reply.
+## Adapter truth boundary
+
+The evidence fields `id`, `chat`, `outgoing` and `quote` are claims from
+the caller's transport adapter. The ledger enforces their shape and
+strictness (a real id, `outgoing` exactly `True`, exact chat and quote
+match) but cannot verify them against the network. An adapter must report
+only what its transport actually exposes: authorship from the transport's
+own flag (never inferred from timing or ordering), quote linkage only when
+the transport provides it. A transport that cannot expose quote linkage
+cannot settle plans through `reconcile()` at all - that is the design,
+not a gap.
+
+`unresolved()` returns records for plans stuck in `pending` or `unknown`
+(oldest first) - each a dict `{"plan", "chat", "msg", "state"}` so callers
+never read internal storage to find a plan's chat. `is_answered(chat, msg)`
+reports whether an inbound has a sent reply.
 
 ## State machine
 
@@ -111,7 +159,7 @@ and `is_answered(chat, msg)` reports whether an inbound has a sent reply.
 plan_reply -> pending --mark_sent--> sent        (terminal)
            pending  --mark_unknown--> unknown
            pending  --mark_failed--> failed      (terminal)
-           unknown  --reconcile(observed reply)--> sent
+           unknown  --reconcile(quote-correlated observed reply)--> sent
            unknown  --mark_failed--> failed
            failed   --plan_reply--> pending      (explicit re-plan, attempts += 1)
 ```
