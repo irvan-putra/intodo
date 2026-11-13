@@ -28,7 +28,7 @@ import org.robolectric.annotation.GraphicsMode;
 @Config(sdk = 32, qualifiers = "xxhdpi")
 public class BotActivityRenderTest {
     private static Activity activityWithState(String state, boolean running, String log) throws Exception {
-        android.app.ActivityController<BotActivity> controller = Robolectric.buildActivity(BotActivity.class);
+        org.robolectric.android.controller.ActivityController<BotActivity> controller = Robolectric.buildActivity(BotActivity.class);
         Activity activity = controller.get();
         File dir = activity.getFilesDir();
         if (state != null) {
