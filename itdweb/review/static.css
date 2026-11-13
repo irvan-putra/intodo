@@ -23,14 +23,20 @@ body {
 }
 h1, h2, h3 { font-family: Aime, Georgia, serif; font-weight: 400; }
 
+/* Page column: viewport flexes, the relationship key docks below it when
+   open, so the key can never cover the diagram. */
+.rc-page {
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh;
+}
 /* Full-window canvas, FreeForm/Miro-style. Overrides the square aspect-ratio
    rule from ../src/style.css. */
 .rc-viewport {
-    height: 100vh;
-    height: 100dvh;
+    flex: 1; min-height: 0;
     aspect-ratio: auto;
     border: none;
     border-radius: 0;
+    position: relative;
 }
 
 /* Live storage-state note, non-interactive. */
@@ -100,6 +106,50 @@ a, .rc-card a { color: var(--ds-ink); }
    with neighbouring titles; the grouping it named is the context level */
 .rc-lo .rc-tag { display: none; }
 .rc-lo .rc-badge { font-size: min(calc(10px / var(--camz)), 44px); }
+/* Detail band: each container renders as a labeled frame holding its
+   section cards - C4 zoom-in-context nesting (the parent box stays the
+   frame of reference while its contents are revealed inside it). Frames
+   size by DOM flow, so real card heights can never overflow the frame. */
+.rc-nest-col {
+    position: absolute;
+    display: flex; flex-direction: column; gap: 60px;
+    align-items: flex-start;
+}
+.rc-frame {
+    position: relative; flex: none;
+    border: 2px solid var(--ds-hairline); border-radius: 18px;
+    background: rgba(30, 41, 38, 0.03);
+}
+.rc-frame-cards {
+    display: flex; flex-wrap: wrap; gap: 22px;
+    padding: 108px 28px 28px;
+}
+/* The base card style is position:absolute (free-form canvas); inside a
+   frame the cards flow in normal document order instead. */
+.rc-frame-cards > div { position: relative; flex: none; }
+.rc-frame-cards .rc-card { position: static; width: 100%; }
+.rc-frame-support { border-style: dashed; }
+.rc-frame-label {
+    position: absolute; left: 18px; top: 8px;
+    display: flex; flex-direction: column;
+    font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
+    color: var(--ds-ink);
+    font-size: min(calc(15px / var(--camz)), 72px);
+}
+.rc-frame-sub {
+    font-weight: 400; color: var(--ds-ink-2);
+    font-size: min(calc(11px / var(--camz)), 52px);
+}
+/* Supporting views (dynamic flow / deployment): same node/edge/badge
+   machinery as the structure bands, rendered at any zoom. */
+.rc-viewedges, .rc-viewlabels { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.rc-viewnodes { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.rc-viewnodes .rc-grpnode { pointer-events: auto; }
+.rc-viewedges polyline {
+    stroke: var(--ds-teal);
+    stroke-width: calc(2.5px / var(--camz));
+    opacity: 0.55;
+}
 /* Section level: each card group is owned by its C4 container label;
    the old free-floating concept edges are gone per owner request */
 .rc-seclabel {
@@ -149,29 +199,48 @@ a, .rc-card a { color: var(--ds-ink); }
     text-anchor: middle;
     dominant-baseline: central;
 }
-.rc-grp .rc-legend-grp, .rc-sys .rc-legend-sys { display: flex; }
-.rc-legend-chip {
-    display: none;
-    position: absolute; left: 14px; bottom: 14px; z-index: 8;
-    padding: 5px 10px;
-    background: rgba(251, 250, 249, 0.92);
+/* Bottom navigation dock: a compact bar that never covers the canvas.
+   The key/menu open as docked panels above it (see .rc-legend/.rc-menu),
+   shrinking the viewport rather than overlaying the diagram. */
+.rc-dockbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px;
+    background: #fbfaf9; border-top: 1px solid var(--ds-hairline);
+}
+.rc-dockchip {
+    padding: 5px 12px;
+    background: var(--ds-page);
     border: 1px solid var(--ds-hairline); border-radius: 999px;
-    font: inherit; font-size: 10.5px; color: var(--ds-ink-2);
+    font: inherit; font-size: 11px; color: var(--ds-ink-2);
     cursor: pointer;
 }
-.rc-grp .rc-legend-chip-grp, .rc-sys .rc-legend-chip-sys { display: block; }
-.rc-grp .rc-legend, .rc-sys .rc-legend { bottom: 44px; }
+.rc-dockchip-on { border-color: var(--ds-teal); color: var(--ds-ink); }
+.rc-menu {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 14px;
+    max-height: 42dvh; overflow-y: auto;
+    background: #fbfaf9; border-top: 1px solid var(--ds-hairline);
+    font-size: 11px; color: var(--ds-ink-2);
+}
+.rc-menu-head { font-weight: 700; letter-spacing: 0.02em; color: var(--ds-ink); }
+.rc-menu-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.rc-menu-btn {
+    padding: 5px 10px;
+    background: var(--ds-page);
+    border: 1px solid var(--ds-hairline); border-radius: 8px;
+    font: inherit; font-size: 11px; color: var(--ds-ink-2);
+    cursor: pointer; text-align: left;
+}
+.rc-menu-on { border-color: var(--ds-teal); color: var(--ds-ink); }
+/* The key docks below the viewport as a page band, never over the canvas. */
 .rc-legend {
-    display: none;
-    position: absolute; left: 14px; bottom: 14px; z-index: 8;
+    display: flex;
     flex-direction: column; gap: 3px;
-    padding: 7px 10px;
-    max-width: min(72vw, 340px);
+    padding: 8px 14px;
+    max-height: 42dvh; overflow-y: auto;
     background: #fbfaf9;
-    border: 1px solid var(--ds-hairline); border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(30, 41, 38, 0.12);
+    border-top: 1px solid var(--ds-hairline);
     font-size: 10.5px; line-height: 1.25; color: var(--ds-ink-2);
-    pointer-events: none;
 }
 .rc-legend-item { display: flex; align-items: center; gap: 8px; }
 .rc-legend-key { margin-top: 2px; font-size: 10px; }
@@ -294,4 +363,22 @@ a, .rc-card a { color: var(--ds-ink); }
     font-size: 12px; line-height: 18px; color: var(--ds-ink-2);
     background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 999px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* per-frame explicit sheet entry on phones: the sheet complements the
+   nested frame (long card lists scroll better as a list) instead of
+   replacing it as the container tap's outcome */
+.rc-frame-list {
+    position: relative;
+    z-index: 5;
+    align-self: flex-start;
+    margin-top: 0.35em;
+    font: inherit;
+    font-size: min(calc(11px / var(--camz)), 48px);
+    padding: 0.25em 0.8em;
+    border-radius: 999px;
+    border: 2px solid var(--line, #cfd8d3);
+    background: #fff;
+    color: var(--ds-ink);
+    cursor: pointer;
 }

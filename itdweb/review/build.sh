@@ -14,4 +14,12 @@ if [ ! -d node_modules ]; then
 fi
 ./node_modules/.bin/esbuild main.tsx --bundle --outfile="$OUT/app.js" --jsx=automatic --minify
 cp index.html "$OUT/index.html"
-echo "Built: $OUT (index.html, app.js, app.css)"
+# Content-fingerprint the JS/CSS asset names and rewrite index.html to match,
+# so a new release is picked up immediately instead of waiting out the
+# browser cache (GitHub Pages serves these with max-age=600).
+JS_HASH=$(md5sum "$OUT/app.js" | cut -c1-8)
+CSS_HASH=$(md5sum "$OUT/app.css" | cut -c1-8)
+mv "$OUT/app.js" "$OUT/app.$JS_HASH.js"
+mv "$OUT/app.css" "$OUT/app.$CSS_HASH.css"
+sed -i "s|\./app\.js|./app.$JS_HASH.js|; s|\./app\.css|./app.$CSS_HASH.css|" "$OUT/index.html"
+echo "Built: $OUT (index.html, app.$JS_HASH.js, app.$CSS_HASH.css)"

@@ -7,7 +7,7 @@ type Cam = { x: number; y: number; z: number };
 type Mark = 'reviewed' | 'flag';
 type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark>; findings?: Record<string, string> };
 
-const WORLD = { w: 2160, h: 2560 };
+const WORLD = { w: 2400, h: 4240 };
 const ZMIN = 0.07, ZMAX = 2.5;
 // Zoom bands, C4-style progressive disclosure (c4model.com):
 //   z < SYS_Z    system context: people + the intodo system + external systems
@@ -95,7 +95,7 @@ const DEFAULT_POS: Record<string, Pos> = {
 // size at every zoom level, and edges route around unrelated boxes.
 type C4Node = { id: string; label: string; sub: string; kind: 'container' | 'support' | 'external' | 'person' | 'system'; members?: string[]; attached?: string[]; frac: { fx: number; fy: number } };
 const C4_CONTAINERS: C4Node[] = [
-    { id: 'c-app', label: 'itdapk - Android app', sub: 'Java/Kotlin + Chaquopy', kind: 'container', frac: { fx: 0.5, fy: 0.08 },
+    { id: 'c-app', label: 'itdapk - Android app', sub: 'Java/Kotlin + Chaquopy', kind: 'container', frac: { fx: 0.5, fy: 0.15 },
       members: ['list-ui', 'feed-sync', 'self-update', 'native-canvas', 'merge-core', 'bot-app', 'bot-runtime', 'bot-delivery', 'witness'],
       attached: ['tests-android', 'tests-bot'] },
     { id: 'c-xdc', label: 'itdxdc - webxdc app', sub: 'JavaScript in DeltaChat', kind: 'container', frac: { fx: 0.22, fy: 0.44 }, members: ['xdc-app', 'xdc-canvas'], attached: ['tests-xdc'] },
@@ -112,15 +112,15 @@ const C4_CONTAINERS: C4Node[] = [
       members: ['build-ci', 'assets-docs', 'dc-relay'] },
 ];
 const C4_EXTERNALS: C4Node[] = [
-    { id: 'x-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.16, fy: 0.24 } },
-    { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.84, fy: 0.24 } },
+    { id: 'x-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.18, fy: 0.24 } },
+    { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.8, fy: 0.24 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.72, fy: 0.78 } },
     // Turso was removed from this repo at 042141d; no database adapter is diagrammed.
 ];
 // The developer appears on the container view as the person who builds and
 // tests the apps and runs the feed tool - an ordinary external role only.
 const C4_PEOPLE: C4Node[] = [
-    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.08, fy: 0.62 } },
+    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.2, fy: 0.62 } },
 ];
 const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNALS];
 
@@ -143,6 +143,48 @@ const LO_LABELS: Record<string, { x: number; y: number }> = {};
         y += Math.ceil(all.length / 5) * LO_ROW_H + LO_GAP;
     }
 }
+// Detail-band nested layout, C4 zoom-in-context style (c4model.com): each
+// container is a labeled frame and its section cards live INSIDE the frame,
+// so zooming in reveals a container's contents within the parent box instead
+// of swapping to an unrelated level page. Positions are deterministic, so
+// cards stay fixed in place across visits; the saved free-form pos grid is
+// kept for backward compatibility but the detail band no longer uses it.
+// NEST_LABEL_H must clear the frame label at the detail band's lowest zoom:
+// the label is inverse-scaled (constant screen size), so its world height
+// grows as zoom falls; 78 world px clears it down to z ~ 0.55.
+const NEST_PAD = 28, NEST_LABEL_H = 78, NEST_GAP = 22, NEST_COL_W = 392, NEST_FRAME_GAP = 60;
+const NEST_COLS: Record<string, number> = { 'c-app': 3, 'c-xdc': 2, 'c-web': 2, 'c-feedtool': 1, 'c-devsupport': 2 };
+// Two frame columns: the app container (tallest) on the left, the rest
+// stacked on the right. Frames size themselves by DOM flow (real card
+// heights, no estimates), stacked inside absolute-positioned columns.
+const NEST_COLUMNS: string[][] = [['c-app'], ['c-xdc', 'c-web', 'c-feedtool', 'c-devsupport']];
+const NEST_FRAME_W = (gid: string) => (NEST_COLS[gid] ?? 2) * NEST_COL_W - NEST_GAP + 2 * NEST_PAD;
+const NEST_COL_X = [40, 40 + NEST_FRAME_W('c-app') + NEST_FRAME_GAP];
+// Estimated frame/card bounds, used only to zoom toward a container or card
+// before the frames have rendered. Rendering never uses these: frames size
+// themselves by DOM flow so real card heights can never overflow a frame.
+const NEST_EST: { frames: Record<string, { x: number; y: number; w: number; h: number }>; pos: Record<string, Pos> } = (() => {
+    const frames: Record<string, { x: number; y: number; w: number; h: number }> = {};
+    const pos: Record<string, Pos> = {};
+    NEST_COLUMNS.forEach((col, ci) => {
+        let y = 40;
+        for (const gid of col) {
+            const g = C4_CONTAINERS.find((c) => c.id === gid)!;
+            const all = [...(g.members ?? []), ...(g.attached ?? [])];
+            const cols = NEST_COLS[gid] ?? 2;
+            let cy = y + NEST_PAD + NEST_LABEL_H;
+            for (let i = 0; i < all.length; i += cols) {
+                const row = all.slice(i, i + cols);
+                const rh = Math.max(...row.map((m) => (CARD_SIZES[m] ?? { w: 360, h: 480 }).h));
+                row.forEach((m, j) => { pos[m] = { x: NEST_COL_X[ci] + NEST_PAD + j * NEST_COL_W, y: cy }; });
+                cy += rh + NEST_GAP;
+            }
+            frames[gid] = { x: NEST_COL_X[ci], y, w: NEST_FRAME_W(gid), h: cy - NEST_GAP - y + NEST_PAD };
+            y += frames[gid].h + NEST_FRAME_GAP;
+        }
+    });
+    return { frames, pos };
+})();
 type C4Rel = { a: string; b: string; label: string; dashed?: boolean; side?: 1 | -1 };
 const C4_RELS: C4Rel[] = [
     { a: 'c-app', b: 'x-files', label: 'encrypted feed (HTTPS)' },                      // app/.../SyncEngine.java
@@ -160,12 +202,12 @@ const SYS_NODES: C4Node[] = [
     // Same human as the owner, in the developer role: builds, tests and
     // publishes. Modeled separately because the owner asked for developers as
     // users of the build/publish services, not as runtime architecture.
-    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.5, fy: 0.06 } },
+    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.5, fy: 0.1 } },
     { id: 's-intodo', label: 'intodo', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
-    { id: 'x-gha', label: 'GitHub Actions', sub: 'draft workflows, manual trigger', kind: 'external', frac: { fx: 0.88, fy: 0.44 } },
+    { id: 'x-gha', label: 'GitHub Actions', sub: 'draft workflows, manual trigger', kind: 'external', frac: { fx: 0.84, fy: 0.44 } },
     { id: 'x-files', label: 'Instinct Files', sub: 'feed page', kind: 'external', frac: { fx: 0.18, fy: 0.7 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.82, fy: 0.7 } },
-    { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.86 } },
+    { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.82 } },
 ];
 const SYS_RELS: C4Rel[] = [
     { a: 'p-owner', b: 's-intodo', label: 'uses + reviews' },
@@ -182,6 +224,52 @@ const SYS_RELS: C4Rel[] = [
     // manual human step (rebuild + publish the File), not an integration.
     { a: 'p-dev', b: 'x-files', label: 'encrypts feed, publishes page by hand' },
 ];
+// Supporting C4 views (owner-approved alongside the nested structure):
+// two dynamic diagrams (each ONE verifiable causal scenario, numbered over
+// time) and a deployment diagram (where each container actually runs). Same
+// canvas, same pan/zoom, same numbered-badge + docked-key mechanics; every
+// step names its repo evidence. Public repo content only.
+// Scenario 1: a shared-list edit syncs to the group (webxdc ops path).
+const FLOW_NODES: C4Node[] = [
+    { id: 'f-xdc', label: 'itdxdc - webxdc app', sub: "a member's shared list", kind: 'container', frac: { fx: 0.14, fy: 0.28 } },
+    { id: 'f-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.16 } },
+    { id: 'f-app', label: 'itdapk bot host', sub: 'Android app, python bot', kind: 'container', frac: { fx: 0.86, fy: 0.28 } },
+    { id: 'f-xdc2', label: 'Other members', sub: 'their itdxdc apps', kind: 'container', frac: { fx: 0.5, fy: 0.74 } },
+];
+const FLOW_STEPS: C4Rel[] = [
+    { a: 'f-xdc', b: 'f-dc', label: 'member edit sent as one webxdc status update {ops} · webxdc/js/app.js sendOps' },
+    { a: 'f-dc', b: 'f-xdc2', label: 'relayed to every member; each app applies ops on receipt · app.js setUpdateListener', side: 1 },
+    { a: 'f-dc', b: 'f-app', label: 'relayed to the bot host; trust gate, ops persisted, watermark advances · bot.py on_status_update/process_instance' },
+    { a: 'f-xdc2', b: 'f-dc', label: 'later, separate phase: only when a trusted instance boots fresh, it sends a boot hint (unknown instances are not registered) · bot.py is_boot', side: 1 },
+    { a: 'f-app', b: 'f-dc', label: 'if the gate authorizes that boot, the bot MAY replay restore batches (RESTORE_BATCH 50) · bot.py send_update', side: -1 },
+];
+// Scenario 2: the Android app list feed (a separate, manual publication).
+const FEED_NODES: C4Node[] = [
+    { id: 'g-dev', label: 'Developer', sub: 'the owner', kind: 'person', frac: { fx: 0.12, fy: 0.5 } },
+    { id: 'g-tool', label: 'feed encryption tool', sub: 'Python CLI', kind: 'container', frac: { fx: 0.4, fy: 0.22 } },
+    { id: 'g-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.68, fy: 0.22 } },
+    { id: 'g-app', label: 'itdapk', sub: 'Android app', kind: 'container', frac: { fx: 0.88, fy: 0.6 } },
+];
+const FEED_STEPS: C4Rel[] = [
+    { a: 'g-dev', b: 'g-tool', label: 'feed JSON in, encrypted payload printed · tools/encrypt_feed.py (print-only)' },
+    { a: 'g-dev', b: 'g-files', label: 'payload published to the feed page by hand' },
+    { a: 'g-files', b: 'g-app', label: 'itdapk GETs the feed when paired; the encrypted feed is returned and decrypted on device with the paired key · FeedSyncWorker.java + SyncEngine.java' },
+];
+const DEPLOY_NODES: C4Node[] = [
+    { id: 'd-phone', label: 'Android phone', sub: 'itdapk · itdxdc in DeltaChat', kind: 'container', frac: { fx: 0.5, fy: 0.14 } },
+    { id: 'd-devmachine', label: 'Developer machine', sub: 'Gradle build · feed CLI', kind: 'container', frac: { fx: 0.22, fy: 0.5 } },
+    { id: 'd-github', label: 'GitHub', sub: 'Pages: itdweb · Releases: APK', kind: 'external', frac: { fx: 0.76, fy: 0.3 } },
+    { id: 'd-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.76, fy: 0.68 } },
+    { id: 'd-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.84 } },
+];
+const DEPLOY_RELS: C4Rel[] = [
+    { a: 'd-phone', b: 'd-dc', label: 'messages + webxdc (RPC)' },                   // app/src/main/python/bot.py
+    { a: 'd-phone', b: 'd-github', label: 'APK updates + review page (HTTPS)' },     // app/.../UpdateCheck.java, itdweb/
+    { a: 'd-phone', b: 'd-files', label: 'fetches encrypted feed (HTTPS)' },         // app/.../SyncEngine.java
+    { a: 'd-devmachine', b: 'd-github', label: 'git push + release upload' },        // gradlew, GitHub Releases
+    { a: 'd-devmachine', b: 'd-files', label: 'publishes feed page (manual)' },      // tools/encrypt_feed.py output handoff
+];
+const VIEW_SETS = { flow: { nodes: FLOW_NODES, rels: FLOW_STEPS }, flowfeed: { nodes: FEED_NODES, rels: FEED_STEPS }, deploy: { nodes: DEPLOY_NODES, rels: DEPLOY_RELS } } as const;
 type Rect = { x: number; y: number; w: number; h: number };
 type GroupNode = { g: C4Node; x: number; y: number; hw: number; hh: number };
 // Screen-constant metrics: every size is device px, divided by the zoom to
@@ -353,6 +441,16 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
                 routed = true;
             }
         }
+        // Opposite-direction edges on the same node pair (marked side: 1/-1)
+        // get real parallel lanes, not just offset badges: shift the whole
+        // route perpendicular to its direction so the two directions never
+        // share one line. Endpoints move along the box border, still attached.
+        if (rel.side) {
+            const dx0 = nb.x - na.x, dy0 = nb.y - na.y;
+            const L0 = Math.hypot(dx0, dy0) || 1;
+            const off = rel.side * 30 / z;
+            pts = pts.map((p) => ({ x: p.x - (dy0 / L0) * off, y: p.y + (dx0 / L0) * off }));
+        }
         return { rel, na, nb, pts };
     });
     const segDist = (x: number, y: number, p: Pos, q: Pos): number => {
@@ -517,7 +615,8 @@ function Canvas() {
     const [pos, setPos] = useState<Record<string, Pos>>(sanePositions(saved?.pos ?? {}));
     const [focusedId, setFocusedId] = useState<string | null>(null);
     const [sheetGroup, setSheetGroup] = useState<string | null>(null);
-    const [legendOpen, setLegendOpen] = useState(false);
+    const [dock, setDock] = useState<'none' | 'menu' | 'legend'>('none');
+    const [view, setView] = useState<'structure' | 'flow' | 'flowfeed' | 'deploy'>('structure');
     const [measuredNodes, setMeasuredNodes] = useState<Record<string, { w: number; h: number }>>({});
     const [reviews, setReviews] = useState<Record<string, Mark>>(saved?.reviews ?? {});
     const [findings, setFindings] = useState<Record<string, string>>(saved?.findings ?? {});
@@ -608,10 +707,21 @@ function Canvas() {
         // tall (480 vs ~434 actual), which clipped the card top in focus mode.
         if (evp.w < 560) return; // phones read the card in the focus overlay below, not a shrunken canvas
         const el = vpRef.current?.querySelector(`[data-card="${id}"]`) as HTMLElement | null;
-        const w = el?.offsetWidth || CARD_SIZES[id].w;
-        const h = el?.offsetHeight || CARD_SIZES[id].h;
-        const p = pos[id] ?? DEFAULT_POS[id];
-        const ctr = { x: p.x + w / 2, y: p.y + h / 2 };
+        // Measure the real rendered position when the card is on screen
+        // (frames lay cards out by DOM flow, so estimates are a fallback).
+        const world = vpRef.current?.querySelector('.rc-world') as HTMLElement | null;
+        let w = el?.offsetWidth || CARD_SIZES[id].w;
+        let h = el?.offsetHeight || CARD_SIZES[id].h;
+        let ctr: Pos;
+        if (el && world && el.getBoundingClientRect().width > 0) {
+            const wr = world.getBoundingClientRect();
+            const cr = el.getBoundingClientRect();
+            w = cr.width / cam.z; h = cr.height / cam.z;
+            ctr = { x: (cr.left - wr.left) / cam.z + w / 2, y: (cr.top - wr.top) / cam.z + h / 2 };
+        } else {
+            const p = NEST_EST.pos[id] ?? pos[id] ?? DEFAULT_POS[id];
+            ctr = { x: p.x + w / 2, y: p.y + h / 2 };
+        }
         const z = clampZ(Math.min(evp.w / (w + 80), evp.h / (h + 48), 1.2));
         const c = clampCam({ x: ctr.x, y: ctr.y, z });
         setCam(c); persist(c, pos, reviews);
@@ -622,21 +732,21 @@ function Canvas() {
     const focusGroup = (gid: string) => {
         viewTouched.current = true;
         const g = C4_CONTAINERS.find((x) => x.id === gid)!;
-        // phones can't fit a wide container's cards side by side readably,
-        // so the container opens as a list sheet of its sections instead
-        if (evp.w < 560) { setSheetGroup(gid); return; }
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const m of [...g.members, ...(g.attached ?? [])]) {
-            const p = pos[m] ?? DEFAULT_POS[m];
-            const s = CARD_SIZES[m] ?? { w: 360, h: 480 };
-            minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-            maxX = Math.max(maxX, p.x + s.w); maxY = Math.max(maxY, p.y + s.h);
-        }
-        const bw = maxX - minX, bh = maxY - minY;
-        // fit the group's bounds; when it fits at a readable zoom, land in
-        // the detail band so its sections show their full cards
+        // Zoom into the container's nested frame on every device: the parent
+        // box stays the frame of reference while its contents are revealed
+        // inside it. On phones the frame dwarfs the viewport, so the
+        // detail-band effect below aligns its top-left (label + first cards
+        // readable); the list sheet stays available per frame via its List
+        // button, as an explicit choice rather than the tap's replacement.
+        pendingFrame.current = gid;
+        const f = NEST_EST.frames[gid];
+        const bw = f.w, bh = f.h;
+        const minX = f.x, minY = f.y;
+        // Fit the group's frame; never land wider than the detail band, so a
+        // container tap always arrives inside the nested frame, even on a
+        // phone where the frame is many viewports wide.
         const zFit = Math.min(evp.w / (bw + 140), evp.h / (bh + 140), 0.75);
-        const z = clampZ(Math.max(zFit, GROUP_Z + 0.04));
+        const z = clampZ(Math.max(zFit, LO_Z + 0.04));
         const c = clampCam({ x: minX + bw / 2, y: minY + bh / 2, z });
         setCam(c); persist(c, pos, reviews);
     };
@@ -653,6 +763,63 @@ function Canvas() {
     }, [overlayId, sheetOpen]);
 
     const band = cam.z < SYS_Z ? 'sys' : cam.z < GROUP_Z ? 'grp' : cam.z < LO_Z ? 'lo' : 'detail';
+    // Detail-band landing correction. The C4 bands re-lay around wherever
+    // the camera is, but nested content lives at fixed world coordinates,
+    // so wheel-zooming through the container band can surface empty canvas.
+    // When the detail band renders, center a tapped frame exactly, or nudge
+    // the camera into the frames' bounds once per entry.
+    const pendingFrame = useRef<string | null>(null);
+    const detailNudged = useRef(false);
+    useEffect(() => {
+        if (view !== 'structure' || band !== 'detail') { detailNudged.current = false; return; }
+        const vp = vpRef.current;
+        const worldEl = vp?.querySelector('.rc-world') as HTMLElement | null;
+        const frameEls = vp?.querySelectorAll('[data-frame]');
+        if (!vp || !worldEl || !frameEls || frameEls.length === 0) return;
+        const wr = worldEl.getBoundingClientRect();
+        const toWorld = (r: DOMRect) => ({
+            x0: (r.left - wr.left) / cam.z, y0: (r.top - wr.top) / cam.z,
+            x1: (r.right - wr.left) / cam.z, y1: (r.bottom - wr.top) / cam.z,
+        });
+        if (pendingFrame.current) {
+            const gid = pendingFrame.current;
+            pendingFrame.current = null;
+            detailNudged.current = true;
+            const el = vp.querySelector(`[data-frame="${gid}"]`);
+            if (el) {
+                const b = toWorld(el.getBoundingClientRect());
+                let cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+                // A frame larger than the viewport centers as a void; align
+                // its top-left instead so the parent label shows with its
+                // contents below/right - the nested reading.
+                if ((b.y1 - b.y0) * cam.z > evp.h * 0.9) cy = b.y0 + (evp.h / 2 - 16) / cam.z;
+                if ((b.x1 - b.x0) * cam.z > evp.w * 0.95) cx = b.x0 + (evp.w / 2 - 16) / cam.z;
+                const c = clampCam({ x: cx, y: cy, z: cam.z });
+                if (Math.abs(c.x - cam.x) > 1 || Math.abs(c.y - cam.y) > 1) { setCam(c); persist(c, pos, reviews); }
+            }
+            return;
+        }
+        if (detailNudged.current) return;
+        detailNudged.current = true;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        const bounds: { x0: number; y0: number; x1: number; y1: number }[] = [];
+        frameEls.forEach((el) => {
+            const b = toWorld(el.getBoundingClientRect());
+            bounds.push(b);
+            minX = Math.min(minX, b.x0); minY = Math.min(minY, b.y0);
+            maxX = Math.max(maxX, b.x1); maxY = Math.max(maxY, b.y1);
+        });
+        // Landing inside a frame: align its top-left so the parent label is
+        // visible with its cards below. Outside all frames: nudge into bounds.
+        const inside = bounds.find((b) => cam.x >= b.x0 && cam.x <= b.x1 && cam.y >= b.y0 && cam.y <= b.y1);
+        const nx = inside ? inside.x0 + (evp.w / 2 - 16) / cam.z : Math.min(Math.max(cam.x, minX - 80), maxX + 80);
+        const ny = inside ? inside.y0 + (evp.h / 2 - 16) / cam.z : Math.min(Math.max(cam.y, minY - 80), maxY + 80);
+        if (Math.abs(nx - cam.x) > 1 || Math.abs(ny - cam.y) > 1) {
+            const c = clampCam({ x: nx, y: ny, z: cam.z });
+            setCam(c); persist(c, pos, reviews);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [band, view]);
 
     const markSection = (id: string, m?: Mark) => {
         const r = { ...reviews };
@@ -755,10 +922,30 @@ function Canvas() {
     }, [band, measuredNodes]);
 
     const visRect: Rect = { x: cam.x - evp.w / 2 / cam.z, y: cam.y - evp.h / 2 / cam.z, w: evp.w / cam.z, h: evp.h / cam.z };
-    const groupLayout = diagramLayout(CONTAINER_NODES, visRect, cam.z, measuredNodes);
-    const sysLayout = diagramLayout(SYS_NODES, visRect, cam.z, measuredNodes);
-    const grpRels = routeRels(C4_RELS, groupLayout, cam.z, visRect);
-    const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, visRect);
+    // Owner feedback (14 Nov): laid out against exactly the visible screen,
+    // the diagrams squeezed into one screen and the long edges crisscrossed
+    // the middle. Lay the C4 bands out over MORE canvas than one screen and
+    // let pan/zoom do its job. The spread rect shares the visible center, so
+    // the current framing is kept while nodes gain real separation.
+    // The supporting views have few nodes; spreading them past the screen
+    // would just clip them, so only the structure bands use the canvas.
+    // Phones spread less: their first landing must still show whole nodes.
+    const SPREAD_X = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.35;
+    const SPREAD_Y = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.3;
+    const layRect: Rect = {
+        x: cam.x - (visRect.w * SPREAD_X) / 2, y: cam.y - (visRect.h * SPREAD_Y) / 2,
+        w: visRect.w * SPREAD_X, h: visRect.h * SPREAD_Y,
+    };
+    const groupLayout = diagramLayout(CONTAINER_NODES, layRect, cam.z, measuredNodes);
+    const sysLayout = diagramLayout(SYS_NODES, layRect, cam.z, measuredNodes);
+    const grpRels = routeRels(C4_RELS, groupLayout, cam.z, layRect);
+    const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, layRect);
+    // Supporting views (dynamic flow / deployment) reuse the same
+    // layout + routing pipeline; their edges are numbered steps/routes in
+    // the docked key, same as the structure bands.
+    const viewLayout: GroupNode[] = view !== 'structure' ? diagramLayout(VIEW_SETS[view].nodes as C4Node[], layRect, cam.z, measuredNodes) : [];
+    const viewRelRoutes = view !== 'structure' ? routeRels(VIEW_SETS[view].rels as C4Rel[], viewLayout, cam.z, layRect) : [];
+    const dockRels: C4Rel[] | null = view !== 'structure' ? VIEW_SETS[view].rels : band === 'grp' ? C4_RELS : band === 'sys' ? SYS_RELS : null;
 
     const cards: Record<string, React.ReactNode> = {
         progress: <CardShell id="progress" tag="Center" purpose="Do the task - how-to" title="Review progress" centerCard onFocus={focusCard}>
@@ -799,6 +986,7 @@ function Canvas() {
     }
 
     return <>
+        <div className="rc-page">
         <div
             ref={vpRef}
             className={`rc-viewport${dragging ? ' rc-dragging' : ''}${band === 'sys' ? ' rc-sys' : band === 'grp' ? ' rc-grp' : band === 'lo' ? ' rc-lo' : ''}`}
@@ -817,6 +1005,7 @@ function Canvas() {
                     ['--camz' as any]: cam.z,
                 }}
             >
+                {view === 'structure' && (<>
                 {/* container level: C4 relationships with labels; solid =
                     observed flow or evidenced manual step, dashed = designed
                     but not active / no deployed runtime link. rc-grp only */}
@@ -914,16 +1103,75 @@ function Canvas() {
                         </g>
                     ))}
                 </svg>
-                {/* section level: every card belongs to a C4 container. The
-                    free-form pos grid mixes containers within rows, so in the
-                    section band cards ignore pos and flow under their container
-                    label in reading order (LO_LAYOUT); the detail band keeps
-                    the saved/default positions. */}
-                {band === 'lo' && C4_CONTAINERS.map((g) => (
+                </>)}
+                {/* supporting views (owner-approved): dynamic flow and
+                    deployment, rendered with the same nodes/edges/badges
+                    machinery at any zoom; no section cards in these views */}
+                {view !== 'structure' && (<>
+                <svg className="rc-viewedges" width={WORLD.w} height={WORLD.h}>
+                    <defs>
+                        <marker id="rc-arr-view" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
+                        </marker>
+                    </defs>
+                    {viewRelRoutes.map((g) => (
+                        <polyline key={g.key} points={g.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none"
+                            markerEnd="url(#rc-arr-view)" />
+                    ))}
+                </svg>
+                <div className="rc-viewnodes">
+                    {viewLayout.map((n) => (
+                        <div key={n.g.id} data-nid={n.g.id} className={`rc-grpnode${n.g.kind === 'external' || n.g.kind === 'person' ? ' rc-node-ext' : ''}`} style={{ left: n.x, top: n.y }}>
+                            <span className="rc-grplabel">{n.g.label}</span>
+                            <span className="rc-grpcount">{n.g.sub}</span>
+                        </div>
+                    ))}
+                </div>
+                <svg className="rc-viewlabels" width={WORLD.w} height={WORLD.h}>
+                    {viewRelRoutes.map((g, i) => (
+                        <g key={g.key} className="rc-rel-badge">
+                            <circle cx={g.bx} cy={g.by} r={g.r} />
+                            <text x={g.bx} y={g.by}>{i + 1}</text>
+                        </g>
+                    ))}
+                </svg>
+                </>)}
+                {/* section level: every card belongs to a C4 container. In
+                    the detail band each container renders as a labeled frame
+                    with its cards inside (NEST), C4 zoom-in-context style;
+                    in the section band chips flow under their container label
+                    in reading order (LO_LAYOUT). */}
+                {view === 'structure' && band === 'detail' && NEST_COLUMNS.map((col, ci) => (
+                    <div key={ci} className="rc-nest-col" style={{ left: NEST_COL_X[ci], top: 40 }}>
+                        {col.map((gid) => {
+                            const g = C4_CONTAINERS.find((c) => c.id === gid)!;
+                            return (
+                                <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid) }}>
+                                    <div className="rc-frame-label">{g.label}<span className="rc-frame-sub">{g.sub}</span>{evp.w < 560 ? (
+                                        <button type="button" className="rc-frame-list" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSheetGroup(gid); }}>List</button>
+                                    ) : null}</div>
+                                    <div className="rc-frame-cards">
+                                        {/* legacy saved positions (draggable era) migrate into the frame
+                                            as reading order - top to bottom, then left to right - instead
+                                            of being dropped; cards without a saved position keep their
+                                            curated order. Cards stay fixed per the owner request. */}
+                                        {[...(g.members ?? []), ...(g.attached ?? [])]
+                                            .map((m, i) => ({ m, i, p: pos[m] }))
+                                            .sort((a, b) => (a.p && b.p ? (a.p.y - b.p.y) || (a.p.x - b.p.x) : a.p ? -1 : b.p ? 1 : a.i - b.i))
+                                            .map(({ m }) => (
+                                                <div key={m} style={{ width: CARD_SIZES[m].w, flex: 'none' }}>{cards[m]}</div>
+                                            ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ))}
+                {view === 'structure' && band === 'lo' && C4_CONTAINERS.map((g) => (
                     <div key={g.id} className="rc-seclabel" style={{ left: LO_LABELS[g.id].x, top: LO_LABELS[g.id].y }}>{g.label}</div>
                 ))}
-                {Object.keys(cards).map((id) => {
-                    const p = band === 'lo' ? LO_LAYOUT[id] : pos[id];
+                {view === 'structure' && band !== 'detail' && Object.keys(cards).map((id) => {
+                    const p = LO_LAYOUT[id];
                     return (
                         <div key={id} style={{ position: 'absolute', left: p.x, top: p.y, width: CARD_SIZES[id].w, zIndex: expandedId === id ? 5 : undefined }}>
                             {cards[id]}
@@ -939,37 +1187,59 @@ function Canvas() {
             {savedMeta.ready && /^Not saved/.test(savedMeta.message) ? (
                 <div className="rc-status rc-warn" aria-live="polite">{savedMeta.message}</div>
             ) : null}
-            {/* C4 relationship key, container/system bands only: badges on
-                the edges are numbered into this list; dashed = designed but
-                not active (draft workflows) or no deployed runtime link */}
-            <button type="button" className="rc-legend-chip rc-legend-chip-grp" onClick={() => setLegendOpen((v) => !v)}>
-                {legendOpen ? 'hide key' : 'relationship key'}
-            </button>
-            {legendOpen ? (
-                <div className="rc-legend rc-legend-grp">
-                    {C4_RELS.map((r, i) => (
-                        <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
-                    ))}
-                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>designed, not active / no runtime link</span>
-                </div>
-            ) : null}
-            <button type="button" className="rc-legend-chip rc-legend-chip-sys" onClick={() => setLegendOpen((v) => !v)}>
-                {legendOpen ? 'hide key' : 'relationship key'}
-            </button>
-            {legendOpen ? (
-                <div className="rc-legend rc-legend-sys">
-                    {SYS_RELS.map((r, i) => (
-                        <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
-                    ))}
-                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>designed, not active (draft workflows)</span>
-                </div>
-            ) : null}
-            {band !== 'detail' ? (
+
+            {view !== 'structure' || band !== 'detail' ? (
                 <div className="rc-bandcap">{
+                    view === 'flow' ? 'Understand - a shared list edit, step by step' :
+                    view === 'flowfeed' ? 'Understand - the app list feed, step by step' :
+                    view === 'deploy' ? 'Understand - where intodo runs' :
                     band === 'sys' ? 'Understand - the system context' :
                     band === 'grp' ? 'Understand - the containers' :
                     `Look up - the ${SECTIONS.length} sections`
                 }</div>
+            ) : null}
+        </div>
+        {/* Bottom navigation: a compact dock bar that never covers the
+            canvas; the key and the menu open as docked panels above the
+            bar, shrinking the viewport instead of overlaying the diagram.
+            Badges on the edges are numbered into the key; dashed = designed
+            but not active (draft workflows) or no deployed runtime link */}
+        {dock === 'legend' && dockRels ? (
+            <div className="rc-legend">
+                {view === 'flow' || view === 'flowfeed' ? <span className="rc-legend-item rc-legend-key">Numbered steps, in order:</span> : null}
+                {dockRels.map((r, i) => (
+                    <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
+                ))}
+                {view === 'structure' ? (
+                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>{band === 'grp' ? 'designed, not active / no runtime link' : 'designed, not active (draft workflows)'}</span>
+                ) : null}
+            </div>
+        ) : null}
+        {dock === 'menu' ? (
+            <div className="rc-menu">
+                <span className="rc-menu-head">Diagram views</span>
+                <div className="rc-menu-row">
+                    <button type="button" className={`rc-menu-btn${view === 'structure' ? ' rc-menu-on' : ''}`} onClick={() => setView('structure')}>Structure</button>
+                    <button type="button" className={`rc-menu-btn${view === 'flow' ? ' rc-menu-on' : ''}`} onClick={() => setView('flow')}>List edit flow</button>
+                    <button type="button" className={`rc-menu-btn${view === 'flowfeed' ? ' rc-menu-on' : ''}`} onClick={() => setView('flowfeed')}>App feed flow</button>
+                    <button type="button" className={`rc-menu-btn${view === 'deploy' ? ' rc-menu-on' : ''}`} onClick={() => setView('deploy')}>Where it runs</button>
+                </div>
+                {view === 'structure' ? (
+                    <>
+                        <span className="rc-menu-head">Jump to a container</span>
+                        <div className="rc-menu-row">
+                            {C4_CONTAINERS.map((g) => (
+                                <button key={g.id} type="button" className="rc-menu-btn" onClick={() => { setDock('none'); focusGroup(g.id); }}>{g.label}</button>
+                            ))}
+                        </div>
+                    </>
+                ) : null}
+            </div>
+        ) : null}
+        <div className="rc-dockbar">
+            <button type="button" className={`rc-dockchip${dock === 'menu' ? ' rc-dockchip-on' : ''}`} onClick={() => setDock(dock === 'menu' ? 'none' : 'menu')}>{dock === 'menu' ? 'Close menu' : 'Menu'}</button>
+            {dockRels ? (
+                <button type="button" className={`rc-dockchip${dock === 'legend' ? ' rc-dockchip-on' : ''}`} onClick={() => setDock(dock === 'legend' ? 'none' : 'legend')}>{dock === 'legend' ? 'Hide key' : view === 'flow' || view === 'flowfeed' ? 'Step key' : 'Relationship key'}</button>
             ) : null}
         </div>
         {overlayId && cards[overlayId] ? (
@@ -1015,6 +1285,7 @@ function Canvas() {
                 </div>
             </div>
         ) : null}
+        </div>
     </>;
 }
 
