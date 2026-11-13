@@ -1,26 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- List-only widget (user-chosen): no title, status or refresh chrome.
+     Every row and the empty view open the app; sync happens via pull-down
+     in the app or the scheduled worker. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="#F2101828" android:padding="12dp">
+    android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#F2101828" android:padding="10dp">
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="itdapk" android:textColor="#FFFFFF" android:textSize="16sp" android:textStyle="bold"
-            android:maxLines="1" android:ellipsize="end" android:layout_marginEnd="8dp" />
-        <TextView android:id="@+id/widget_sync_state" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:text="tap to sync" android:textColor="#98A2B3" android:textSize="11sp" android:layout_marginEnd="8dp"
-            android:maxLines="2" android:ellipsize="end" android:gravity="end" />
-        <ImageButton android:id="@+id/widget_refresh" android:layout_width="36dp" android:layout_height="36dp"
-            android:src="@drawable/ic_refresh" android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Sync now" />
-    </LinearLayout>
-
-    <ListView android:id="@+id/widget_list" android:layout_width="match_parent" android:layout_height="0dp"
-        android:layout_weight="1" android:layout_marginTop="6dp" android:divider="@android:color/transparent"
-        android:dividerHeight="4dp" />
+    <!-- wrap_content so the collection only covers real rows (verified: 3 rows in
+         700px -> list 146px + filler 554px; 40 rows -> list fills, filler 0) -->
+    <ListView android:id="@+id/widget_list" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:divider="@null" android:dividerHeight="0dp" />
 
     <TextView android:id="@+id/widget_empty" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="Open the app to sync your list" android:textColor="#98A2B3" android:textSize="13sp"
         android:visibility="gone" />
+
+    <!-- tappable filler: the trailing area below the last row opens the app too -->
+    <View android:id="@+id/widget_filler" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" />
 </LinearLayout>

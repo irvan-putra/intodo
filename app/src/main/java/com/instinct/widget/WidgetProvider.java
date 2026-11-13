@@ -40,15 +40,20 @@ public class WidgetProvider extends AppWidgetProvider {
         svc.setData(android.net.Uri.parse("instinctwidget://widget/" + id));
         views.setRemoteAdapter(R.id.widget_list, svc);
 
-        views.setTextViewText(R.id.widget_sync_state,
-                SyncStatusText.build(context, Prefs.isPaired(context) ? "tap refresh to sync" : "pair in app", true));
         boolean hasData = Prefs.feed(context) != null;
         views.setViewVisibility(R.id.widget_empty, hasData ? View.GONE : View.VISIBLE);
-
-        Intent refresh = new Intent(context, MainActivity.class);
-        refresh.putExtra("sync", true);
-        views.setOnClickPendingIntent(R.id.widget_refresh,
-                PendingIntent.getActivity(context, id * 2, refresh, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        // no chrome left to tap: the empty view itself opens the app
+        Intent openEmpty = new Intent(context, MainActivity.class);
+        views.setOnClickPendingIntent(R.id.widget_empty,
+                PendingIntent.getActivity(context, id * 2, openEmpty, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        // the root background covers the padding ring around the collection
+        Intent openRoot = new Intent(context, MainActivity.class);
+        views.setOnClickPendingIntent(R.id.widget_root,
+                PendingIntent.getActivity(context, id * 2 + 2, openRoot, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        // the filler sibling covers the trailing area below the last row
+        Intent openFiller = new Intent(context, MainActivity.class);
+        views.setOnClickPendingIntent(R.id.widget_filler,
+                PendingIntent.getActivity(context, id * 2 + 3, openFiller, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 
         Intent open = new Intent(context, MainActivity.class);
         views.setPendingIntentTemplate(R.id.widget_list,

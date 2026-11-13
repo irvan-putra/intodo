@@ -1,73 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="#101828" android:padding="20dp">
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/drawerLayout" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#101828">
 
-    <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="itdapk" android:textColor="#FFFFFF" android:textSize="24sp" android:textStyle="bold" />
-    <TextView android:id="@+id/subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="Reminders and todos" android:textColor="#98A2B3" android:textSize="14sp"
-        android:layout_marginBottom="16dp" />
+    <!-- Resting view: the list is the whole screen. Transient update UI sits below it. -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <LinearLayout android:id="@+id/pairingPane" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical" android:visibility="gone">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Pair this phone" android:textColor="#F59E0B" android:textSize="16sp" android:textStyle="bold" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:textColor="#D0D5DD" android:textSize="14sp"
-            android:text="1. Tap the button below to create this phone's private key.\n2. Send the shown public key to your assistant's WhatsApp chat (it is not secret).\n3. Your list is encrypted so only this phone can read it.\n4. Come back and tap Sync now." />
-        <Button android:id="@+id/generateKey" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" android:text="Create pairing key" />
-        <TextView android:id="@+id/pubkeyLabel" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" android:text="Your public key:" android:textColor="#98A2B3"
-            android:textSize="12sp" android:visibility="gone" />
-        <TextView android:id="@+id/pubkey" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:textColor="#FFFFFF" android:textSize="12sp" android:textIsSelectable="true"
-            android:background="#1D2939" android:padding="12dp" android:visibility="gone" />
-        <Button android:id="@+id/copyKey" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:text="Copy public key" android:visibility="gone" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" android:text="Feed address (only for public builds without one built in):"
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/swipeRefresh"
+                android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone">
+                <ListView android:id="@+id/list" android:layout_width="match_parent"
+                    android:layout_height="match_parent" android:divider="#1D2939"
+                    android:dividerHeight="1dp" android:paddingStart="16dp" android:paddingEnd="16dp"
+                    android:clipToPadding="false" />
+            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+            <TextView android:id="@+id/empty" android:layout_width="match_parent"
+                android:layout_height="match_parent" android:gravity="center"
+                android:text="Nothing synced yet. Pull down to sync, or swipe from the left edge for the menu."
+                android:textColor="#98A2B3" android:textSize="14sp" android:padding="24dp"
+                android:visibility="gone" />
+
+            <LinearLayout android:id="@+id/pairingPane" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp"
+                android:visibility="gone">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="Pair this phone" android:textColor="#F59E0B" android:textSize="16sp" android:textStyle="bold" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:textColor="#D0D5DD" android:textSize="14sp"
+                    android:text="1. Tap the button below to create this phone's private key.\n2. Send the shown public key to your assistant's WhatsApp chat (it is not secret).\n3. Your list is encrypted so only this phone can read it.\n4. Come back and tap Sync now." />
+                <Button android:id="@+id/generateKey" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:text="Create pairing key" />
+                <TextView android:id="@+id/pubkeyLabel" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:text="Your public key:" android:textColor="#98A2B3"
+                    android:textSize="12sp" android:visibility="gone" />
+                <TextView android:id="@+id/pubkey" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF" android:textSize="12sp" android:textIsSelectable="true"
+                    android:background="#1D2939" android:padding="12dp" android:visibility="gone" />
+                <Button android:id="@+id/copyKey" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:text="Copy public key" android:visibility="gone" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:text="Feed address (only for public builds without one built in):"
+                    android:textColor="#98A2B3" android:textSize="12sp" />
+                <EditText android:id="@+id/feedUrlInput" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" android:hint="https://files.instinct.com/..." android:textColor="#FFFFFF"
+                    android:textColorHint="#475467" android:textSize="13sp" android:background="#1D2939" android:padding="12dp"
+                    android:inputType="textUri" />
+                <Button android:id="@+id/saveFeedUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:text="Save feed address" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- transient update UI: hidden unless an update is available or downloading -->
+        <TextView android:id="@+id/updateLine" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textColor="#F59E0B" android:textSize="12sp" android:padding="8dp" android:visibility="gone" />
+        <ProgressBar android:id="@+id/updateProgress" style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100"
+            android:visibility="gone" />
+        <ProgressBar android:id="@+id/syncProgress" style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:max="100" android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Left-edge menu: every control stays reachable here -->
+    <LinearLayout android:id="@+id/drawerPane" android:layout_width="300dp" android:layout_height="match_parent"
+        android:layout_gravity="start" android:orientation="vertical" android:background="#1D2939"
+        android:padding="16dp">
+        <TextView android:id="@+id/lastSync" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textColor="#98A2B3" android:textSize="12sp" />
-        <EditText android:id="@+id/feedUrlInput" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" android:hint="https://files.instinct.com/..." android:textColor="#FFFFFF"
-            android:textColorHint="#475467" android:textSize="13sp" android:background="#1D2939" android:padding="12dp"
-            android:inputType="textUri" />
-        <Button android:id="@+id/saveFeedUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:text="Save feed address" />
+        <Button android:id="@+id/syncNow" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Sync now" android:visibility="gone" />
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:layout_marginTop="16dp" android:background="#344054" />
+        <TextView android:id="@+id/repair" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:focusable="true" android:minHeight="48dp" android:gravity="center_vertical" android:text="Re-pair this phone"
+            android:textColor="#98A2B3" android:textSize="14sp" android:visibility="gone" />
+        <TextView android:id="@+id/openCanvas" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:focusable="true" android:minHeight="48dp" android:gravity="center_vertical" android:text="Open the review canvas (prototype)"
+            android:textColor="#98A2B3" android:textSize="14sp" />
+        <TextView android:id="@+id/openBot" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:focusable="true" android:minHeight="48dp" android:gravity="center_vertical" android:text="Open the DeltaChat bot"
+            android:textColor="#98A2B3" android:textSize="14sp" />
+        <TextView android:id="@+id/version" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="" android:textColor="#475467" android:textSize="11sp" />
     </LinearLayout>
-
-    <LinearLayout android:id="@+id/listPane" android:layout_width="match_parent" android:layout_height="0dp"
-        android:layout_weight="1" android:orientation="vertical" android:visibility="gone">
-        <ListView android:id="@+id/list" android:layout_width="match_parent" android:layout_height="0dp"
-            android:layout_weight="1" android:divider="#1D2939" android:dividerHeight="1dp" />
-        <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Nothing synced yet. Tap Sync now." android:textColor="#98A2B3" android:textSize="14sp"
-            android:padding="12dp" android:visibility="gone" />
-    </LinearLayout>
-
-    <TextView android:id="@+id/lastSync" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:textColor="#667085" android:textSize="12sp" />
-    <ProgressBar android:id="@+id/syncProgress" style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="4dp" android:max="100" android:visibility="gone" />
-    <Button android:id="@+id/syncNow" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="Sync now" android:visibility="gone" />
-    <TextView android:id="@+id/repair" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="Re-pair this phone" android:textColor="#667085"
-        android:textSize="13sp" android:padding="8dp" android:visibility="gone" />
-    <TextView android:id="@+id/openCanvas" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="Open the review canvas (prototype)" android:textColor="#667085"
-        android:textSize="13sp" android:padding="8dp" />
-    <TextView android:id="@+id/openBot" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="Open the DeltaChat bot" android:textColor="#667085"
-        android:textSize="13sp" android:padding="8dp" />
-    <TextView android:id="@+id/updateLine" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:textColor="#F59E0B" android:textSize="12sp"
-        android:padding="4dp" android:visibility="gone" />
-    <ProgressBar android:id="@+id/updateProgress" style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="4dp" android:max="100" android:visibility="gone" />
-    <TextView android:id="@+id/version" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="" android:textColor="#475467" android:textSize="11sp" android:gravity="end" />
-</LinearLayout>
+</androidx.drawerlayout.widget.DrawerLayout>

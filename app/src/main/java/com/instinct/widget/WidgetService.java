@@ -29,9 +29,13 @@ public class WidgetService extends RemoteViewsService {
             if (json == null) return;
             try {
                 FeedParser.Feed feed = FeedParser.parse(json);
+                int visibleSections = 0;
+                for (FeedParser.Section sec : feed.sections) {
+                    if (!sec.items.isEmpty()) visibleSections++;
+                }
                 for (FeedParser.Section sec : feed.sections) {
                     if (sec.items.isEmpty()) continue;
-                    rows.add(sec);
+                    if (visibleSections > 1) rows.add(sec);
                     rows.addAll(sec.items);
                 }
             } catch (Exception ignored) { }
@@ -49,6 +53,8 @@ public class WidgetService extends RemoteViewsService {
             if (row instanceof FeedParser.Section) {
                 RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.widget_section);
                 v.setTextViewText(R.id.section_title, ((FeedParser.Section) row).title);
+                // section headers open the app too - no dead rows in the list
+                v.setOnClickFillInIntent(R.id.section_title, new Intent());
                 return v;
             }
             FeedParser.Item item = (FeedParser.Item) row;
@@ -61,7 +67,10 @@ public class WidgetService extends RemoteViewsService {
             } else {
                 v.setViewVisibility(R.id.item_note, View.GONE);
             }
+            // the whole row opens the app: root (covers padding) and both lines
+            v.setOnClickFillInIntent(R.id.item_row, new Intent());
             v.setOnClickFillInIntent(R.id.item_title, new Intent());
+            v.setOnClickFillInIntent(R.id.item_note, new Intent());
             return v;
         }
     }

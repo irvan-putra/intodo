@@ -17,6 +17,10 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.core.view.GravityCompat;
+import androidx.core.view.ViewCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +43,8 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView empty;
     private Button syncNow;
+    private DrawerLayout drawer;
+    private SwipeRefreshLayout swipeRefresh;
     private FeedAdapter adapter;
 
     @Override
@@ -52,6 +58,21 @@ public class MainActivity extends Activity {
         syncNow = findViewById(R.id.syncNow);
         adapter = new FeedAdapter(this);
         listView.setAdapter(adapter);
+        drawer = findViewById(R.id.drawerLayout);
+        swipeRefresh = findViewById(R.id.swipeRefresh);
+        // pull-down on the list triggers the same sync the menu button does
+        swipeRefresh.setOnRefreshListener(() -> sync());
+        // accessible menu fallback that needs no visible chrome and never
+        // competes with the Android 10+ edge Back gesture: long-press any item
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            drawer.openDrawer(GravityCompat.START);
+            return true;
+        });
+        // same fallback where no item can be long-pressed: empty area, empty
+        // state and the unpaired pane, plus a TalkBack action on each surface
+        installMenuAccess(listView);
+        installMenuAccess(empty);
+        installMenuAccess(findViewById(R.id.pairingPane));
 
         Button generate = findViewById(R.id.generateKey);
         findViewById(R.id.openCanvas).setOnClickListener(v ->
@@ -149,7 +170,7 @@ public class MainActivity extends Activity {
 
     private void showPairing() {
         findViewById(R.id.pairingPane).setVisibility(View.VISIBLE);
-        findViewById(R.id.listPane).setVisibility(View.GONE);
+        swipeRefresh.setVisibility(View.GONE);
         syncNow.setVisibility(View.GONE);
         findViewById(R.id.repair).setVisibility(View.GONE);
         if (Prefs.isPaired(this)) showKey();
@@ -157,7 +178,7 @@ public class MainActivity extends Activity {
 
     private void showList() {
         findViewById(R.id.pairingPane).setVisibility(View.GONE);
-        findViewById(R.id.listPane).setVisibility(View.VISIBLE);
+        swipeRefresh.setVisibility(View.VISIBLE);
         syncNow.setVisibility(View.VISIBLE);
         findViewById(R.id.repair).setVisibility(View.VISIBLE);
         reload();
@@ -222,8 +243,30 @@ public class MainActivity extends Activity {
         });
     }
 
+    @Override
+    public void onBackPressed() {
+        // an open menu consumes Back first; only a shut menu leaves the activity
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private void installMenuAccess(View v) {
+        v.setOnLongClickListener(view -> {
+            drawer.openDrawer(GravityCompat.START);
+            return true;
+        });
+        ViewCompat.addAccessibilityAction(v, "Open menu", (view, args) -> {
+            drawer.openDrawer(GravityCompat.START);
+            return true;
+        });
+    }
+
     private void sync() {
-        if (syncRunning) return;
+        if (!Prefs.isPaired(this)) { swipeRefresh.setRefreshing(false); return; }
+        if (syncRunning) { swipeRefresh.setRefreshing(false); return; }
         syncRunning = true;
         syncDataStarted = false;
         final int gen = ++syncGen;
@@ -238,6 +281,7 @@ public class MainActivity extends Activity {
                 syncRunning = false;
                 syncNow.setEnabled(true); // re-enabled on every terminal path
                 bar.setVisibility(View.GONE);
+                swipeRefresh.setRefreshing(false);
                 reload();
                 refreshStatus();
                 Toast.makeText(MainActivity.this, ok ? "Synced" : message, Toast.LENGTH_LONG).show();
@@ -278,9 +322,15 @@ public class MainActivity extends Activity {
         if (json != null) {
             try {
                 FeedParser.Feed feed = FeedParser.parse(json);
+                int visibleSections = 0;
+                for (FeedParser.Section sec : feed.sections) {
+                    if (!sec.items.isEmpty()) visibleSections++;
+                }
                 for (FeedParser.Section sec : feed.sections) {
                     if (sec.items.isEmpty()) continue;
-                    rows.add(sec);
+                    // one visible section: its header only repeats the obvious; skip
+                    // it and give the row back to items (Option B, user-chosen)
+                    if (visibleSections > 1) rows.add(sec);
                     rows.addAll(sec.items);
                 }
             } catch (Exception ignored) { }

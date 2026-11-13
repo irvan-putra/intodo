@@ -7,6 +7,7 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.view.View;
+import android.widget.TextView;
 import androidx.work.testing.WorkManagerTestInitHelper;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -107,28 +108,103 @@ public class MainActivityRenderTest {
     }
 
     @Test
-    public void renderWidgetFooter() throws Exception {
-        // Widget footer must keep both timestamps visible from an A24-like
-        // 4-cell full-width widget down to the 250dp minimum (xhdpi here),
-        // wrapping instead of ellipsizing either age away.
+    public void renderWidgetListOnly() throws Exception {
+        // List-only widget (user-chosen): no title, no status line, no refresh
+        // chrome. The list fills the cell; rows and the empty view open the app.
         android.content.Context ctx = RuntimeEnvironment.getApplication();
         Prefs.saveKeys(ctx, "test-private-key", "test-public-key");
         Prefs.saveFeed(ctx, FEED_JSON, "2026-11-13T02:00:00Z");
         Prefs.saveCheck(ctx);
-        ctx.getSharedPreferences("instinct_widget", android.content.Context.MODE_PRIVATE)
-                .edit().putLong("feed_at", System.currentTimeMillis() - 3L * 3600 * 1000).commit();
-        assertWidgetFooterReadable(ctx, 1000, "/tmp/integ-widget-footer.png");
-        assertWidgetFooterReadable(ctx, 500, "/tmp/integ-widget-footer-narrow.png");
+        assertWidgetListOnlyReadable(ctx, 1000, "/tmp/integ-widget-listonly.png");
+        assertWidgetListOnlyReadable(ctx, 500, "/tmp/integ-widget-listonly-narrow.png");
     }
 
-    private static void assertWidgetFooterReadable(android.content.Context ctx, int w, String path)
+    @Test
+    public void listIsSwipeRefreshDirectChild() throws Exception {
+        // Pull-to-sync must only trigger at the top of the list: the
+        // SwipeRefreshLayout's direct child must be the scrollable ListView
+        // itself - a wrapper would report canChildScrollUp=false mid-scroll.
+        Activity a = a();
+        android.widget.ListView list = a.findViewById(R.id.list);
+        org.junit.Assert.assertTrue("ListView is SwipeRefreshLayout's direct child",
+                list.getParent() instanceof androidx.swiperefreshlayout.widget.SwipeRefreshLayout);
+    }
+
+    @Test
+    public void backClosesDrawerBeforeFinishing() throws Exception {
+        Activity a = a();
+        androidx.drawerlayout.widget.DrawerLayout d = a.findViewById(R.id.drawerLayout);
+        d.openDrawer(androidx.core.view.GravityCompat.START, false);
+        org.junit.Assert.assertTrue(d.isDrawerOpen(androidx.core.view.GravityCompat.START));
+        // Back with the menu open must not leave the activity: the override
+        // routes it to closeDrawer. The animated close itself is not executed
+        // under Robolectric, so the closed state is not asserted here.
+        a.onBackPressed();
+        org.junit.Assert.assertFalse("Back with menu open keeps the activity",
+                a.isFinishing());
+        d.closeDrawer(androidx.core.view.GravityCompat.START, false);
+        a.onBackPressed();
+        org.junit.Assert.assertTrue("Back with menu shut finishes the activity",
+                a.isFinishing());
+    }
+
+    private static void assertWidgetListOnlyReadable(android.content.Context ctx, int w, String path)
             throws Exception {
         View v = android.view.LayoutInflater.from(ctx).inflate(R.layout.widget_layout, null);
-        android.widget.TextView state = v.findViewById(R.id.widget_sync_state);
-        String text = SyncStatusText.build(ctx, "tap refresh to sync", true);
-        assertTrue(text, text.contains("synced "));
-        assertTrue(text, text.contains("list changed"));
-        state.setText(text);
+        // the header row is gone entirely: root holds exactly the collection,
+        // the empty view and the tappable trailing filler
+        org.junit.Assert.assertEquals("widget is list + empty view + filler only",
+                3, ((android.widget.LinearLayout) v).getChildCount());
+        android.widget.ListView list = v.findViewById(R.id.widget_list);
+        org.junit.Assert.assertNotNull("widget keeps its list", list);
+        org.junit.Assert.assertNotNull("root takes the background tap",
+                v.findViewById(R.id.widget_root));
+        org.junit.Assert.assertNotNull("filler takes the trailing tap",
+                v.findViewById(R.id.widget_filler));
+        org.junit.Assert.assertEquals("no dead divider strips",
+                0, list.getDividerHeight());
+        // Local adapter fixture mirroring WidgetService.Factory row building
+        // (including the single-section header skip), so this render shows
+        // real rows instead of a blank unbound ListView.
+        FeedParser.Feed feed = FeedParser.parse(FEED_JSON);
+        final java.util.List<Object> rows = new java.util.ArrayList<>();
+        int visibleSections = 0;
+        for (FeedParser.Section sec : feed.sections) {
+            if (!sec.items.isEmpty()) visibleSections++;
+        }
+        for (FeedParser.Section sec : feed.sections) {
+            if (sec.items.isEmpty()) continue;
+            if (visibleSections > 1) rows.add(sec);
+            rows.addAll(sec.items);
+        }
+        org.junit.Assert.assertTrue("fixture produced rows", rows.size() > 0);
+        list.setAdapter(new android.widget.BaseAdapter() {
+            @Override public int getCount() { return rows.size(); }
+            @Override public Object getItem(int p) { return rows.get(p); }
+            @Override public long getItemId(int p) { return p; }
+            @Override public View getView(int p, View c, android.view.ViewGroup parent) {
+                android.view.LayoutInflater inf = android.view.LayoutInflater.from(parent.getContext());
+                Object row = rows.get(p);
+                if (row instanceof FeedParser.Section) {
+                    View r = inf.inflate(R.layout.widget_section, parent, false);
+                    ((TextView) r.findViewById(R.id.section_title))
+                            .setText(((FeedParser.Section) row).title);
+                    return r;
+                }
+                FeedParser.Item item = (FeedParser.Item) row;
+                View r = inf.inflate(R.layout.widget_item, parent, false);
+                String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
+                ((TextView) r.findViewById(R.id.item_title)).setText(item.title + suffix);
+                TextView note = r.findViewById(R.id.item_note);
+                if (item.note != null && !item.note.isEmpty()) {
+                    note.setText(item.note);
+                    note.setVisibility(View.VISIBLE);
+                } else {
+                    note.setVisibility(View.GONE);
+                }
+                return r;
+            }
+        });
         v.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                   View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
         v.layout(0, 0, w, v.getMeasuredHeight());
@@ -139,11 +215,6 @@ public class MainActivityRenderTest {
             b.compress(Bitmap.CompressFormat.PNG, 100, f);
         }
         assertTrue("render written: " + out.length(), out.length() > 1000);
-        android.text.Layout tl = state.getLayout();
-        for (int i = 0; i < tl.getLineCount(); i++) {
-            assertEquals("line " + i + " ellipsized at width " + w + ": " + text,
-                    0, tl.getEllipsisCount(i));
-        }
     }
 
     private static Activity a() {
