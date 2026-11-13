@@ -2,7 +2,7 @@ package com.instinct.widget;
 
 import android.content.Context;
 import androidx.annotation.NonNull;
-import androidx.work.ListenableWorker;
+import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * yet, or a transient network failure) is retried by WorkManager backoff -
  * never crash-loop the process for a fetch the next manual sync can also do.
  */
-public class FeedSyncWorker extends ListenableWorker {
+public class FeedSyncWorker extends Worker {
     public FeedSyncWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
     }
