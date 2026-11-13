@@ -3,15 +3,18 @@ package com.instinct.widget;
 import static org.junit.Assert.assertTrue;
 
 import android.app.Activity;
+import androidx.work.testing.WorkManagerTestInitHelper;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.view.View;
 import java.io.File;
 import java.io.FileOutputStream;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 
@@ -20,6 +23,13 @@ import org.robolectric.annotation.GraphicsMode;
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = 32)
 public class MainActivityRenderTest {
+
+    @Before
+    public void initWorkManager() {
+        // Robolectric does not run the androidx.startup initializer; the app's
+        // onCreate schedules feed auto-sync via WorkManager.getInstance().
+        WorkManagerTestInitHelper.initializeTestWorkManager(RuntimeEnvironment.getApplication());
+    }
 
     @Test
     public void renderInitialUi() throws Exception {
