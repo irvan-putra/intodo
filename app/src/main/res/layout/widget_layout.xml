@@ -15,7 +15,9 @@
         android:text="Open the app to sync your list" android:textColor="#98A2B3" android:textSize="13sp"
         android:visibility="gone" />
 
-    <!-- tappable filler: the trailing area below the last row opens the app too -->
-    <View android:id="@+id/widget_filler" android:layout_width="match_parent" android:layout_height="0dp"
+    <!-- tappable filler: the trailing area below the last row opens the app too.
+         A TextView, not a bare View: RemoteViews only supports whitelisted widget
+         classes and a plain View fails host-side inflation ("Couldn't add widget"). -->
+    <TextView android:id="@+id/widget_filler" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" />
 </LinearLayout>

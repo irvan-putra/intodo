@@ -29,35 +29,22 @@ public class WidgetService extends RemoteViewsService {
             if (json == null) return;
             try {
                 FeedParser.Feed feed = FeedParser.parse(json);
-                int visibleSections = 0;
+                // pure list (user-chosen): no section headings anywhere, items only
                 for (FeedParser.Section sec : feed.sections) {
-                    if (!sec.items.isEmpty()) visibleSections++;
-                }
-                for (FeedParser.Section sec : feed.sections) {
-                    if (sec.items.isEmpty()) continue;
-                    if (visibleSections > 1) rows.add(sec);
                     rows.addAll(sec.items);
                 }
             } catch (Exception ignored) { }
         }
 
         @Override public int getCount() { return rows.size(); }
-        @Override public int getViewTypeCount() { return 2; }
+        @Override public int getViewTypeCount() { return 1; }
         @Override public long getItemId(int i) { return i; }
         @Override public boolean hasStableIds() { return true; }
         @Override public RemoteViews getLoadingView() { return null; }
 
         @Override
         public RemoteViews getViewAt(int i) {
-            Object row = rows.get(i);
-            if (row instanceof FeedParser.Section) {
-                RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.widget_section);
-                v.setTextViewText(R.id.section_title, ((FeedParser.Section) row).title);
-                // section headers open the app too - no dead rows in the list
-                v.setOnClickFillInIntent(R.id.section_title, new Intent());
-                return v;
-            }
-            FeedParser.Item item = (FeedParser.Item) row;
+            FeedParser.Item item = (FeedParser.Item) rows.get(i);
             RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.widget_item);
             String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
             v.setTextViewText(R.id.item_title, item.title + suffix);

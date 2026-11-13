@@ -120,6 +120,46 @@ public class MainActivityRenderTest {
     }
 
     @Test
+    public void widgetLayoutsUseOnlyRemoteViewsClasses() throws Exception {
+        // A bare android.view.View (or any non-whitelisted class) makes the
+        // host fail inflation with "Couldn't add widget". Robolectric inflates
+        // it happily, so guard the class set explicitly. Whitelist per the
+        // Android app-widget docs: FrameLayout, LinearLayout, RelativeLayout,
+        // GridLayout, AnalogClock, Button, Chronometer, ImageButton, ImageView,
+        // ProgressBar, TextView, ListView, GridView, StackView,
+        // AdapterViewFlipper, ViewFlipper.
+        android.content.Context ctx = RuntimeEnvironment.getApplication();
+        for (int layout : new int[]{R.layout.widget_layout, R.layout.widget_item,
+                                    R.layout.widget_section}) {
+            View root = android.view.LayoutInflater.from(ctx).inflate(layout, null);
+            java.util.ArrayDeque<View> stack = new java.util.ArrayDeque<>();
+            stack.push(root);
+            while (!stack.isEmpty()) {
+                View v = stack.pop();
+                org.junit.Assert.assertTrue(
+                        "widget layout " + layout + " uses non-RemoteViews class "
+                                + v.getClass().getName(),
+                        v instanceof android.widget.FrameLayout
+                                || v instanceof android.widget.LinearLayout
+                                || v instanceof android.widget.RelativeLayout
+                                || v instanceof android.widget.GridLayout
+                                || v instanceof android.widget.TextView
+                                || v instanceof android.widget.ImageView
+                                || v instanceof android.widget.ProgressBar
+                                || v instanceof android.widget.ListView
+                                || v instanceof android.widget.GridView
+                                || v instanceof android.widget.StackView
+                                || v instanceof android.widget.AdapterViewFlipper
+                                || v instanceof android.widget.ViewFlipper);
+                if (v instanceof android.view.ViewGroup) {
+                    android.view.ViewGroup g = (android.view.ViewGroup) v;
+                    for (int i = 0; i < g.getChildCount(); i++) stack.push(g.getChildAt(i));
+                }
+            }
+        }
+    }
+
+    @Test
     public void listIsSwipeRefreshDirectChild() throws Exception {
         // Pull-to-sync must only trigger at the top of the list: the
         // SwipeRefreshLayout's direct child must be the scrollable ListView
@@ -164,17 +204,11 @@ public class MainActivityRenderTest {
         org.junit.Assert.assertEquals("no dead divider strips",
                 0, list.getDividerHeight());
         // Local adapter fixture mirroring WidgetService.Factory row building
-        // (including the single-section header skip), so this render shows
-        // real rows instead of a blank unbound ListView.
+        // (pure list, no section headings), so this render shows real rows
+        // instead of a blank unbound ListView.
         FeedParser.Feed feed = FeedParser.parse(FEED_JSON);
         final java.util.List<Object> rows = new java.util.ArrayList<>();
-        int visibleSections = 0;
         for (FeedParser.Section sec : feed.sections) {
-            if (!sec.items.isEmpty()) visibleSections++;
-        }
-        for (FeedParser.Section sec : feed.sections) {
-            if (sec.items.isEmpty()) continue;
-            if (visibleSections > 1) rows.add(sec);
             rows.addAll(sec.items);
         }
         org.junit.Assert.assertTrue("fixture produced rows", rows.size() > 0);
@@ -184,14 +218,7 @@ public class MainActivityRenderTest {
             @Override public long getItemId(int p) { return p; }
             @Override public View getView(int p, View c, android.view.ViewGroup parent) {
                 android.view.LayoutInflater inf = android.view.LayoutInflater.from(parent.getContext());
-                Object row = rows.get(p);
-                if (row instanceof FeedParser.Section) {
-                    View r = inf.inflate(R.layout.widget_section, parent, false);
-                    ((TextView) r.findViewById(R.id.section_title))
-                            .setText(((FeedParser.Section) row).title);
-                    return r;
-                }
-                FeedParser.Item item = (FeedParser.Item) row;
+                FeedParser.Item item = (FeedParser.Item) rows.get(p);
                 View r = inf.inflate(R.layout.widget_item, parent, false);
                 String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
                 ((TextView) r.findViewById(R.id.item_title)).setText(item.title + suffix);

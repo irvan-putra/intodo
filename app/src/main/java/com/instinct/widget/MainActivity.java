@@ -60,8 +60,13 @@ public class MainActivity extends Activity {
         listView.setAdapter(adapter);
         drawer = findViewById(R.id.drawerLayout);
         swipeRefresh = findViewById(R.id.swipeRefresh);
-        // pull-down on the list triggers the same sync the menu button does
-        swipeRefresh.setOnRefreshListener(() -> sync());
+        // pull-down triggers the same sync the menu button does; the rotating
+        // circle retracts on release (user-chosen: no spinner while syncing -
+        // progress shows on the minimal bottom bar instead)
+        swipeRefresh.setOnRefreshListener(() -> {
+            sync();
+            swipeRefresh.setRefreshing(false);
+        });
         // accessible menu fallback that needs no visible chrome and never
         // competes with the Android 10+ edge Back gesture: long-press any item
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
@@ -322,15 +327,8 @@ public class MainActivity extends Activity {
         if (json != null) {
             try {
                 FeedParser.Feed feed = FeedParser.parse(json);
-                int visibleSections = 0;
+                // pure list (user-chosen): no section headings anywhere, items only
                 for (FeedParser.Section sec : feed.sections) {
-                    if (!sec.items.isEmpty()) visibleSections++;
-                }
-                for (FeedParser.Section sec : feed.sections) {
-                    if (sec.items.isEmpty()) continue;
-                    // one visible section: its header only repeats the obvious; skip
-                    // it and give the row back to items (Option B, user-chosen)
-                    if (visibleSections > 1) rows.add(sec);
                     rows.addAll(sec.items);
                 }
             } catch (Exception ignored) { }
@@ -351,18 +349,10 @@ public class MainActivity extends Activity {
         @Override public int getCount() { return rows.size(); }
         @Override public Object getItem(int i) { return rows.get(i); }
         @Override public long getItemId(int i) { return i; }
-        @Override public int getViewTypeCount() { return 2; }
-        @Override public int getItemViewType(int i) { return rows.get(i) instanceof FeedParser.Section ? 0 : 1; }
         @Override public boolean isEnabled(int i) { return false; }
         @Override public View getView(int i, View convert, ViewGroup parent) {
-            Object row = rows.get(i);
-            if (row instanceof FeedParser.Section) {
-                View v = convert != null ? convert : inflater.inflate(R.layout.list_section, parent, false);
-                ((TextView) v.findViewById(R.id.section_title)).setText(((FeedParser.Section) row).title);
-                return v;
-            }
             View v = convert != null ? convert : inflater.inflate(R.layout.list_item, parent, false);
-            FeedParser.Item item = (FeedParser.Item) row;
+            FeedParser.Item item = (FeedParser.Item) rows.get(i);
             String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
             ((TextView) v.findViewById(R.id.item_title)).setText(item.title + suffix);
             TextView note = v.findViewById(R.id.item_note);
