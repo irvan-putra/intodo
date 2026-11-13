@@ -264,3 +264,34 @@ a, .rc-card a { color: var(--ds-ink); }
 .rc-growtitle { font-size: 16px; line-height: 22px; color: var(--ds-ink); font-weight: 600; }
 .rc-growtag { font-size: 11px; color: var(--ds-ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .rc-grow .rc-icon { font-size: 20px; }
+
+/* Diataxis purpose chip in card headers: every card names what it is for. */
+.rc-purpose {
+    margin-top: 2px;
+    display: inline-block; padding: 1px 8px;
+    font-size: 10px; line-height: 16px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ds-ink-2);
+    border: 1px solid var(--ds-hairline); border-radius: 999px;
+}
+.rc-lo .rc-purpose { display: none; }
+
+/* Findings capture: the reviewer's own notes, browser-local, never published. */
+.rc-findings {
+    width: 100%; box-sizing: border-box;
+    font: inherit; font-size: 13px; line-height: 20px;
+    padding: 8px 10px; resize: vertical; min-height: 64px;
+    color: var(--ds-ink);
+    background: var(--ds-page);
+    border: 1px solid var(--ds-hairline); border-radius: 8px;
+}
+.rc-findings:focus { outline: 2px solid var(--ds-ink-2); outline-offset: 0; }
+
+/* Zoom-band purpose caption, non-interactive, top-left (legend stays bottom-left). */
+.rc-bandcap {
+    position: absolute; right: 14px; bottom: 14px; z-index: 8; pointer-events: none;
+    max-width: 80%; padding: 4px 12px;
+    font-size: 12px; line-height: 18px; color: var(--ds-ink-2);
+    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 999px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

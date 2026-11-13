@@ -5,7 +5,7 @@ import { COMMIT, COMMIT_SHORT, SECTIONS, Section } from '../src/sections';
 type Pos = { x: number; y: number };
 type Cam = { x: number; y: number; z: number };
 type Mark = 'reviewed' | 'flag';
-type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark> };
+type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark>; findings?: Record<string, string> };
 
 const WORLD = { w: 2160, h: 2560 };
 const ZMIN = 0.07, ZMAX = 2.5;
@@ -74,6 +74,7 @@ const DEFAULT_POS: Record<string, Pos> = {
     'build-ci':      { x: COL_X[0], y: ROW_Y[4] },
     'feed-tool':     { x: COL_X[1], y: ROW_Y[4] },
     'assets-docs':   { x: COL_X[2], y: ROW_Y[4] },
+    'dc-relay':      { x: COL_X[3], y: ROW_Y[4] },
     'review-src':    { x: COL_X[4], y: ROW_Y[3] },
 };
 
@@ -108,14 +109,13 @@ const C4_CONTAINERS: C4Node[] = [
     // Tests attach to the containers they verify; build/CI and repo docs stay
     // one honestly-labeled supporting group, not fake runtime architecture.
     { id: 'c-devsupport', label: 'Build, CI & repo docs', sub: 'supporting - not runtime', kind: 'support', frac: { fx: 0.32, fy: 0.85 },
-      members: ['build-ci', 'assets-docs'] },
+      members: ['build-ci', 'assets-docs', 'dc-relay'] },
 ];
 const C4_EXTERNALS: C4Node[] = [
     { id: 'x-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.16, fy: 0.24 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.84, fy: 0.24 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.72, fy: 0.78 } },
-    // Turso deliberately omitted per owner request (13 Nov): the repo's
-    // turso_store.py adapter is designed, not deployed, and is out of the diagram
+    // Turso was removed from this repo at 042141d; no database adapter is diagrammed.
 ];
 // The developer appears on the container view as the person who builds and
 // tests the apps and runs the feed tool - an ordinary external role only.
@@ -448,8 +448,8 @@ const clampZ = (z: number) => Math.min(ZMAX, Math.max(ZMIN, z));
 // infinite canvas: pan is deliberately unbounded; zoom stays clamped at call sites
 const clampCam = (c: Cam): Cam => c;
 
-function CardShell({ id, tag, title, mark, centerCard, onFocus, children }: {
-    id: string; tag: string; title: string; mark?: Mark; centerCard?: boolean; onFocus: (id: string) => void; children: React.ReactNode;
+function CardShell({ id, tag, purpose, title, mark, centerCard, onFocus, children }: {
+    id: string; tag: string; purpose?: string; title: string; mark?: Mark; centerCard?: boolean; onFocus: (id: string) => void; children: React.ReactNode;
 }) {
     return <div className={`rc-card${centerCard ? ' rc-center' : ''}`} data-card={id}>
         <div className="rc-cardhead" onClick={() => onFocus(id)} title="Focus this section">
@@ -457,6 +457,7 @@ function CardShell({ id, tag, title, mark, centerCard, onFocus, children }: {
                 <span className="rc-icon" aria-hidden="true">{ICONS[id]}</span>
                 <div>
                     <div className="rc-tag">{tag}</div>
+                    {purpose && <div className="rc-purpose">{purpose}</div>}
                     <h3>{title}</h3>
                 </div>
             </div>
@@ -468,8 +469,8 @@ function CardShell({ id, tag, title, mark, centerCard, onFocus, children }: {
     </div>;
 }
 
-function SectionCard({ s, mark, expanded, onToggleExpand, onMark, onFocus }: {
-    s: Section; mark?: Mark; expanded: boolean; onToggleExpand: (id: string) => void; onMark: (id: string, m?: Mark) => void; onFocus: (id: string) => void;
+function SectionCard({ s, mark, expanded, finding, onToggleExpand, onMark, onFinding, onFocus }: {
+    s: Section; mark?: Mark; expanded: boolean; finding?: string; onToggleExpand: (id: string) => void; onMark: (id: string, m?: Mark) => void; onFinding: (id: string, text: string) => void; onFocus: (id: string) => void;
 }) {
     const shown = expanded ? s.files : s.files.slice(0, 5);
     const cycle = () => {
@@ -478,7 +479,7 @@ function SectionCard({ s, mark, expanded, onToggleExpand, onMark, onFocus }: {
         else onMark(s.id, undefined);
     };
     const label = !mark ? 'Mark reviewed' : mark === 'reviewed' ? 'Needs another look' : 'Clear mark';
-    return <CardShell id={s.id} tag={s.tag} title={s.title} mark={mark} onFocus={onFocus}>
+    return <CardShell id={s.id} tag={s.tag} purpose="Look up - reference" title={s.title} mark={mark} onFocus={onFocus}>
         <p>{s.purpose}</p>
         <ul className="rc-files">
             {shown.map((fl) => (
@@ -496,6 +497,14 @@ function SectionCard({ s, mark, expanded, onToggleExpand, onMark, onFocus }: {
             {s.notChecked.map((n) => <li key={n}>{n}</li>)}
         </ul>
         <p><TextLink href={`https://github.com/irvan-putra/intodo/tree/${COMMIT}/${s.link}`}>Open this folder at {COMMIT_SHORT}</TextLink></p>
+        <p className="rc-nchead">Your findings</p>
+        <textarea
+            className="rc-findings"
+            rows={3}
+            value={finding ?? ''}
+            placeholder="What you found reviewing this section - saved in this browser only; not synced or sent anywhere."
+            onChange={(e) => onFinding(s.id, e.target.value)}
+        />
         <div className="rc-reviewbtns">
             <button type="button" onClick={cycle}>{label}</button>
         </div>
@@ -511,6 +520,7 @@ function Canvas() {
     const [legendOpen, setLegendOpen] = useState(false);
     const [measuredNodes, setMeasuredNodes] = useState<Record<string, { w: number; h: number }>>({});
     const [reviews, setReviews] = useState<Record<string, Mark>>(saved?.reviews ?? {});
+    const [findings, setFindings] = useState<Record<string, string>>(saved?.findings ?? {});
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [vp, setVp] = useState({ w: 0, h: 0 });
     const fitted = useRef(false);
@@ -552,6 +562,7 @@ function Canvas() {
             setCam(saved.cam);
             setPos(sanePositions(saved.pos));
             setReviews(saved.reviews ?? {});
+            setFindings(saved.findings ?? {});
         }
     }, [savedMeta.ready, saved]);
 
@@ -567,7 +578,14 @@ function Canvas() {
         }
     }, [vp]);
 
-    const persist = (c: Cam, p: Record<string, Pos>, r: Record<string, Mark>) => { if (savedMeta.ready) setSaved({ cam: c, pos: p, reviews: r }); };
+    const persist = (c: Cam, p: Record<string, Pos>, r: Record<string, Mark>, f: Record<string, string> = findings) => { if (savedMeta.ready) setSaved({ cam: c, pos: p, reviews: r, findings: f }); };
+
+    const recordFinding = (id: string, text: string) => {
+        const f = { ...findings };
+        if (text) f[id] = text; else delete f[id];
+        setFindings(f);
+        persist(cam, pos, reviews, f);
+    };
 
     const evp = vp.w > 0 ? vp : { w: 390, h: 560 };
     const toWorld = (p: Pos, c: Cam): Pos => ({ x: c.x + (p.x - evp.w / 2) / c.z, y: c.y + (p.y - evp.h / 2) / c.z });
@@ -654,7 +672,7 @@ function Canvas() {
             g.current.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), z0: cam.z, cam0: cam, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
             return;
         }
-        if (t.closest('button') || t.closest('a')) { g.current.mode = null; return; }
+        if (t.closest('button') || t.closest('a') || t.closest('textarea') || t.closest('input')) { g.current.mode = null; return; }
         // cards are fixed in place per owner request: dragging anywhere pans
         // the canvas; card positions only change through code, never by hand
         g.current.start = p; g.current.last = p;
@@ -717,6 +735,7 @@ function Canvas() {
 
     const reviewedCount = SECTIONS.filter((s) => reviews[s.id] === 'reviewed').length;
     const flagCount = SECTIONS.filter((s) => reviews[s.id] === 'flag').length;
+    const findingsCount = SECTIONS.filter((s) => (findings[s.id] ?? '').trim().length > 0).length;
     useEffect(() => {
         if (band !== 'grp' && band !== 'sys') return;
         const sel = band === 'grp' ? '.rc-groups .rc-grpnode' : '.rc-sysnodes .rc-grpnode';
@@ -742,34 +761,35 @@ function Canvas() {
     const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, visRect);
 
     const cards: Record<string, React.ReactNode> = {
-        progress: <CardShell id="progress" tag="Center" title="Review progress" centerCard onFocus={focusCard}>
-            <p>{reviewedCount} of {SECTIONS.length} sections reviewed{flagCount > 0 ? ` - ${flagCount} flagged for another look` : ''}.</p>
-            <p className="rc-muted">Your marks are saved on this device only. Clearing all marks starts the pass over.</p>
+        progress: <CardShell id="progress" tag="Center" purpose="Do the task - how-to" title="Review progress" centerCard onFocus={focusCard}>
+            <p>{reviewedCount} of {SECTIONS.length} sections reviewed{flagCount > 0 ? ` - ${flagCount} flagged for another look` : ''}{findingsCount > 0 ? ` - ${findingsCount} with findings noted` : ''}.</p>
+            <p className="rc-muted">Your marks and findings are saved on this device only. Clearing all marks starts the pass over.</p>
         </CardShell>,
-        howto: <CardShell id="howto" tag="Start here" title="How to review a section" onFocus={focusCard}>
+        howto: <CardShell id="howto" tag="Start here" purpose="Do the task - how-to" title="How to review a section" onFocus={focusCard}>
             <ul>
-                <li>Three purposes here (the Diataxis map): the diagram views are for understanding the architecture; each section card is for looking up exact files at the pinned commit; this card is for getting the review task done.</li>
-                <li>Pick a card. Each is one piece of the repo, small enough for one sitting.</li>
+                <li>Every card names its primary purpose (the Diataxis map): Understand views explain the architecture, Look up cards list the exact files at the pinned commit, Do the task cards run the review itself. Section cards intentionally mix reference and explanation inside those primary purposes.</li>
+                <li>Pick a section card. Each is one piece of the repo, small enough for one sitting.</li>
                 <li>Tap any file name - it opens that exact file at commit {COMMIT_SHORT}. Long lists unfold with "Show all files".</li>
-                <li>Read, then come back and mark it: Reviewed, or Needs another look.</li>
-                <li>"Not checked yet" lists what nobody has verified, so gaps stay visible.</li>
+                <li>Read, write what you found in the card's findings box, then mark it: Reviewed, or Needs another look.</li>
+                <li>"Not checked yet" lists what nobody has verified, so gaps stay visible. A mark or a finding is your review act; neither claims the code is safe.</li>
+                <li>No tutorial here on purpose: this surface supports review rather than a guided learning lesson.</li>
             </ul>
         </CardShell>,
-        permanence: <CardShell id="permanence" tag="Permanence, honestly" title="What persists here" onFocus={focusCard}>
+        permanence: <CardShell id="permanence" tag="Permanence, honestly" purpose="Understand - explanation" title="What persists here" onFocus={focusCard}>
             <ul>
-                <li>Your view and review marks are remembered in this browser's local storage on this static page. Cards stay fixed in place.</li>
+                <li>Your view, review marks and findings are remembered in this browser's local storage on this static page. Cards stay fixed in place.</li>
                 <li>Not synced across devices; clearing browser storage resets them.</li>
                 <li>Public repo content only, generated from irvan-putra/intodo @ {COMMIT_SHORT} on Nov 13, 2026; nothing is sent anywhere or published with this page, and nothing here changes the app or the repo.</li>
                 <li>Marks made on the Instinct-hosted review page live in that browser's storage and cannot carry over here.</li>
                 <li>Long-term ownership (export, backup) is an open question, not a claim.</li>
             </ul>
         </CardShell>,
-        rule: <CardShell id="rule" tag="The honest rule" title="No hidden gaps" onFocus={focusCard}>
+        rule: <CardShell id="rule" tag="The honest rule" purpose="Understand - explanation" title="No hidden gaps" onFocus={focusCard}>
             <p>No card ever reads "this code is safe". Each card says exactly what it is, and what has not been checked stays visible in the same size next to it.</p>
         </CardShell>,
     };
     for (const s of SECTIONS) {
-        cards[s.id] = <SectionCard key={s.id} s={s} mark={reviews[s.id]} expanded={expandedId === s.id} onToggleExpand={(id) => {
+        cards[s.id] = <SectionCard key={s.id} s={s} mark={reviews[s.id]} finding={findings[s.id]} onFinding={recordFinding} expanded={expandedId === s.id} onToggleExpand={(id) => {
             const next = expandedId === id ? null : id;
             setExpandedId(next);
             // expanding the focused card changes its measured height; refocus
@@ -943,6 +963,13 @@ function Canvas() {
                     ))}
                     <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>designed, not active (draft workflows)</span>
                 </div>
+            ) : null}
+            {band !== 'detail' ? (
+                <div className="rc-bandcap">{
+                    band === 'sys' ? 'Understand - the system context' :
+                    band === 'grp' ? 'Understand - the containers' :
+                    `Look up - the ${SECTIONS.length} sections`
+                }</div>
             ) : null}
         </div>
         {overlayId && cards[overlayId] ? (

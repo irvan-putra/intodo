@@ -1,6 +1,6 @@
-// Generated from irvan-putra/intodo @ 042141d by gen_sections.py - do not hand-edit.
-export const COMMIT = "042141d9715e664f888ec524224601628fa08725";
-export const COMMIT_SHORT = "042141d";
+// Generated from irvan-putra/intodo @ fbd0213 by gen_sections.py - do not hand-edit.
+export const COMMIT = "fbd0213aed84b785d7b6b8f4235b9df7bd8202ac";
+export const COMMIT_SHORT = "fbd0213";
 export type SectionFile = { path: string; lines: number | null; note?: string };
 export type Section = { id: string; title: string; tag: string; icon: string; purpose: string; link: string; digest: string; totalLines: number; files: SectionFile[]; notChecked: string[] };
 export const SECTIONS: Section[] = [
@@ -291,12 +291,12 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "app/src/main/python/digest-fixtures.json",
-        "lines": 336
+        "lines": 335
       }
     ],
     "notChecked": [],
     "digest": "6b3a7a610392",
-    "totalLines": 2074
+    "totalLines": 2073
   },
   {
     "id": "witness",
@@ -566,18 +566,18 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "webxdc/test/fixtures/envs-new-bot.json",
-        "lines": 1
+        "lines": 0
       },
       {
         "path": "webxdc/test/fixtures/envs-old-bot.json",
-        "lines": 1
+        "lines": 0
       }
     ],
     "notChecked": [
       "Fixtures pin the 0.4.3 app bytes - they need refreshing per release"
     ],
     "digest": "36b26f37e072",
-    "totalLines": 1386
+    "totalLines": 1384
   },
   {
     "id": "build-ci",
@@ -625,14 +625,14 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": ".gitignore",
-        "lines": 7
+        "lines": 8
       }
     ],
     "notChecked": [
       "Nothing runs on its own - both workflows wait for someone to press the button"
     ],
-    "digest": "48d90cac7234",
-    "totalLines": 286
+    "digest": "315da90e7531",
+    "totalLines": 287
   },
   {
     "id": "feed-tool",
@@ -652,6 +652,33 @@ export const SECTIONS: Section[] = [
     ],
     "digest": "975ee7ca3a15",
     "totalLines": 36
+  },
+  {
+    "id": "dc-relay",
+    "title": "Durable reply ledger",
+    "tag": "Developer tooling - Python",
+    "icon": "🔁",
+    "purpose": "Reusable local library for recording inbound messages and reply attempts before sending; uncertain outcomes remain blocked rather than retried blindly.",
+    "link": "tools/dc_relay",
+    "files": [
+      {
+        "path": "tools/dc_relay/README.md",
+        "lines": 180
+      },
+      {
+        "path": "tools/dc_relay/reply_ledger.py",
+        "lines": 473
+      },
+      {
+        "path": "tools/dc_relay/test_reply_ledger.py",
+        "lines": 467
+      }
+    ],
+    "notChecked": [
+      "Transport integration, storage permissions and lifecycle are caller responsibilities; this library is not wired into the experimental chat bridge"
+    ],
+    "digest": "08825e280b6c",
+    "totalLines": 1120
   },
   {
     "id": "assets-docs",
@@ -735,7 +762,7 @@ export const SECTIONS: Section[] = [
     "files": [
       {
         "path": "itdweb/review/App.tsx",
-        "lines": 998
+        "lines": 1000
       },
       {
         "path": "itdweb/review/static.css",
@@ -779,12 +806,12 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "itdweb/src/sections.ts",
-        "lines": 790,
-        "note": "generated - excluded from digest"
+        "lines": null,
+        "note": "generated - self-size excluded to avoid self-reference"
       }
     ],
     "notChecked": [],
-    "digest": "fa7ff450c34a",
-    "totalLines": 3018
+    "digest": "48b8ba69a1ad",
+    "totalLines": 2230
   }
 ];

@@ -7,6 +7,7 @@ ap = argparse.ArgumentParser(description='Generate sections.ts for the itdweb re
 ap.add_argument('--repo', default='.', help='path to the intodo repository root (default: current directory)')
 ap.add_argument('--out', default='-', help='output path for sections.ts (default: stdout)')
 ap.add_argument('--commit', default=None, help='commit hash the cards pin; default: git rev-parse HEAD in --repo')
+ap.add_argument('--from-git', action='store_true', help='read file contents via git show COMMIT:path, so counts and digests describe the pinned commit exactly rather than the worktree')
 args = ap.parse_args()
 
 REPO = os.path.abspath(args.repo)
@@ -17,15 +18,37 @@ else:
     COMMIT = subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip()
 SHORT = COMMIT[:7]
 
-def f(path, note=None):
+OUT_ABS = os.path.abspath(args.out) if args.out != '-' else None
+
+def _size_and_lines(path, want_lines):
+    """From the pinned commit itself when --from-git is set, so the
+    inventory can never describe a dirty worktree while claiming to pin a
+    commit; from the worktree otherwise. Lines counted only when asked."""
+    if args.from_git:
+        import subprocess
+        data = subprocess.check_output(
+            ['git', '-C', REPO, 'show', '%s:%s' % (COMMIT, path)])
+        n = data.decode('utf-8', errors='strict').count('\n') if want_lines else None
+        return len(data), n
     full = os.path.join(REPO, path)
     assert os.path.isfile(full), 'missing: ' + path
-    if note == 'binary':
-        size = os.path.getsize(full)
-        note_s = '%.1f MB binary' % (size/1e6) if size >= 100000 else '%.0f KB binary' % (size/1e3)
-        return {'path': path, 'lines': None, 'note': note_s}
+    if not want_lines:
+        return os.path.getsize(full), None
     with open(full, 'r', encoding='utf-8', errors='strict') as fh:
         n = sum(1 for _ in fh)
+    return os.path.getsize(full), n
+
+def f(path, note=None):
+    if OUT_ABS and os.path.abspath(os.path.join(REPO, path)) == OUT_ABS:
+        # The generated file's self-size is measurable but excluded to avoid
+        # self-reference: any count would describe the previous generation.
+        return {'path': path, 'lines': None,
+                'note': 'generated - self-size excluded to avoid self-reference'}
+    if note == 'binary':
+        size, _ = _size_and_lines(path, want_lines=False)
+        note_s = '%.1f MB binary' % (size/1e6) if size >= 100000 else '%.0f KB binary' % (size/1e3)
+        return {'path': path, 'lines': None, 'note': note_s}
+    size, n = _size_and_lines(path, want_lines=True)
     if note == 'generated':
         # A generated file that itself contains section digests can never have
         # a stable content hash, so it is listed for coverage but excluded
@@ -200,6 +223,13 @@ SECTIONS = [
       link='tools',
       files=[f('tools/encrypt_feed.py')],
       notChecked=['Key custody - which phone public key the feed encrypts to, and how that key rotates']),
+ dict(id='dc-relay', title='Durable reply ledger', tag='Developer tooling - Python', icon='🔁',
+      purpose='Reusable local library for recording inbound messages and reply attempts before sending; uncertain outcomes remain blocked rather than retried blindly.',
+      link='tools/dc_relay',
+      files=[f('tools/dc_relay/README.md'),
+             f('tools/dc_relay/reply_ledger.py'),
+             f('tools/dc_relay/test_reply_ledger.py')],
+      notChecked=['Transport integration, storage permissions and lifecycle are caller responsibilities; this library is not wired into the experimental chat bridge']),
  dict(id='assets-docs', title='Docs & binary assets', tag='Non-code', icon='\U0001F4C4',
       purpose='README, icons, the launcher art - and the prebuilt RPC library the bot runs on.',
       link='.',
@@ -233,13 +263,23 @@ SECTIONS = [
       notChecked=[]),
 ]
 
+def _read_bytes(path):
+    """File bytes from the pinned commit's tree when --from-git is set;
+    from the worktree otherwise. Digests must describe the same source the
+    line counts do."""
+    if args.from_git:
+        import subprocess
+        return subprocess.check_output(
+            ['git', '-C', REPO, 'show', '%s:%s' % (COMMIT, path)])
+    with open(os.path.join(REPO, path), 'rb') as fh:
+        return fh.read()
+
 for s in SECTIONS:
     h = hashlib.sha256()
     for fl in sorted(s['files'], key=lambda x: x['path']):
         if fl.get('note', '').startswith('generated'):
             continue  # self-referential content hash can never stabilise
-        with open(os.path.join(REPO, fl['path']), 'rb') as fh:
-            h.update(('%s:%s\n' % (fl['path'], hashlib.sha256(fh.read()).hexdigest())).encode())
+        h.update(('%s:%s\n' % (fl['path'], hashlib.sha256(_read_bytes(fl['path'])).hexdigest())).encode())
     s['digest'] = h.hexdigest()[:12]
     s['totalLines'] = sum(fl['lines'] or 0 for fl in s['files'])
 
