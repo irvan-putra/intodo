@@ -14,7 +14,7 @@
   const DELETED = window.MERGE_DELETED;
   const STORE_KEY = 'instinct-shared-list-doc-v1';
   const BIND_KEY = 'instinct-shared-list-binding-v1';
-  const APP_VERSION = '0.4.6'; // keep in step with manifest.toml version
+  const APP_VERSION = '0.4.7'; // keep in step with manifest.toml version
   // List binding: an instance only accepts restore envelopes for its bound
   // list_id. Binding comes from trusted packaging (list.json packed by the
   // bot at publish) or an explicit in-app owner confirmation - NEVER from
