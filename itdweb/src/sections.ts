@@ -1,6 +1,6 @@
-// Generated from irvan-putra/intodo @ 7e0bb57 by gen_sections.py - do not hand-edit.
-export const COMMIT = "7e0bb571a97cd5dacdf7a62db36f5a257fd90e59";
-export const COMMIT_SHORT = "7e0bb57";
+// Generated from irvan-putra/intodo @ 042141d by gen_sections.py - do not hand-edit.
+export const COMMIT = "042141d9715e664f888ec524224601628fa08725";
+export const COMMIT_SHORT = "042141d";
 export type SectionFile = { path: string; lines: number | null; note?: string };
 export type Section = { id: string; title: string; tag: string; icon: string; purpose: string; link: string; digest: string; totalLines: number; files: SectionFile[]; notChecked: string[] };
 export const SECTIONS: Section[] = [
@@ -283,26 +283,20 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "app/src/main/python/ops_store.py",
-        "lines": 359
+        "lines": 357
       },
       {
         "path": "app/src/main/python/migration.py",
         "lines": 337
       },
       {
-        "path": "app/src/main/python/turso_store.py",
-        "lines": 175
-      },
-      {
         "path": "app/src/main/python/digest-fixtures.json",
         "lines": 336
       }
     ],
-    "notChecked": [
-      "Turso cloud adapter tested only against a local stub - no real cloud database yet"
-    ],
-    "digest": "c9b021e0442d",
-    "totalLines": 2251
+    "notChecked": [],
+    "digest": "6b3a7a610392",
+    "totalLines": 2074
   },
   {
     "id": "witness",
@@ -411,7 +405,7 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "itdweb/src/App.tsx",
-        "lines": 412
+        "lines": 474
       },
       {
         "path": "itdweb/src/main.tsx",
@@ -419,14 +413,14 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "itdweb/src/style.css",
-        "lines": 76
+        "lines": 104
       }
     ],
     "notChecked": [
       "Whether your saved layout survives a signed-in reopen on your phone (implemented, not yet verified)"
     ],
-    "digest": "9d1d348fbf25",
-    "totalLines": 511
+    "digest": "03941ca62d5e",
+    "totalLines": 601
   },
   {
     "id": "tests-android",
@@ -642,10 +636,10 @@ export const SECTIONS: Section[] = [
   },
   {
     "id": "feed-tool",
-    "title": "Feed signing tool",
+    "title": "Feed encryption tool",
     "tag": "Tools",
     "icon": "🔐",
-    "purpose": "Encrypts the reminder feed so only the paired phone can read it.",
+    "purpose": "Encrypts the reminder feed so only the paired phone can read it. Print-only: emitting the payload and publishing the feed page are separate manual steps.",
     "link": "tools",
     "files": [
       {
@@ -654,7 +648,7 @@ export const SECTIONS: Section[] = [
       }
     ],
     "notChecked": [
-      "Key custody - where the signing key pair lives and who can rotate it"
+      "Key custody - which phone public key the feed encrypts to, and how that key rotates"
     ],
     "digest": "975ee7ca3a15",
     "totalLines": 36
@@ -682,19 +676,39 @@ export const SECTIONS: Section[] = [
         "note": "1.3 MB binary"
       },
       {
+        "path": "app/src/main/res/mipmap-hdpi/ic_launcher.png",
+        "lines": null,
+        "note": "3 KB binary"
+      },
+      {
+        "path": "app/src/main/res/mipmap-mdpi/ic_launcher.png",
+        "lines": null,
+        "note": "2 KB binary"
+      },
+      {
+        "path": "app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+        "lines": null,
+        "note": "4 KB binary"
+      },
+      {
         "path": "app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
         "lines": null,
-        "note": "0.0 MB binary"
+        "note": "7 KB binary"
+      },
+      {
+        "path": "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+        "lines": null,
+        "note": "6 KB binary"
       },
       {
         "path": "webxdc/icon.png",
         "lines": null,
-        "note": "0.0 MB binary"
+        "note": "4 KB binary"
       },
       {
         "path": "gradle/wrapper/gradle-wrapper.jar",
         "lines": null,
-        "note": "0.0 MB binary"
+        "note": "43 KB binary"
       },
       {
         "path": "gradlew",
@@ -708,7 +722,69 @@ export const SECTIONS: Section[] = [
     "notChecked": [
       "librpcsrv.so is a ~21 MB prebuilt binary - its source and build recipe are not in this repo"
     ],
-    "digest": "5cbe31e73c9c",
+    "digest": "2d38febe142a",
     "totalLines": 398
+  },
+  {
+    "id": "review-src",
+    "title": "Review canvas source",
+    "tag": "Review surface - source",
+    "icon": "🧱",
+    "purpose": "The static Pages variant of this review: its own app, build script, and the generator that produced these cards.",
+    "link": "itdweb/review",
+    "files": [
+      {
+        "path": "itdweb/review/App.tsx",
+        "lines": 998
+      },
+      {
+        "path": "itdweb/review/static.css",
+        "lines": 266
+      },
+      {
+        "path": "itdweb/review/main.tsx",
+        "lines": 7
+      },
+      {
+        "path": "itdweb/review/files-shim.tsx",
+        "lines": 68
+      },
+      {
+        "path": "itdweb/review/index.html",
+        "lines": 14
+      },
+      {
+        "path": "itdweb/review/build.sh",
+        "lines": 17
+      },
+      {
+        "path": "itdweb/review/package.json",
+        "lines": 13
+      },
+      {
+        "path": "itdweb/review/package-lock.json",
+        "lines": 530
+      },
+      {
+        "path": "itdweb/review/README.md",
+        "lines": 50
+      },
+      {
+        "path": "itdweb/review/.gitignore",
+        "lines": 2
+      },
+      {
+        "path": "itdweb/tools/gen_sections.py",
+        "lines": 263
+      },
+      {
+        "path": "itdweb/src/sections.ts",
+        "lines": 790,
+        "note": "generated - excluded from digest"
+      }
+    ],
+    "notChecked": [],
+    "digest": "fa7ff450c34a",
+    "totalLines": 3018
   }
 ];

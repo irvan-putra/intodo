@@ -100,10 +100,13 @@ a, .rc-card a { color: var(--ds-ink); }
    with neighbouring titles; the grouping it named is the context level */
 .rc-lo .rc-tag { display: none; }
 .rc-lo .rc-badge { font-size: min(calc(10px / var(--camz)), 44px); }
-.rc-lo .rc-edges line {
-    stroke: var(--ds-teal);
-    stroke-width: min(calc(2px / var(--camz)), 12px);
-    opacity: 0.55;
+/* Section level: each card group is owned by its C4 container label;
+   the old free-floating concept edges are gone per owner request */
+.rc-seclabel {
+    position: absolute; z-index: 2; pointer-events: none;
+    font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
+    color: var(--ds-ink-2);
+    font-size: min(calc(13px / var(--camz)), 64px);
 }
 
 /* Container level (C4): section cards and their edges give way to one node
@@ -112,7 +115,7 @@ a, .rc-card a { color: var(--ds-ink); }
    section titles do, so the overview stays readable at phone fit zoom. */
 .rc-groups { display: none; }
 .rc-gedges { display: none; }
-.rc-grp .rc-world .rc-card, .rc-grp .rc-edges { display: none; }
+.rc-grp .rc-world .rc-card { display: none; }
 .rc-grp .rc-groups { display: block; }
 .rc-grp .rc-gedges { display: block; }
 .rc-gedges, .rc-glabels, .rc-syslabels { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
@@ -189,7 +192,7 @@ a, .rc-card a { color: var(--ds-ink); }
    intodo system + external systems. */
 .rc-sysnodes { display: none; }
 .rc-sysedges { display: none; }
-.rc-sys .rc-world .rc-card, .rc-sys .rc-edges,
+.rc-sys .rc-world .rc-card,
 .rc-sys .rc-groups, .rc-sys .rc-gedges, .rc-sys .rc-glabels { display: none; }
 .rc-sys .rc-sysnodes { display: block; }
 .rc-sys .rc-sysedges { display: block; }

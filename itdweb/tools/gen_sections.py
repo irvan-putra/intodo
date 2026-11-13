@@ -21,9 +21,16 @@ def f(path, note=None):
     full = os.path.join(REPO, path)
     assert os.path.isfile(full), 'missing: ' + path
     if note == 'binary':
-        return {'path': path, 'lines': None, 'note': '%.1f MB binary' % (os.path.getsize(full)/1e6)}
+        size = os.path.getsize(full)
+        note_s = '%.1f MB binary' % (size/1e6) if size >= 100000 else '%.0f KB binary' % (size/1e3)
+        return {'path': path, 'lines': None, 'note': note_s}
     with open(full, 'r', encoding='utf-8', errors='strict') as fh:
         n = sum(1 for _ in fh)
+    if note == 'generated':
+        # A generated file that itself contains section digests can never have
+        # a stable content hash, so it is listed for coverage but excluded
+        # from its section's digest.
+        return {'path': path, 'lines': n, 'note': 'generated - excluded from digest'}
     return {'path': path, 'lines': n}
 
 SECTIONS = [
@@ -103,9 +110,8 @@ SECTIONS = [
       files=[f('app/src/main/python/delivery_bot.py'),
              f('app/src/main/python/ops_store.py'),
              f('app/src/main/python/migration.py'),
-             f('app/src/main/python/turso_store.py'),
              f('app/src/main/python/digest-fixtures.json')],
-      notChecked=['Turso cloud adapter tested only against a local stub - no real cloud database yet']),
+      notChecked=[]),
  dict(id='witness', title='Witness & validation', tag='DeltaChat bot - proof', icon='\U0001F441\uFE0F',
       purpose='Independent confirmation that group messages actually land on other devices.',
       link='app/src/main/python',
@@ -189,27 +195,49 @@ SECTIONS = [
              f('webxdc/manifest.toml'),
              f('.gitignore')],
       notChecked=['Nothing runs on its own - both workflows wait for someone to press the button']),
- dict(id='feed-tool', title='Feed signing tool', tag='Tools', icon='\U0001F510',
-      purpose='Encrypts the reminder feed so only the paired phone can read it.',
+ dict(id='feed-tool', title='Feed encryption tool', tag='Tools', icon='\U0001F510',
+      purpose='Encrypts the reminder feed so only the paired phone can read it. Print-only: emitting the payload and publishing the feed page are separate manual steps.',
       link='tools',
       files=[f('tools/encrypt_feed.py')],
-      notChecked=['Key custody - where the signing key pair lives and who can rotate it']),
+      notChecked=['Key custody - which phone public key the feed encrypts to, and how that key rotates']),
  dict(id='assets-docs', title='Docs & binary assets', tag='Non-code', icon='\U0001F4C4',
       purpose='README, icons, the launcher art - and the prebuilt RPC library the bot runs on.',
       link='.',
       files=[f('README.md'),
              f('app/src/main/jniLibs/arm64-v8a/librpcsrv.so', 'binary'),
              f('itdweb/src/photos/review-concept-hero.png', 'binary'),
+             f('app/src/main/res/mipmap-hdpi/ic_launcher.png', 'binary'),
+             f('app/src/main/res/mipmap-mdpi/ic_launcher.png', 'binary'),
+             f('app/src/main/res/mipmap-xhdpi/ic_launcher.png', 'binary'),
              f('app/src/main/res/mipmap-xxhdpi/ic_launcher.png', 'binary'),
+             f('app/src/main/res/mipmap-xxxhdpi/ic_launcher.png', 'binary'),
              f('webxdc/icon.png', 'binary'),
              f('gradle/wrapper/gradle-wrapper.jar', 'binary'),
              f('gradlew'), f('gradlew.bat')],
       notChecked=['librpcsrv.so is a ~21 MB prebuilt binary - its source and build recipe are not in this repo']),
+ dict(id='review-src', title='Review canvas source', tag='Review surface - source', icon='\U0001F9F1',
+      purpose='The static Pages variant of this review: its own app, build script, and the generator that produced these cards.',
+      link='itdweb/review',
+      files=[f('itdweb/review/App.tsx'),
+             f('itdweb/review/static.css'),
+             f('itdweb/review/main.tsx'),
+             f('itdweb/review/files-shim.tsx'),
+             f('itdweb/review/index.html'),
+             f('itdweb/review/build.sh'),
+             f('itdweb/review/package.json'),
+             f('itdweb/review/package-lock.json'),
+             f('itdweb/review/README.md'),
+             f('itdweb/review/.gitignore'),
+             f('itdweb/tools/gen_sections.py'),
+             f('itdweb/src/sections.ts', 'generated')],
+      notChecked=[]),
 ]
 
 for s in SECTIONS:
     h = hashlib.sha256()
     for fl in sorted(s['files'], key=lambda x: x['path']):
+        if fl.get('note', '').startswith('generated'):
+            continue  # self-referential content hash can never stabilise
         with open(os.path.join(REPO, fl['path']), 'rb') as fh:
             h.update(('%s:%s\n' % (fl['path'], hashlib.sha256(fh.read()).hexdigest())).encode())
     s['digest'] = h.hexdigest()[:12]

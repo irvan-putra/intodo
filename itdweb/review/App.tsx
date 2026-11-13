@@ -13,8 +13,9 @@ const ZMIN = 0.07, ZMAX = 2.5;
 //   z < SYS_Z    system context: people + the intodo system + external systems
 //   z < GROUP_Z  container level: the repo's runnable units + code-evidenced
 //                relationships; tap a container to open its sections
-//   z < LO_Z     section level: concept cards (icon + title + mark), no
-//                per-file detail; tap a card to focus it
+//   z < LO_Z     section level: compact cards (icon + title + mark) grouped
+//                under their C4 container labels, no per-file detail;
+//                tap a card to focus it
 //   otherwise    detail level: the full review cards, unchanged
 const SYS_Z = 0.11;
 //   otherwise    detail level: the full review cards, unchanged
@@ -73,57 +74,75 @@ const DEFAULT_POS: Record<string, Pos> = {
     'build-ci':      { x: COL_X[0], y: ROW_Y[4] },
     'feed-tool':     { x: COL_X[1], y: ROW_Y[4] },
     'assets-docs':   { x: COL_X[2], y: ROW_Y[4] },
+    'review-src':    { x: COL_X[4], y: ROW_Y[3] },
 };
 
-const EDGES: [string, string][] = [
-    ['tests-android', 'list-ui'],
-    ['tests-android', 'feed-sync'],
-    ['tests-android', 'self-update'],
-    ['tests-android', 'native-canvas'],
-    ['tests-android', 'merge-core'],
-    ['tests-bot', 'bot-runtime'],
-    ['tests-bot', 'bot-delivery'],
-    ['tests-bot', 'witness'],
-    ['tests-xdc', 'xdc-app'],
-    ['tests-xdc', 'xdc-canvas'],
-    ['native-canvas', 'xdc-canvas'],
-    ['merge-core', 'xdc-app'],
-    ['bot-app', 'bot-runtime'],
-    ['bot-runtime', 'bot-delivery'],
-    ['feed-sync', 'feed-tool'],
-    ['build-ci', 'tests-android'],
-];
 
-function center(id: string, pos: Record<string, Pos>): Pos {
-    const s = CARD_SIZES[id];
-    return { x: pos[id].x + s.w / 2, y: pos[id].y + s.h / 2 };
-}
-
-// C4 model, grounded in the public repo at the pinned snapshot 7e0bb57
-// (each relationship names its evidence file). Three runnable containers;
-// the feed publisher script, tests, CI and docs are supporting elements,
-// not architecture. Solid lines are runtime flows seen in code; dashed
-// lines are design similarity or designed-but-never-deployed pieces.
+// C4 model, grounded in the public repo at the pinned snapshot (see
+// sections.ts COMMIT; each relationship names its evidence file). Runnable
+// containers: itdapk, itdxdc, itdweb and the feed encryption CLI. Tests
+// attach to the containers they verify; build/CI and repo docs stay one
+// honestly-labeled supporting group; the developer and the draft GitHub
+// Actions workflows appear as people/external systems, not runtime boxes.
+// Solid lines are observed flows or evidenced manual steps; dashed lines
+// are designed but not active (draft workflows) or design similarity with
+// no deployed runtime link.
 //
 // The container and system bands are true semantic zoom: instead of
 // shrinking a fixed world-space diagram, each band re-lays-out against the
 // CURRENTLY VISIBLE world rect, so node type stays a constant on-screen
 // size at every zoom level, and edges route around unrelated boxes.
-type C4Node = { id: string; label: string; sub: string; kind: 'container' | 'support' | 'external' | 'person' | 'system'; members?: string[]; frac: { fx: number; fy: number } };
+type C4Node = { id: string; label: string; sub: string; kind: 'container' | 'support' | 'external' | 'person' | 'system'; members?: string[]; attached?: string[]; frac: { fx: number; fy: number } };
 const C4_CONTAINERS: C4Node[] = [
     { id: 'c-app', label: 'itdapk - Android app', sub: 'Java/Kotlin + Chaquopy', kind: 'container', frac: { fx: 0.5, fy: 0.08 },
-      members: ['list-ui', 'feed-sync', 'self-update', 'native-canvas', 'merge-core', 'bot-app', 'bot-runtime', 'bot-delivery', 'witness'] },
-    { id: 'c-xdc', label: 'itdxdc - webxdc app', sub: 'JavaScript in DeltaChat', kind: 'container', frac: { fx: 0.22, fy: 0.44 }, members: ['xdc-app', 'xdc-canvas'] },
-    { id: 'c-web', label: 'itdweb - review page', sub: 'static GitHub Pages site', kind: 'container', frac: { fx: 0.72, fy: 0.48 }, members: ['this-page'] },
-    { id: 'c-support', label: 'Tests, tools & docs', sub: 'supporting - not architecture', kind: 'support', frac: { fx: 0.28, fy: 0.74 },
-      members: ['tests-android', 'tests-bot', 'tests-xdc', 'build-ci', 'assets-docs', 'feed-tool', 'howto', 'rule', 'permanence', 'progress'] },
+      members: ['list-ui', 'feed-sync', 'self-update', 'native-canvas', 'merge-core', 'bot-app', 'bot-runtime', 'bot-delivery', 'witness'],
+      attached: ['tests-android', 'tests-bot'] },
+    { id: 'c-xdc', label: 'itdxdc - webxdc app', sub: 'JavaScript in DeltaChat', kind: 'container', frac: { fx: 0.22, fy: 0.44 }, members: ['xdc-app', 'xdc-canvas'], attached: ['tests-xdc'] },
+    { id: 'c-web', label: 'itdweb - review page', sub: 'static GitHub Pages site', kind: 'container', frac: { fx: 0.72, fy: 0.48 },
+      members: ['this-page', 'review-src'], attached: ['howto', 'rule', 'permanence', 'progress'] },
+    // The feed encryption tool is a runnable container in C4 terms (a CLI
+    // application): it reads feed JSON on stdin and prints the IFW1 payload.
+    // It does NOT sign and does NOT upload - publishing the feed page is a
+    // manual handoff, so there is no edge from it to Instinct Files.
+    { id: 'c-feedtool', label: 'Feed encryption tool', sub: 'Python CLI, run by hand', kind: 'container', frac: { fx: 0.3, fy: 0.72 }, members: ['feed-tool'] },
+    // Tests attach to the containers they verify; build/CI and repo docs stay
+    // one honestly-labeled supporting group, not fake runtime architecture.
+    { id: 'c-devsupport', label: 'Build, CI & repo docs', sub: 'supporting - not runtime', kind: 'support', frac: { fx: 0.32, fy: 0.85 },
+      members: ['build-ci', 'assets-docs'] },
 ];
 const C4_EXTERNALS: C4Node[] = [
     { id: 'x-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.16, fy: 0.24 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.84, fy: 0.24 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.72, fy: 0.78 } },
+    // Turso deliberately omitted per owner request (13 Nov): the repo's
+    // turso_store.py adapter is designed, not deployed, and is out of the diagram
 ];
-const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_EXTERNALS];
+// The developer appears on the container view as the person who builds and
+// tests the apps and runs the feed tool - an ordinary external role only.
+const C4_PEOPLE: C4Node[] = [
+    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.08, fy: 0.62 } },
+];
+const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNALS];
+
+// Section-band layout: computed container-owned flow. The free-form pos grid
+// mixes containers within rows, so in the section band chips are laid out
+// fresh under their container label in reading order; the detail band keeps
+// the saved/default positions.
+const LO_COL_W = 400, LO_ROW_H = 130, LO_LABEL_H = 60, LO_GAP = 40;
+const LO_LAYOUT: Record<string, { x: number; y: number }> = {};
+const LO_LABELS: Record<string, { x: number; y: number }> = {};
+{
+    let y = 40;
+    for (const g of C4_CONTAINERS) {
+        LO_LABELS[g.id] = { x: 20, y };
+        y += LO_LABEL_H;
+        const all = [...(g.members ?? []), ...(g.attached ?? [])];
+        all.forEach((m, i) => {
+            LO_LAYOUT[m] = { x: 20 + (i % 5) * LO_COL_W, y: y + Math.floor(i / 5) * LO_ROW_H };
+        });
+        y += Math.ceil(all.length / 5) * LO_ROW_H + LO_GAP;
+    }
+}
 type C4Rel = { a: string; b: string; label: string; dashed?: boolean; side?: 1 | -1 };
 const C4_RELS: C4Rel[] = [
     { a: 'c-app', b: 'x-files', label: 'encrypted feed (HTTPS)' },                      // app/.../SyncEngine.java
@@ -132,14 +151,18 @@ const C4_RELS: C4Rel[] = [
     { a: 'c-xdc', b: 'x-dc', label: 'webxdc updates' },                                 // webxdc/js/app.js
     { a: 'c-web', b: 'x-github', label: 'links at pinned commit' },                     // itdweb/src/sections.ts
     { a: 'c-app', b: 'c-xdc', label: 'same merge algorithm, no runtime link', dashed: true }, // app/.../merge/MergeDoc.java vs webxdc/js/mergedoc.js
+    { a: 'p-dev', b: 'c-app', label: 'builds + tests (Gradle)' },              // gradlew, app/build.gradle, app/src/test
+    { a: 'p-dev', b: 'c-feedtool', label: 'feed JSON in, IFW1 payload out' },  // tools/encrypt_feed.py (stdin -> stdout, print-only)
 ];
-// encrypt_feed.py is deliberately NOT a container and has NO edge to
-// Instinct Files: the script only emits ciphertext; publishing is a manual
-// handoff outside this repo, so there is no runtime integration to draw.
 const SYS_NODES: C4Node[] = [
     { id: 'p-owner', label: 'Irvan', sub: 'owner', kind: 'person', frac: { fx: 0.22, fy: 0.2 } },
     { id: 'p-members', label: 'Group members', sub: 'DeltaChat chat', kind: 'person', frac: { fx: 0.78, fy: 0.2 } },
+    // Same human as the owner, in the developer role: builds, tests and
+    // publishes. Modeled separately because the owner asked for developers as
+    // users of the build/publish services, not as runtime architecture.
+    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.5, fy: 0.06 } },
     { id: 's-intodo', label: 'intodo', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
+    { id: 'x-gha', label: 'GitHub Actions', sub: 'draft workflows, manual trigger', kind: 'external', frac: { fx: 0.88, fy: 0.44 } },
     { id: 'x-files', label: 'Instinct Files', sub: 'feed page', kind: 'external', frac: { fx: 0.18, fy: 0.7 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.82, fy: 0.7 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.86 } },
@@ -150,6 +173,14 @@ const SYS_RELS: C4Rel[] = [
     { a: 's-intodo', b: 'x-files', label: 'feed page' },
     { a: 's-intodo', b: 'x-github', label: 'source, releases, pages' },
     { a: 's-intodo', b: 'x-dc', label: 'bot + webxdc' },
+    { a: 'p-dev', b: 's-intodo', label: 'builds + tests (Gradle)' },
+    // Both workflows are REVIEW DRAFTS, manual workflow_dispatch only: no
+    // automatic CI runs on push (grounded in .github/workflows/*.yml).
+    { a: 'p-dev', b: 'x-gha', label: 'triggers release + render-check (draft)', dashed: true },
+    { a: 'x-gha', b: 'x-github', label: 'stamps version, signs + publishes APK (draft)', dashed: true },
+    // encrypt_feed.py only prints ciphertext; publishing the feed page is a
+    // manual human step (rebuild + publish the File), not an integration.
+    { a: 'p-dev', b: 'x-files', label: 'encrypts feed, publishes page by hand' },
 ];
 type Rect = { x: number; y: number; w: number; h: number };
 type GroupNode = { g: C4Node; x: number; y: number; hw: number; hh: number };
@@ -577,7 +608,7 @@ function Canvas() {
         // so the container opens as a list sheet of its sections instead
         if (evp.w < 560) { setSheetGroup(gid); return; }
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const m of g.members) {
+        for (const m of [...g.members, ...(g.attached ?? [])]) {
             const p = pos[m] ?? DEFAULT_POS[m];
             const s = CARD_SIZES[m] ?? { w: 360, h: 480 };
             minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
@@ -717,6 +748,7 @@ function Canvas() {
         </CardShell>,
         howto: <CardShell id="howto" tag="Start here" title="How to review a section" onFocus={focusCard}>
             <ul>
+                <li>Three purposes here (the Diataxis map): the diagram views are for understanding the architecture; each section card is for looking up exact files at the pinned commit; this card is for getting the review task done.</li>
                 <li>Pick a card. Each is one piece of the repo, small enough for one sitting.</li>
                 <li>Tap any file name - it opens that exact file at commit {COMMIT_SHORT}. Long lists unfold with "Show all files".</li>
                 <li>Read, then come back and mark it: Reviewed, or Needs another look.</li>
@@ -765,22 +797,9 @@ function Canvas() {
                     ['--camz' as any]: cam.z,
                 }}
             >
-                <svg className="rc-edges" width={WORLD.w} height={WORLD.h}>
-                    {EDGES.map(([a, b]) => {
-                        // band-aware anchors: full cards connect at their
-                        // center; compact concept cards connect at the header
-                        // (~55 world px down) so lines don't dangle below
-                        const ea = (id: string): Pos => {
-                            const p = pos[id], s = CARD_SIZES[id];
-                            return { x: p.x + s.w / 2, y: p.y + (cam.z >= LO_Z ? s.h / 2 : 55) };
-                        };
-                        const ca = ea(a), cb = ea(b);
-                        return <line key={`${a}-${b}`} x1={ca.x} y1={ca.y} x2={cb.x} y2={cb.y} stroke="var(--ds-hairline)" strokeWidth={2} />;
-                    })}
-                </svg>
                 {/* container level: C4 relationships with labels; solid =
-                    runtime flow seen in code, dashed = design similarity or
-                    designed-but-never-deployed. Visible only in rc-grp */}
+                    observed flow or evidenced manual step, dashed = designed
+                    but not active / no deployed runtime link. rc-grp only */}
                 <svg className="rc-gedges" width={WORLD.w} height={WORLD.h}>
                     <defs>
                         <marker id="rc-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
@@ -799,7 +818,7 @@ function Canvas() {
                 <div className="rc-groups">
                     {groupLayout.map((n) => {
                         const g = n.g;
-                        if (g.kind === 'external') {
+                        if (g.kind === 'external' || g.kind === 'person') {
                             return (
                                 <div key={g.id} data-nid={g.id} className="rc-grpnode rc-node-ext" style={{ left: n.x, top: n.y }}>
                                     <span className="rc-grplabel">{g.label}</span>
@@ -807,7 +826,7 @@ function Canvas() {
                                 </div>
                             );
                         }
-                        const members = g.members!;
+                        const members = [...(g.members ?? []), ...(g.attached ?? [])];
                         const rev = members.filter((m) => reviews[m] === 'reviewed').length;
                         return (
                             <button key={g.id} type="button" className={`rc-grpnode${g.kind === 'support' ? ' rc-node-support' : ''}`} style={{ left: n.x, top: n.y }} onClick={() => focusGroup(g.id)}>
@@ -875,11 +894,22 @@ function Canvas() {
                         </g>
                     ))}
                 </svg>
-                {Object.keys(cards).map((id) => (
-                    <div key={id} style={{ position: 'absolute', left: pos[id].x, top: pos[id].y, width: CARD_SIZES[id].w, zIndex: expandedId === id ? 5 : undefined }}>
-                        {cards[id]}
-                    </div>
+                {/* section level: every card belongs to a C4 container. The
+                    free-form pos grid mixes containers within rows, so in the
+                    section band cards ignore pos and flow under their container
+                    label in reading order (LO_LAYOUT); the detail band keeps
+                    the saved/default positions. */}
+                {band === 'lo' && C4_CONTAINERS.map((g) => (
+                    <div key={g.id} className="rc-seclabel" style={{ left: LO_LABELS[g.id].x, top: LO_LABELS[g.id].y }}>{g.label}</div>
                 ))}
+                {Object.keys(cards).map((id) => {
+                    const p = band === 'lo' ? LO_LAYOUT[id] : pos[id];
+                    return (
+                        <div key={id} style={{ position: 'absolute', left: p.x, top: p.y, width: CARD_SIZES[id].w, zIndex: expandedId === id ? 5 : undefined }}>
+                            {cards[id]}
+                        </div>
+                    );
+                })}
             </div>
             {/* navigation chrome (zoom buttons, Fit, minimap) intentionally
                 removed per owner request - pan and pinch remain; controls come
@@ -890,8 +920,8 @@ function Canvas() {
                 <div className="rc-status rc-warn" aria-live="polite">{savedMeta.message}</div>
             ) : null}
             {/* C4 relationship key, container/system bands only: badges on
-                the edges are numbered into this list; dashed badge ring =
-                design similarity / not deployed */}
+                the edges are numbered into this list; dashed = designed but
+                not active (draft workflows) or no deployed runtime link */}
             <button type="button" className="rc-legend-chip rc-legend-chip-grp" onClick={() => setLegendOpen((v) => !v)}>
                 {legendOpen ? 'hide key' : 'relationship key'}
             </button>
@@ -900,7 +930,7 @@ function Canvas() {
                     {C4_RELS.map((r, i) => (
                         <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
                     ))}
-                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>runtime flow (code-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>design similarity / not deployed</span>
+                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>designed, not active / no runtime link</span>
                 </div>
             ) : null}
             <button type="button" className="rc-legend-chip rc-legend-chip-sys" onClick={() => setLegendOpen((v) => !v)}>
@@ -909,8 +939,9 @@ function Canvas() {
             {legendOpen ? (
                 <div className="rc-legend rc-legend-sys">
                     {SYS_RELS.map((r, i) => (
-                        <span className="rc-legend-item" key={r.label}><span className="rc-legend-num">{i + 1}</span>{r.label}</span>
+                        <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
                     ))}
+                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>designed, not active (draft workflows)</span>
                 </div>
             ) : null}
         </div>
@@ -930,12 +961,13 @@ function Canvas() {
                 <div className="rc-overlay-body">
                     {(() => {
                         const g = C4_CONTAINERS.find((x) => x.id === sheetGroup)!;
-                        const rev = g.members.filter((m) => reviews[m] === 'reviewed').length;
+                        const all = [...(g.members ?? []), ...(g.attached ?? [])];
+                        const rev = all.filter((m) => reviews[m] === 'reviewed').length;
                         return (
                             <>
                                 <h2 className="rc-gsheet-title">{g.label}</h2>
-                                <p className="rc-gsheet-sub">{g.members.length} {g.members.length === 1 ? 'section' : 'sections'}{rev > 0 ? ` · ${rev} reviewed` : ''}</p>
-                                {g.members.map((m) => {
+                                <p className="rc-gsheet-sub">{all.length} {all.length === 1 ? 'section' : 'sections'}{rev > 0 ? ` · ${rev} reviewed` : ''}</p>
+                                {all.map((m) => {
                                     const sec = SECTIONS.find((s) => s.id === m);
                                     const mk = reviews[m];
                                     return (
