@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p renders
-          for f in /tmp/integ-bot-scroll-top.png /tmp/integ-bot-scroll-bottom.png; do
+          for f in /tmp/intodo-bot-compact.png /tmp/intodo-bot-setup-expanded.png /tmp/intodo-bot-logs-expanded.png; do
             if [ ! -f "$f" ]; then
               echo "EXPECTED RENDER MISSING: $f - the test did not produce it; failing"
               exit 1

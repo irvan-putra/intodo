@@ -21,42 +21,92 @@ import org.json.JSONObject;
 
 public class BotActivity extends Activity {
     private TextView logView;
-    private LinearLayout candBox;
+    private TextView statusView;
+    private TextView setupHeader;
+    private TextView logsHeader;
+    private LinearLayout setupBox;
+    private ScrollView logScroll;
     private final Handler handler = new Handler();
-    private String lastStateJson = "";
+    private String lastStateJson = null;
     private BotImport importer;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        int pad = (int) (12 * getResources().getDisplayMetrics().density);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        Button validate = new Button(this); validate.setText("1. Offline validation probe (no network)");
-        Button provision = new Button(this); provision.setText("2. Create bot account (ONE-TIME, uses network)");
-        Button importBtn = new Button(this); importBtn.setText("Import bot backup (moves the bot from the old test app)");
-        Button live = new Button(this); live.setText("3. Start/restart bot service (network; permanent notification, uses battery)");
-        Button invite = new Button(this); invite.setText("4. Show invitation QR (scan it from your DeltaChat)");
-        Button stop = new Button(this); stop.setText("Stop service");
-        Button publish = new Button(this); publish.setText("5. Publish new app version (.xdc) to all chats");
-        Button fetchXdc = new Button(this); fetchXdc.setText("6. Get latest app version (.xdc) from GitHub");
-        candBox = new LinearLayout(this); candBox.setOrientation(LinearLayout.VERTICAL);
-        logView = new TextView(this);
+
+        // Status first: account, service state, chats served - no raw JSON.
+        statusView = new TextView(this);
+        statusView.setTextSize(16);
+        statusView.setPadding(pad, pad, pad, 0);
+        root.addView(statusView);
+
+        // Day-to-day controls only.
+        LinearLayout primary = new LinearLayout(this);
+        primary.setOrientation(LinearLayout.HORIZONTAL);
+        Button live = new Button(this); live.setText("Start bot");
+        Button stop = new Button(this); stop.setText("Stop bot");
+        Button invite = new Button(this); invite.setText("Invitation");
+        primary.addView(live, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        primary.addView(stop, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        primary.addView(invite, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        root.addView(primary);
+
+        LinearLayout updates = new LinearLayout(this);
+        updates.setOrientation(LinearLayout.HORIZONTAL);
+        Button fetchXdc = new Button(this); fetchXdc.setText("Get latest app");
+        Button publish = new Button(this); publish.setText("Publish update");
+        updates.addView(fetchXdc, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        updates.addView(publish, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        root.addView(updates);
+
+        // Setup & account: collapsed once the bot is provisioned.
+        setupHeader = sectionHeader("Setup & account");
+        setupHeader.setFocusable(true);
+        root.addView(setupHeader);
+        setupBox = new LinearLayout(this);
+        setupBox.setOrientation(LinearLayout.VERTICAL);
         TextView steps = new TextView(this);
-        steps.setText("Setup: 1 probe, 2 create account, 3 start bot, 4 show the invitation - on this same phone tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list, kept separate. Button 5 publishes a new .xdc from this app to every chat the bot serves; button 6 downloads the newest .xdc from GitHub so you do not have to pick a file yourself.");
-        // One scroll container for everything: the setup text and buttons
-        // scroll out of the way so the log can fill the screen (user request:
-        // screenshot more of the log). All controls preserved.
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.addView(steps);
-        content.addView(validate); content.addView(provision); content.addView(importBtn); content.addView(live); content.addView(invite); content.addView(stop);
-        content.addView(publish);
-        content.addView(fetchXdc);
-        content.addView(candBox); content.addView(logView);
-        ScrollView sv = new ScrollView(this); sv.addView(content);
-        root.addView(sv, new LinearLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
-        setContentView(root);
+        steps.setPadding(pad, 0, pad, 0);
+        steps.setText("First time: run the offline probe, create a bot account (one-time, uses network), start the bot, then show the invitation. On this phone, tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list.");
+        Button validate = new Button(this); validate.setText("1. Offline probe");
+        Button provision = new Button(this); provision.setText("2. Create bot account");
+        Button importBtn = new Button(this); importBtn.setText("Import bot backup");
+        setupBox.addView(steps); setupBox.addView(validate); setupBox.addView(provision); setupBox.addView(importBtn);
+        root.addView(setupBox);
+        setupHeader.setOnClickListener(v -> toggle(setupHeader, setupBox, "Setup & account"));
+        {
+            File stf = new File(getFilesDir(), "bot_state.json");
+            String js = stf.exists() ? read(stf) : "";
+            boolean prov = false;
+            try { prov = new JSONObject(js).optBoolean("provisioned", false); } catch (Exception ignored) {}
+            if (prov) {
+                setupBox.setVisibility(android.view.View.GONE);
+                setupHeader.setText("Setup & account  \u25b8");
+            } else {
+                setupHeader.setText("Setup & account  \u25be");
+            }
+        }
+
+        // Logs are available on demand and have enough room to read.
+        logsHeader = sectionHeader("Logs");
+        logsHeader.setText("Logs  \u25b8");
+        logsHeader.setFocusable(true);
+        root.addView(logsHeader);
+        logView = new TextView(this);
+        logView.setPadding(pad, 0, pad, 0);
+        logScroll = new ScrollView(this);
+        logScroll.addView(logView);
+        int logH = (int) (getResources().getDisplayMetrics().heightPixels * 0.6);
+        logScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, logH));
+        logScroll.setVisibility(android.view.View.GONE);
+        root.addView(logScroll);
+        logsHeader.setOnClickListener(v -> toggle(logsHeader, logScroll, "Logs"));
+
+        ScrollView outer = new ScrollView(this);
+        outer.addView(root);
+        setContentView(outer);
 
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -92,11 +142,11 @@ public class BotActivity extends Activity {
             String botAddr = "";
             try { botAddr = new JSONObject(js).optString("bot_addr", ""); } catch (Exception ignored) {}
             if (botAddr.isEmpty() || botAddr.equals("null")) {
-                Toast.makeText(this, "Create the bot account first (button 2)", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Create the bot account first (Setup & account)", Toast.LENGTH_LONG).show();
                 return;
             }
             if (!new File(getFilesDir(), "RUNNING").exists()) {
-                Toast.makeText(this, "Start the bot service first (button 3)", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Start the bot service first", Toast.LENGTH_LONG).show();
                 return;
             }
             new File(getFilesDir(), "INVITE_DONE").delete();
@@ -140,7 +190,7 @@ public class BotActivity extends Activity {
             if (result.getOk()) {
                 new android.app.AlertDialog.Builder(this)
                     .setTitle("Bot imported")
-                    .setMessage("Imported bot: " + result.getAddr() + "\n\nCheck this matches the address in the old app, then start the service (button 3). Uninstall the old app only after the bot is live here.")
+                    .setMessage("Imported bot: " + result.getAddr() + "\n\nCheck this is the bot account you meant to import, then start the bot service.")
                     .setPositiveButton("OK", null).show();
             } else {
                 new android.app.AlertDialog.Builder(this)
@@ -213,21 +263,42 @@ public class BotActivity extends Activity {
     }
 
     private void refresh() {
+        logView.setText(readLog());
         File f = new File(getFilesDir(), "bot_state.json");
         String json = f.exists() ? read(f) : "";
-        logView.setText(readLog());
-        if (json.equals(lastStateJson)) return;
+        boolean running = new File(getFilesDir(), "RUNNING").exists();
+        if (json.equals(lastStateJson) && running == lastRunning) return;
         lastStateJson = json;
-        candBox.removeAllViews();
-        if (json.isEmpty()) return;
-        try {
-            JSONObject st = new JSONObject(json);
-            String botAddr = st.optString("bot_addr", "");
-            TextView t = new TextView(this);
-            if (!botAddr.isEmpty()) t.setText("bot: " + botAddr + "   ");
-            t.setText(t.getText() + "chats served: " + st.optString("chats", "{}"));
-            candBox.addView(t);
-        } catch (Exception ignored) {}
+        lastRunning = running;
+        String botAddr = "";
+        int chats = 0;
+        if (!json.isEmpty()) {
+            try {
+                JSONObject st = new JSONObject(json);
+                botAddr = st.optString("bot_addr", "");
+                JSONObject c = st.optJSONObject("chats");
+                if (c != null) chats = c.length();
+            } catch (Exception ignored) {}
+        }
+        statusView.setText((botAddr.isEmpty() || botAddr.equals("null") ? "No bot account yet" : "Bot: " + botAddr)
+                + "\nService: " + (running ? "running" : "stopped") + "  ·  Chats served: " + chats);
+    }
+
+    private boolean lastRunning = false;
+
+    private TextView sectionHeader(String title) {
+        TextView h = new TextView(this);
+        int pad = (int) (12 * getResources().getDisplayMetrics().density);
+        h.setTextSize(16);
+        h.setPadding(pad, pad, pad, pad);
+        h.setText(title);
+        return h;
+    }
+
+    private void toggle(TextView header, android.view.View box, String title) {
+        boolean show = box.getVisibility() == android.view.View.GONE;
+        box.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
+        header.setText(title + (show ? "  \u25be" : "  \u25b8"));
     }
 
     // ---- publish flow (app-side only: the runtime refuses chat-originated publishing) ----
@@ -242,16 +313,16 @@ public class BotActivity extends Activity {
         boolean prov = false;
         try { prov = new JSONObject(js).optBoolean("provisioned", false); } catch (Exception ignored) {}
         if (!prov) {
-            Toast.makeText(this, "Create the bot account first (button 2)", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Create the bot account first (Setup & account)", Toast.LENGTH_LONG).show();
             return;
         }
         if (!new File(getFilesDir(), "RUNNING").exists()) {
-            Toast.makeText(this, "Start the bot service first (button 3)", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Start the bot service first", Toast.LENGTH_LONG).show();
             return;
         }
         new android.app.AlertDialog.Builder(this)
             .setTitle("Publish new app version")
-            .setMessage("Pick the new .xdc file (or use button 6 to fetch the latest from GitHub). The bot sends it to EVERY chat it serves (each group and each direct chat with the bot).")
+            .setMessage("Pick the new .xdc file, or use Get latest app. The bot sends it to every chat it serves.")
             .setPositiveButton("Pick .xdc", (d, w) -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -295,11 +366,11 @@ public class BotActivity extends Activity {
                     boolean prov = false;
                     try { prov = new JSONObject(js).optBoolean("provisioned", false); } catch (Exception ignored) {}
                     if (!prov) {
-                        Toast.makeText(this, "Create the bot account first (button 2)", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Create the bot account first (Setup & account)", Toast.LENGTH_LONG).show();
                         return;
                     }
                     if (!new File(getFilesDir(), "RUNNING").exists()) {
-                        Toast.makeText(this, "Start the bot service first (button 3)", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Start the bot service first", Toast.LENGTH_LONG).show();
                         return;
                     }
                     try {
