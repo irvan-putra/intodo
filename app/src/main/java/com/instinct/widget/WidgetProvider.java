@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.text.format.DateUtils;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -17,6 +16,15 @@ public class WidgetProvider extends AppWidgetProvider {
     public void onUpdate(Context context, AppWidgetManager awm, int[] ids) {
         FeedSyncScheduler.schedule(context);
         for (int id : ids) updateOne(context, awm, id);
+    }
+
+    /** Refreshes list contents and footer on every widget; used after background syncs. */
+    public static void refreshAll(Context context) {
+        AppWidgetManager awm = AppWidgetManager.getInstance(context);
+        int[] ids = awm.getAppWidgetIds(new ComponentName(context, WidgetProvider.class));
+        if (ids.length == 0) return;
+        awm.notifyAppWidgetViewDataChanged(ids, R.id.widget_list);
+        updateAll(context);
     }
 
     public static void updateAll(Context context) {
@@ -32,14 +40,8 @@ public class WidgetProvider extends AppWidgetProvider {
         svc.setData(android.net.Uri.parse("instinctwidget://widget/" + id));
         views.setRemoteAdapter(R.id.widget_list, svc);
 
-        long at = Prefs.feedAt(context);
-        if (at > 0) {
-            String gen = MainActivity.shortGen(Prefs.feedGen(context));
-            String asOf = gen.isEmpty() ? "" : "as of " + gen + " \u00b7 ";
-            views.setTextViewText(R.id.widget_sync_state, asOf + "fetched " + DateUtils.getRelativeTimeSpanString(at));
-        } else {
-            views.setTextViewText(R.id.widget_sync_state, Prefs.isPaired(context) ? "tap refresh to sync" : "pair in app");
-        }
+        views.setTextViewText(R.id.widget_sync_state,
+                SyncStatusText.build(context, Prefs.isPaired(context) ? "tap refresh to sync" : "pair in app", true));
         boolean hasData = Prefs.feed(context) != null;
         views.setViewVisibility(R.id.widget_empty, hasData ? View.GONE : View.VISIBLE);
 

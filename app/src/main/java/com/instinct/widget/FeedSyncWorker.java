@@ -31,6 +31,7 @@ public class FeedSyncWorker extends Worker {
         final AtomicBoolean ok = new AtomicBoolean(false);
         SyncEngine.run(c, (success, message) -> {
             ok.set(success);
+            WidgetProvider.refreshAll(c); // runs on the main thread, same as manual sync
             done.countDown();
         });
         try {

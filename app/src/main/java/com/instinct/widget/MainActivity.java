@@ -1,14 +1,12 @@
 package com.instinct.widget;
 
 import android.app.Activity;
-import android.appwidget.AppWidgetManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
-import android.content.ComponentName;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.Intent;
 import android.os.Bundle;
-import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,6 +23,9 @@ import java.util.List;
 public class MainActivity extends Activity {
 
     private TextView lastSync;
+    // Background syncs write prefs in this process; refresh the visible UI on change.
+    private final SharedPreferences.OnSharedPreferenceChangeListener syncPrefsListener =
+            (prefs, key) -> runOnUiThread(() -> { reload(); refreshStatus(); });
     private ListView listView;
     private TextView empty;
     private Button syncNow;
@@ -87,6 +88,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Prefs.get(this).registerOnSharedPreferenceChangeListener(syncPrefsListener);
         if (Prefs.isPaired(this)) showList(); else showPairing();
         refreshStatus();
         if (getIntent() != null && getIntent().getBooleanExtra("sync", false) && Prefs.isPaired(this)) {
@@ -95,6 +97,12 @@ public class MainActivity extends Activity {
         }
         ((TextView) findViewById(R.id.version)).setText("v" + BuildConfig.VERSION_NAME);
         checkForUpdate();
+    }
+
+    @Override
+    protected void onPause() {
+        Prefs.get(this).unregisterOnSharedPreferenceChangeListener(syncPrefsListener);
+        super.onPause();
     }
 
     private void showPairing() {
@@ -178,10 +186,7 @@ public class MainActivity extends Activity {
             reload();
             refreshStatus();
             Toast.makeText(this, ok ? "Synced" : message, Toast.LENGTH_LONG).show();
-            AppWidgetManager awm = AppWidgetManager.getInstance(this);
-            int[] ids = awm.getAppWidgetIds(new ComponentName(this, WidgetProvider.class));
-            awm.notifyAppWidgetViewDataChanged(ids, R.id.widget_list);
-            WidgetProvider.updateAll(this);
+            WidgetProvider.refreshAll(this);
             checkForUpdate(); // manual sync doubles as an update check, as the comment above says
         });
     }
@@ -204,26 +209,7 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
-        long at = Prefs.feedAt(this);
-        if (at > 0) {
-            String gen = shortGen(Prefs.feedGen(this));
-            String asOf = gen.isEmpty() ? "" : "List as of " + gen + "  ·  ";
-            lastSync.setText(asOf + "fetched " + DateUtils.getRelativeTimeSpanString(at));
-        } else {
-            lastSync.setText(Prefs.status(this));
-        }
-    }
-
-    static String shortGen(String iso) {
-        // "2026-11-12T07:01:00Z" -> "2026-11-12 14:01" in the phone's own timezone
-        if (iso == null || iso.isEmpty()) return "";
-        try {
-            java.time.ZonedDateTime z = java.time.OffsetDateTime.parse(iso)
-                    .atZoneSameInstant(java.time.ZoneId.systemDefault());
-            return z.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-        } catch (Exception e) {
-            return iso.length() >= 16 ? iso.substring(0, 10) + " " + iso.substring(11, 16) : iso;
-        }
+        lastSync.setText(SyncStatusText.build(this, Prefs.status(this)));
     }
 
     static class FeedAdapter extends BaseAdapter {

@@ -29,6 +29,18 @@ public class Prefs {
     public static long feedAt(Context c) { return get(c).getLong("feed_at", 0); }
     public static String feedGen(Context c) { return get(c).getString("feed_gen", ""); }
     public static void saveStatus(Context c, String s) { get(c).edit().putString("status", s).apply(); }
+    /** Records a successful fetch attempt (content new or unchanged); clears any failure. */
+    public static void saveCheck(Context c) {
+        get(c).edit().putLong("check_at", System.currentTimeMillis()).remove("check_error").commit();
+    }
+    /** Records a failed fetch attempt with a short reason; never clears the last success. */
+    public static void saveCheckFailure(Context c, String reason) {
+        get(c).edit().putLong("check_attempt_at", System.currentTimeMillis())
+                .putString("check_error", reason == null ? "" : reason).apply();
+    }
+    public static long checkAt(Context c) { return get(c).getLong("check_at", 0); }
+    public static long checkAttemptAt(Context c) { return get(c).getLong("check_attempt_at", 0); }
+    public static String checkError(Context c) { return get(c).getString("check_error", ""); }
     public static String status(Context c) { return get(c).getString("status", "never synced"); }
     public static void saveInstallSession(Context c, int id) { get(c).edit().putInt("install_session", id).commit(); } // synchronous: must be durable before session.commit returns
     public static int installSession(Context c) { return get(c).getInt("install_session", -1); }

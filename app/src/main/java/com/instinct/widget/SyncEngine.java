@@ -179,11 +179,13 @@ public class SyncEngine {
         web.destroy();
         String payload = found[0];
         if ("AWAITING".equals(payload)) {
+            Prefs.saveCheckFailure(context, "not published yet");
             Prefs.saveStatus(context, "waiting for Instinct to publish your list");
             cb.onDone(false, "Instinct has not published your encrypted list yet");
             return;
         }
         if (payload == null) {
+            Prefs.saveCheckFailure(context, notFoundMsg);
             Prefs.saveStatus(context, "sync failed: " + notFoundMsg);
             cb.onDone(false, notFoundMsg);
             return;
@@ -195,10 +197,12 @@ public class SyncEngine {
             String genAt = FeedParser.parse(json).generatedAt;
             switch (Freshness.compare(genAt, Prefs.feedGen(context))) {
                 case SAME:
+                    Prefs.saveCheck(context);
                     Prefs.saveStatus(context, "already up to date");
                     cb.onDone(true, "already up to date");
                     return;
                 case OLDER:
+                    Prefs.saveCheckFailure(context, "source looks older");
                     Prefs.saveStatus(context, "sync skipped: source looks older than this phone's list");
                     cb.onDone(false, "the published list is older than the one on this phone");
                     return;
@@ -206,9 +210,11 @@ public class SyncEngine {
                     break;
             }
             Prefs.saveFeed(context, json, genAt);
+            Prefs.saveCheck(context);
             Prefs.saveStatus(context, "synced just now");
             cb.onDone(true, "synced");
         } catch (Exception e) {
+            Prefs.saveCheckFailure(context, "decrypt failed: " + e.getClass().getSimpleName());
             Prefs.saveStatus(context, "sync failed: " + e.getClass().getSimpleName());
             cb.onDone(false, "could not decrypt feed (paired with the right key?)");
         }
