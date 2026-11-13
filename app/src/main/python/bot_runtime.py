@@ -227,6 +227,22 @@ def _account(dc):
     raise RuntimeError("no configured account - run provision() first")
 
 
+# Owner-requested public display name (Irvan, 2026-11-13: "try rename it
+# yourself into itdapk Irvan's bot"). Applied at every bot start; the new
+# name reaches contacts with the bot's next outgoing message (core sends
+# the display name in the From: header). Idempotent, non-fatal on error.
+BOT_DISPLAY_NAME = "itdapk Irvan's bot"
+
+
+def _ensure_display_name(acct):
+    try:
+        if (acct.get_config("displayname") or "") != BOT_DISPLAY_NAME:
+            acct.set_config("displayname", BOT_DISPLAY_NAME)
+            log.info("bot display name set to %r", BOT_DISPLAY_NAME)
+    except Exception:
+        log.exception("display name update failed (non-fatal)")
+
+
 def read_list_identity(xdc_path):
     """Read-only list.json identity from a bundle. None if absent."""
     try:
@@ -934,6 +950,7 @@ def run(native_lib_dir, files_dir):
     rpc, dc = _rpc(native_lib_dir, files_dir)
     try:
         bot_acct = _account(dc)
+        _ensure_display_name(bot_acct)
         control = ChatControl(bot_acct, files_dir)
         bot_acct.start_io()
         wd = threading.Thread(target=_watchdog, args=(files_dir, rpc),
