@@ -74,3 +74,31 @@ body { background: var(--ds-page); }
 .rc-minicard.rc-center { background: transparent; border-color: var(--ds-teal); }
 .rc-miniicon { font-size: 10px; line-height: 1; pointer-events: none; }
 .rc-minimap { overflow: hidden; }
+
+/* Review marks */
+.rc-badge {
+    display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600;
+    border-radius: 4px; padding: 1px 6px;
+}
+.rc-badge-done { color: var(--ds-teal); border: 1px solid var(--ds-teal); }
+.rc-badge-flag { color: var(--ds-ink); border: 1px solid var(--ds-ink); }
+.rc-files { list-style: none; padding-left: 0 !important; }
+.rc-files li { margin-top: 2px !important; }
+.rc-files code { font-size: 12px; }
+.rc-digest { font-size: 11px !important; color: var(--ds-ink-2); font-family: monospace; }
+.rc-nchead { margin: 10px 0 0 !important; font-size: 11px !important; font-weight: 600; color: var(--ds-ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.rc-reviewbtns { margin-top: 10px; }
+.rc-reviewbtns button {
+    min-height: 36px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+    color: var(--ds-ink); background: none; border: 1px solid var(--ds-hairline);
+    border-radius: 6px; cursor: pointer;
+}
+.rc-reviewbtns button:hover { border-color: var(--ds-ink-2); }
+.rc-minicard.rc-done { background: var(--ds-teal); border-color: var(--ds-teal); }
+.rc-mapchip {
+    position: absolute; left: 12px; bottom: 12px; z-index: 3;
+    min-width: 44px; min-height: 44px; padding: 0 14px;
+    font-size: 12px; font-weight: 600; color: var(--ds-ink);
+    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(37, 31, 33, 0.10); cursor: pointer;
+}

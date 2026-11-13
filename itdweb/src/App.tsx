@@ -1,91 +1,111 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Caption, Closing, FileCard, Group, Header, Paragraph, Photos, Text, TextLink, useLocalState } from '@instinct/files';
 import hero from './photos/review-concept-hero.png';
+import { COMMIT, COMMIT_SHORT, SECTIONS, Section } from './sections';
 
 type Pos = { x: number; y: number };
 type Cam = { x: number; y: number; z: number };
-type Saved = { cam: Cam; pos: Record<string, Pos> };
+type Mark = 'reviewed' | 'flag';
+type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark> };
 
-const WORLD = { w: 1760, h: 1420 };
+const WORLD = { w: 2160, h: 2560 };
 const ZMIN = 0.15, ZMAX = 2.5;
 
 const CARD_SIZES: Record<string, { w: number; h: number }> = {
-    change: { w: 380, h: 300 },
-    permanence: { w: 380, h: 210 },
-    identity: { w: 360, h: 210 },
-    reviews: { w: 360, h: 200 },
-    rule: { w: 360, h: 180 },
-    source: { w: 360, h: 170 },
-    gaps: { w: 380, h: 200 },
-    property: { w: 320, h: 210 },
-    mutation: { w: 320, h: 210 },
-    fuzz: { w: 320, h: 210 },
-    load: { w: 320, h: 210 },
-    smoke: { w: 320, h: 210 },
+    progress: { w: 360, h: 210 },
+    howto: { w: 360, h: 260 },
+    permanence: { w: 360, h: 250 },
+    rule: { w: 360, h: 190 },
 };
+// measured real card heights run up to ~472px (fit view, unexpanded); the row
+// pitch below must clear the tallest card, not this estimate
+for (const s of SECTIONS) CARD_SIZES[s.id] = { w: 360, h: 480 };
 
 const ICONS: Record<string, string> = {
-    change: '\u{1F4DD}',
+    progress: '\u{1F3AF}',
+    howto: '\u{1F9ED}',
     permanence: '\u{1F4BE}',
-    identity: '\u{1F511}',
-    reviews: '\u{1F50D}',
-    source: '\u{1F4E6}',
     rule: '\u{1F4CF}',
-    gaps: '\u26A0\uFE0F',
-    property: '\u{1F501}',
-    mutation: '\u{1F9EC}',
-    fuzz: '\u{1F3B2}',
-    load: '\u{1F4C8}',
-    smoke: '\u{1F4A8}',
 };
+for (const s of SECTIONS) ICONS[s.id] = s.icon;
 
 const TITLES: Record<string, string> = {
-    change: 'v0.4: narrow widget layout',
+    progress: 'Review progress',
+    howto: 'How to review a section',
     permanence: 'What persists here',
-    identity: 'Exact code identity',
-    reviews: 'Reviews',
-    source: 'The real code',
     rule: 'No hidden gaps',
-    gaps: 'Not checked for v0.4',
-    property: 'Property testing',
-    mutation: 'Mutation testing',
-    fuzz: 'Fuzz testing',
-    load: 'Load testing',
-    smoke: 'Smoke testing',
 };
+for (const s of SECTIONS) TITLES[s.id] = s.title;
 
+const COL_X = [20, 460, 900, 1340, 1780];
+// 500px pitch: tallest measured card is 472px, so rows never overlap unexpanded
+const ROW_Y = [40, 540, 1040, 1540, 2040];
 const DEFAULT_POS: Record<string, Pos> = {
-    change: { x: 690, y: 430 },
-    permanence: { x: 690, y: 60 },
-    identity: { x: 160, y: 250 },
-    reviews: { x: 1240, y: 250 },
-    source: { x: 160, y: 620 },
-    rule: { x: 1240, y: 620 },
-    gaps: { x: 690, y: 820 },
-    property: { x: 40, y: 1200 },
-    mutation: { x: 400, y: 1200 },
-    fuzz: { x: 760, y: 1200 },
-    load: { x: 1120, y: 1200 },
-    smoke: { x: 1420, y: 1200 },
+    'list-ui':       { x: COL_X[0], y: ROW_Y[0] },
+    'feed-sync':     { x: COL_X[1], y: ROW_Y[0] },
+    'self-update':   { x: COL_X[2], y: ROW_Y[0] },
+    'native-canvas': { x: COL_X[3], y: ROW_Y[0] },
+    'merge-core':    { x: COL_X[4], y: ROW_Y[0] },
+    'bot-app':       { x: COL_X[0], y: ROW_Y[1] },
+    'bot-runtime':   { x: COL_X[1], y: ROW_Y[1] },
+    'bot-delivery':  { x: COL_X[2], y: ROW_Y[1] },
+    'witness':       { x: COL_X[3], y: ROW_Y[1] },
+    'rule':          { x: COL_X[4], y: ROW_Y[1] },
+    'xdc-app':       { x: COL_X[0], y: ROW_Y[2] },
+    'xdc-canvas':    { x: COL_X[1], y: ROW_Y[2] },
+    'this-page':     { x: COL_X[2], y: ROW_Y[2] },
+    'permanence':    { x: COL_X[3], y: ROW_Y[2] },
+    'howto':         { x: COL_X[4], y: ROW_Y[2] },
+    'tests-android': { x: COL_X[0], y: ROW_Y[3] },
+    'tests-bot':     { x: COL_X[1], y: ROW_Y[3] },
+    'tests-xdc':     { x: COL_X[2], y: ROW_Y[3] },
+    'progress':      { x: COL_X[3], y: ROW_Y[3] },
+    'build-ci':      { x: COL_X[0], y: ROW_Y[4] },
+    'feed-tool':     { x: COL_X[1], y: ROW_Y[4] },
+    'assets-docs':   { x: COL_X[2], y: ROW_Y[4] },
 };
 
 const EDGES: [string, string][] = [
-    ['permanence', 'change'],
-    ['identity', 'change'],
-    ['reviews', 'change'],
-    ['source', 'change'],
-    ['rule', 'change'],
-    ['change', 'gaps'],
-    ['change', 'property'],
-    ['change', 'mutation'],
-    ['change', 'fuzz'],
-    ['change', 'load'],
-    ['change', 'smoke'],
+    ['tests-android', 'list-ui'],
+    ['tests-android', 'feed-sync'],
+    ['tests-android', 'self-update'],
+    ['tests-android', 'native-canvas'],
+    ['tests-android', 'merge-core'],
+    ['tests-bot', 'bot-runtime'],
+    ['tests-bot', 'bot-delivery'],
+    ['tests-bot', 'witness'],
+    ['tests-xdc', 'xdc-app'],
+    ['tests-xdc', 'xdc-canvas'],
+    ['native-canvas', 'xdc-canvas'],
+    ['merge-core', 'xdc-app'],
+    ['bot-app', 'bot-runtime'],
+    ['bot-runtime', 'bot-delivery'],
+    ['feed-sync', 'feed-tool'],
+    ['build-ci', 'tests-android'],
 ];
 
 function center(id: string, pos: Record<string, Pos>): Pos {
     const s = CARD_SIZES[id];
     return { x: pos[id].x + s.w / 2, y: pos[id].y + s.h / 2 };
+}
+
+// keep a saved position only if it lands clear of every other card's slot;
+// positions saved against an older card set would otherwise overlap the grid
+function sanePositions(savedPos: Record<string, Pos>): Record<string, Pos> {
+    const out: Record<string, Pos> = { ...DEFAULT_POS };
+    for (const id of Object.keys(DEFAULT_POS)) {
+        const p = savedPos[id];
+        if (!p) continue;
+        const s = CARD_SIZES[id];
+        const hit = Object.keys(DEFAULT_POS).some((other) => {
+            if (other === id) return false;
+            const q = DEFAULT_POS[other];
+            const o = CARD_SIZES[other];
+            return p.x < q.x + o.w && p.x + s.w > q.x && p.y < q.y + o.h && p.y + s.h > q.y;
+        });
+        if (!hit) out[id] = p;
+    }
+    return out;
 }
 
 const clampZ = (z: number) => Math.min(ZMAX, Math.max(ZMIN, z));
@@ -95,8 +115,8 @@ const clampCam = (c: Cam): Cam => ({
     z: c.z,
 });
 
-function CardShell({ id, tag, title, centerCard, onFocus, children }: {
-    id: string; tag: string; title: string; centerCard?: boolean; onFocus: (id: string) => void; children: React.ReactNode;
+function CardShell({ id, tag, title, mark, centerCard, onFocus, children }: {
+    id: string; tag: string; title: string; mark?: Mark; centerCard?: boolean; onFocus: (id: string) => void; children: React.ReactNode;
 }) {
     return <div className={`rc-card${centerCard ? ' rc-center' : ''}`} data-card={id}>
         <div className="rc-cardhead">
@@ -109,14 +129,56 @@ function CardShell({ id, tag, title, centerCard, onFocus, children }: {
             </div>
             <button type="button" className="rc-focus" onClick={() => onFocus(id)}>Focus</button>
         </div>
+        {mark === 'reviewed' && <span className="rc-badge rc-badge-done">Reviewed</span>}
+        {mark === 'flag' && <span className="rc-badge rc-badge-flag">Another look</span>}
         {children}
     </div>;
+}
+
+function SectionCard({ s, mark, expanded, onToggleExpand, onMark, onFocus }: {
+    s: Section; mark?: Mark; expanded: boolean; onToggleExpand: (id: string) => void; onMark: (id: string, m?: Mark) => void; onFocus: (id: string) => void;
+}) {
+    const shown = expanded ? s.files : s.files.slice(0, 5);
+    const cycle = () => {
+        if (!mark) onMark(s.id, 'reviewed');
+        else if (mark === 'reviewed') onMark(s.id, 'flag');
+        else onMark(s.id, undefined);
+    };
+    const label = !mark ? 'Mark reviewed' : mark === 'reviewed' ? 'Needs another look' : 'Clear mark';
+    return <CardShell id={s.id} tag={s.tag} title={s.title} mark={mark} onFocus={onFocus}>
+        <p>{s.purpose}</p>
+        <ul className="rc-files">
+            {shown.map((fl) => (
+                <li key={fl.path}><TextLink href={`https://github.com/irvan-putra/intodo/blob/${COMMIT}/${fl.path}`}><code>{fl.path.split('/').pop()}</code></TextLink>{fl.lines != null ? ` - ${fl.lines} lines` : fl.note ? ` - ${fl.note}` : ''}</li>
+            ))}
+        </ul>
+        {s.files.length > 5 && (
+            <div className="rc-reviewbtns">
+                <button type="button" onClick={() => onToggleExpand(s.id)}>{expanded ? 'Show fewer files' : `Show all ${s.files.length} files`}</button>
+            </div>
+        )}
+        <p className="rc-digest">repo {COMMIT_SHORT} - {s.totalLines.toLocaleString()} lines - digest {s.digest}</p>
+        <p className="rc-nchead">Not checked yet</p>
+        <ul>
+            {s.notChecked.map((n) => <li key={n}>{n}</li>)}
+        </ul>
+        <p><TextLink href={`https://github.com/irvan-putra/intodo/tree/${COMMIT}/${s.link}`}>Open this folder at {COMMIT_SHORT}</TextLink></p>
+        <div className="rc-reviewbtns">
+            <button type="button" onClick={cycle}>{label}</button>
+        </div>
+    </CardShell>;
 }
 
 function Canvas() {
     const [saved, setSaved, savedMeta] = useLocalState<Saved | null>('review-canvas.v1', null);
     const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: WORLD.w / 2, y: WORLD.h / 2, z: 0.25 });
-    const [pos, setPos] = useState<Record<string, Pos>>(saved?.pos ?? DEFAULT_POS);
+    const [pos, setPos] = useState<Record<string, Pos>>(sanePositions(saved?.pos ?? {}));
+    // focused card on a narrow screen: minimap collapses to a chip so it
+    // never covers the card's lower content or review controls
+    const [focusedId, setFocusedId] = useState<string | null>(null);
+    const [mapPeek, setMapPeek] = useState(false);
+    const [reviews, setReviews] = useState<Record<string, Mark>>(saved?.reviews ?? {});
+    const [expandedId, setExpandedId] = useState<string | null>(null);
     const [vp, setVp] = useState({ w: 0, h: 0 });
     const fitted = useRef(false);
     const appliedSaved = useRef(false);
@@ -138,9 +200,17 @@ function Canvas() {
         // own clientWidth is the only honest measure. Set explicit px height
         // so no flex/height rule can override the aspect-ratio.
         const square = () => {
-            const w = el.clientWidth;
-            if (w > 0) el.style.height = w + 'px';
-            setVp({ w: el.clientWidth, h: el.clientHeight });
+            // deferred: resizing the observed element inside the RO callback
+            // triggers "ResizeObserver loop" errors on mobile (host shows an
+            // application-error banner for them), so write on the next frame
+            // and only when the size actually changed
+            requestAnimationFrame(() => {
+                const w = el.clientWidth;
+                if (w > 0 && el.style.height !== w + 'px') el.style.height = w + 'px';
+                setVp((prev) => (Math.abs(prev.w - el.clientWidth) < 1 && Math.abs(prev.h - el.clientHeight) < 1)
+                    ? prev
+                    : { w: el.clientWidth, h: el.clientHeight });
+            });
         };
         const ro = new ResizeObserver(square);
         ro.observe(el);
@@ -153,7 +223,8 @@ function Canvas() {
         if (!appliedSaved.current && savedMeta.ready && saved) {
             appliedSaved.current = true;
             setCam(saved.cam);
-            setPos(saved.pos);
+            setPos(sanePositions(saved.pos));
+            setReviews(saved.reviews ?? {});
         }
     }, [savedMeta.ready, saved]);
 
@@ -169,7 +240,7 @@ function Canvas() {
         }
     }, [vp]);
 
-    const persist = (c: Cam, p: Record<string, Pos>) => { if (savedMeta.ready) setSaved({ cam: c, pos: p }); };
+    const persist = (c: Cam, p: Record<string, Pos>, r: Record<string, Mark>) => { if (savedMeta.ready) setSaved({ cam: c, pos: p, reviews: r }); };
 
     const evp = vp.w > 0 ? vp : { w: 390, h: 560 };
     const toWorld = (p: Pos, c: Cam): Pos => ({ x: c.x + (p.x - evp.w / 2) / c.z, y: c.y + (p.y - evp.h / 2) / c.z });
@@ -179,20 +250,32 @@ function Canvas() {
         const w = el ? el.clientWidth : vp.w, h = el ? el.clientHeight : vp.h;
         if (!w || !h) return;
         const c: Cam = { x: WORLD.w / 2, y: WORLD.h / 2, z: clampZ(Math.min(w / WORLD.w, h / WORLD.h) * 0.98) };
-        setCam(c); persist(c, pos);
+        // no-op guard: resize feedback (iframe height ping-pong) must not
+        // turn into a setState/persist storm
+        if (Math.abs(cam.x - c.x) < 0.5 && Math.abs(cam.y - c.y) < 0.5 && Math.abs(cam.z - c.z) < 0.001) return;
+        setCam(c); persist(c, pos, reviews);
     }
 
     const zoomBy = (f: number) => {
         viewTouched.current = true;
         const c = clampCam({ ...cam, z: clampZ(cam.z * f) });
-        setCam(c); persist(c, pos);
+        setCam(c); persist(c, pos, reviews);
     };
 
     const focusCard = (id: string) => {
         viewTouched.current = true;
+        setFocusedId(id);
+        setMapPeek(false);
         const ctr = center(id, pos);
         const c = clampCam({ x: ctr.x, y: ctr.y, z: clampZ(Math.min(evp.w / (CARD_SIZES[id].w + 80), 1.2)) });
-        setCam(c); persist(c, pos);
+        setCam(c); persist(c, pos, reviews);
+    };
+
+    const markSection = (id: string, m?: Mark) => {
+        const r = { ...reviews };
+        if (m) r[id] = m; else delete r[id];
+        setReviews(r);
+        persist(cam, pos, r);
     };
 
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -254,7 +337,7 @@ function Canvas() {
             const remaining = [...pointers.current.values()][0];
             gg.mode = 'pan'; gg.start = remaining; gg.last = remaining;
         } else if (pointers.current.size === 0) {
-            if (gg.mode) { viewTouched.current = true; persist(cam, pos); }
+            if (gg.mode) { viewTouched.current = true; persist(cam, pos, reviews); }
             gg.mode = null; setDragging(false);
         }
     };
@@ -266,62 +349,36 @@ function Canvas() {
     const MINI_PAD = 4;
     const miniScale = (132 - MINI_PAD * 2) / WORLD.w;
 
+    const reviewedCount = SECTIONS.filter((s) => reviews[s.id] === 'reviewed').length;
+    const flagCount = SECTIONS.filter((s) => reviews[s.id] === 'flag').length;
+
     const cards: Record<string, React.ReactNode> = {
-        change: <CardShell id="change" tag="Change card - example" title="v0.4: narrow widget layout" centerCard onFocus={focusCard}>
-            <p>The widget can shrink to a narrow 2x1 cell and reminders stay readable.<span className="rc-real">real</span></p>
-            <p>v0.4 is confirmed working on your phone - you verified it with a screenshot on Nov 12.<span className="rc-real">real</span></p>
-            <p className="rc-muted">Reviewed by: no one yet. Proved: nothing.<span className="rc-mock">mock entries</span></p>
+        progress: <CardShell id="progress" tag="Center" title="Review progress" centerCard onFocus={focusCard}>
+            <p>{reviewedCount} of {SECTIONS.length} sections reviewed{flagCount > 0 ? ` - ${flagCount} flagged for another look` : ''}.</p>
+            <p className="rc-muted">Your marks are saved on this device only. Clearing all marks starts the pass over.</p>
+        </CardShell>,
+        howto: <CardShell id="howto" tag="Start here" title="How to review a section" onFocus={focusCard}>
+            <ul>
+                <li>Pick a card. Each is one piece of the repo, small enough for one sitting.</li>
+                <li>Tap any file name - it opens that exact file at commit {COMMIT_SHORT}. Long lists unfold with "Show all files".</li>
+                <li>Read, then come back and mark it: Reviewed, or Needs another look.</li>
+                <li>"Not checked yet" lists what nobody has verified, so gaps stay visible.</li>
+            </ul>
         </CardShell>,
         permanence: <CardShell id="permanence" tag="Permanence, honestly" title="What persists here" onFocus={focusCard}>
             <ul>
-                <li>Card positions and your view are designed to be remembered on this device and browser. Implemented, not yet verified in your signed-in view.</li>
-                <li>Not synced across devices; clearing browser storage resets it.</li>
+                <li>Card positions, your view, and your review marks are designed to be remembered on this device and browser. Implemented, not yet verified in your signed-in view.</li>
+                <li>Not synced across devices; clearing browser storage resets them.</li>
                 <li>Long-term ownership (export, backup) is an open question, not a claim.</li>
             </ul>
         </CardShell>,
-        identity: <CardShell id="identity" tag="Unison idea" title="Exact code identity" onFocus={focusCard}>
-            <p>Each card points at its change by content hash.<span className="rc-mock">mock 9f3c...a21e</span></p>
-            <p className="rc-muted">A review attaches to that hash, never to "the latest code". Same hash means same code - it says nothing about whether the code is good.</p>
-        </CardShell>,
-        reviews: <CardShell id="reviews" tag="crev idea" title="Reviews" onFocus={focusCard}>
-            <p>No one has reviewed v0.4.</p>
-            <p className="rc-muted">Signed reviews from people you choose to trust would appear here, with what each one checked. A review is human judgment, not a scan.</p>
-        </CardShell>,
-        source: <CardShell id="source" tag="Today" title="The real code" onFocus={focusCard}>
-            <p>The project source is public - the wall of code this canvas is meant to replace for review.</p>
-            <p><TextLink href="https://github.com/irvan-putra/intodo">irvan-putra/intodo</TextLink></p>
-        </CardShell>,
         rule: <CardShell id="rule" tag="The honest rule" title="No hidden gaps" onFocus={focusCard}>
-            <p>No badge ever reads "app is secure". Each badge says exactly what was checked, and what was not checked stays visible in the same size next to it.</p>
-        </CardShell>,
-        gaps: <CardShell id="gaps" tag="Always visible" title="Not checked for v0.4" onFocus={focusCard}>
-            <ul>
-                <li>Independent check of the reported property tests (7 Java + 9 JS, run by the builders).</li>
-                <li>Any proof - none exists.</li>
-                <li>Real cross-client sync: v0.1 failed your DeltaChat / ArcaneChat test (Nov 12) - add, delete and done were dead because the page never loaded the webxdc API script. v0.2 fixed that load, and you confirmed real DeltaChat/ArcaneChat sync on-device Nov 12 (add, done, delete all synced). v0.2's remaining gap - vague chat notices - is fixed in v0.3 (indeta), which passes a 24-check two-peer simulator test; the v0.3 on-device retest is still pending. The v0.2 fix source is public in the widget repo (commit 715c86b).</li>
-            </ul>
-        </CardShell>,
-        property: <CardShell id="property" tag="Evidence - reported" title="Property testing" onFocus={focusCard}>
-            <p>Random operation sequences; merge invariants must hold (convergence, no lost items).</p>
-            <p className="rc-muted">Reported run by the builders on the public merge source (commit 715c86b): 7 Java + 9 JS tests pass. Not independently verified here. Samples cases - weaker than a proof.</p>
-        </CardShell>,
-        mutation: <CardShell id="mutation" tag="Planned evidence - not run" title="Mutation testing" onFocus={focusCard}>
-            <p>Deliberately break the merge code; the tests must catch each break.</p>
-            <p className="rc-muted">Shows whether the tests are effective, not whether the code is secure. Status: not run.<span className="rc-mock">plan</span></p>
-        </CardShell>,
-        fuzz: <CardShell id="fuzz" tag="Planned evidence - not run" title="Fuzz testing" onFocus={focusCard}>
-            <p>Random and malformed input at the parsers and the sync protocol boundary.</p>
-            <p className="rc-muted">Scope: crash and rejection behavior, not full protocol correctness. Status: not run.<span className="rc-mock">plan</span></p>
-        </CardShell>,
-        load: <CardShell id="load" tag="Planned evidence - not run" title="Load testing" onFocus={focusCard}>
-            <p>Realistic multi-device operation volume and resource use.</p>
-            <p className="rc-muted">Local and simulated only - no hammering of external services. Status: not run.<span className="rc-mock">plan</span></p>
-        </CardShell>,
-        smoke: <CardShell id="smoke" tag="Planned evidence - not run" title="Smoke testing" onFocus={focusCard}>
-            <p>A short "does it basically work" pass per build: app starts, list loads, one add, one sync.</p>
-            <p className="rc-muted">Fast signal, shallow. Status: not run.<span className="rc-mock">plan</span></p>
+            <p>No card ever reads "this code is safe". Each card says exactly what it is, and what has not been checked stays visible in the same size next to it.</p>
         </CardShell>,
     };
+    for (const s of SECTIONS) {
+        cards[s.id] = <SectionCard key={s.id} s={s} mark={reviews[s.id]} expanded={expandedId === s.id} onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)} onMark={markSection} onFocus={focusCard} />;
+    }
 
     return <>
         <div
@@ -347,7 +404,7 @@ function Canvas() {
                     })}
                 </svg>
                 {Object.keys(cards).map((id) => (
-                    <div key={id} style={{ position: 'absolute', left: pos[id].x, top: pos[id].y, width: CARD_SIZES[id].w }}>
+                    <div key={id} style={{ position: 'absolute', left: pos[id].x, top: pos[id].y, width: CARD_SIZES[id].w, zIndex: expandedId === id ? 5 : undefined }}>
                         {cards[id]}
                     </div>
                 ))}
@@ -355,8 +412,11 @@ function Canvas() {
             <div className="rc-controls">
                 <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.35)}>+</button>
                 <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.35)}>-</button>
-                <button type="button" className="rc-fit" onClick={() => { viewTouched.current = true; fitView(); }}>Fit</button>
+                <button type="button" className="rc-fit" onClick={() => { viewTouched.current = true; setFocusedId(null); setMapPeek(false); fitView(); }}>Fit</button>
             </div>
+            {vp.w > 0 && vp.w < 560 && focusedId && !mapPeek ? (
+                <button type="button" className="rc-mapchip" onClick={() => setMapPeek(true)} aria-label="Show minimap">Map</button>
+            ) : (
             <div
                 className="rc-minimap"
                 style={{ width: 132, height: Math.round(WORLD.h * miniScale) + MINI_PAD * 2 }}
@@ -365,11 +425,12 @@ function Canvas() {
                     viewTouched.current = true;
                     const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
                     const c = clampCam({ x: (e.clientX - r.left - MINI_PAD) / miniScale, y: (e.clientY - r.top - MINI_PAD) / miniScale, z: cam.z });
-                    setCam(c); persist(c, pos);
+                    setCam(c); persist(c, pos, reviews);
+                    setMapPeek(false);
                 }}
             >
                 {Object.keys(CARD_SIZES).map((id) => (
-                    <div key={id} className={`rc-minicard${id === 'change' ? ' rc-center' : ''}`} role="img" aria-label={TITLES[id]} title={TITLES[id]} style={{
+                    <div key={id} className={`rc-minicard${id === 'progress' ? ' rc-center' : ''}${reviews[id] === 'reviewed' ? ' rc-done' : ''}`} role="img" aria-label={TITLES[id]} title={TITLES[id]} style={{
                         left: MINI_PAD + pos[id].x * miniScale, top: MINI_PAD + pos[id].y * miniScale,
                         width: Math.max(14, CARD_SIZES[id].w * miniScale), height: Math.max(13, CARD_SIZES[id].h * miniScale),
                     }}>
@@ -381,6 +442,7 @@ function Canvas() {
                     width: (evp.w / cam.z) * miniScale, height: (evp.h / cam.z) * miniScale,
                 }} />
             </div>
+            )}
         </div>
         <Caption>Drag the background to pan, drag a card to move it, pinch or use + and - to zoom, tap a card's Focus to read it. The canvas is bounded, not infinite. {savedMeta.message}</Caption>
     </>;
@@ -389,17 +451,17 @@ function Canvas() {
 export function App() {
     return <FileCard>
         <Header
-            title="Review each change from your phone"
-            fact="Interactive design prototype"
-            intro="The best ideas from crev, Unison, Haskell and Lean, merged into one review surface for the intodo project. Cards live on a canvas, not in pages or an endless feed: they stay where you put them, and the layout is designed to persist on this device - implemented, not yet verified in your own signed-in view."
+            title="Review intodo in sections"
+            fact={`Working review surface - repo ${COMMIT_SHORT}`}
+            intro="The whole intodo repository, split into 18 pieces small enough to review one sitting at a time. Each card names its files, pins the exact commit, says what nobody has checked yet, and remembers your marks in this browser for your signed-in account."
         />
-        <Photos label="The review canvas idea" title="Review canvas concept" items={[{ src: hero, alt: 'Illustration of a phone showing a change card with review, test and proof markers' }]} />
+        <Photos label="The review canvas" title="Review canvas concept" items={[{ src: hero, alt: 'Illustration of a phone showing a change card with review, test and proof markers' }]} />
         <Caption>Illustrative concept art, not a screenshot of a working feature.</Caption>
 
-        <Group label="The idea" heading>
+        <Group label="How this works" heading>
             <Text>
-                <Paragraph>Every change becomes a card you can read in under a minute: what changed, which exact code it is, who reviewed it, and what was tested or proved. Cards connect spatially to their evidence, and what has not been checked stays visible in the same size type as what has.</Paragraph>
-                <Paragraph>The example below uses the real v0.4 narrow-layout change. "Real" chips mark grounded facts; "mock" chips mark illustrative entries. This is a working interactive mockup, not a production review system - nothing is adopted or built into the app.</Paragraph>
+                <Paragraph>Every card is a real section of irvan-putra/intodo at commit {COMMIT_SHORT}: the phone app, the DeltaChat bot, the webxdc mini-app, this page itself, the tests, and the plumbing. File lists, line counts and digests are generated from the actual repository - no mock entries.</Paragraph>
+                <Paragraph>Test-suite cards connect to the code they guard. A mark means you read it; it is your judgment, not a scan, and "Not checked yet" never disappears just because a section is marked reviewed.</Paragraph>
             </Text>
         </Group>
 
@@ -407,6 +469,6 @@ export function App() {
             <Canvas />
         </Group>
 
-        <Closing>Interactive design prototype, Nov 12, 2026. Adopting this as the project standard is your call - nothing here changes the app or the repo.</Closing>
+        <Closing>Working review surface, generated from irvan-putra/intodo @ {COMMIT_SHORT} on Nov 13, 2026. Review marks are kept on this device, in this browser, for your signed-in account - the notice under the canvas always shows the actual storage state. Adopting this as the project standard is your call - nothing here changes the app or the repo.</Closing>
     </FileCard>;
 }
