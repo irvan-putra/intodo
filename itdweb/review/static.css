@@ -37,6 +37,12 @@ h1, h2, h3 { font-family: Aime, Georgia, serif; font-weight: 400; }
     border: none;
     border-radius: 0;
     position: relative;
+    /* the canvas owns every touch gesture on its surface: without this the
+       phone browser hijacks drags for its own scroll/zoom, cancels the
+       pointer stream, and the canvas appears stuck (actual Samsung report).
+       Scoped to the viewport so the sheet overlay and dock panels keep
+       normal touch scrolling. */
+    touch-action: none;
 }
 
 /* Live storage-state note, non-interactive. */

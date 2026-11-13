@@ -769,6 +769,7 @@ function Canvas() {
     // When the detail band renders, center a tapped frame exactly, or nudge
     // the camera into the frames' bounds once per entry.
     const pendingFrame = useRef<string | null>(null);
+    const layAnchor = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
     const detailNudged = useRef(false);
     useEffect(() => {
         if (view !== 'structure' || band !== 'detail') { detailNudged.current = false; return; }
@@ -839,9 +840,16 @@ function Canvas() {
             g.current.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), z0: cam.z, cam0: cam, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
             return;
         }
-        if (t.closest('button') || t.closest('a') || t.closest('textarea') || t.closest('input')) { g.current.mode = null; return; }
         // cards are fixed in place per owner request: dragging anywhere pans
-        // the canvas; card positions only change through code, never by hand
+        // the canvas; card positions only change through code, never by hand.
+        // Node boxes (rc-grpnode) are diagram surface, not controls: at phone
+        // zoom they cover most of the screen, so a drag starting on one must
+        // still pan (a drag suppresses the tap-click via onClickCapture);
+        // a tap with no movement still focuses. Genuine controls inside the
+        // canvas (Focus buttons, the List pill, links, inputs) keep the
+        // gesture to themselves.
+        const btn = t.closest('button');
+        if (t.closest('a') || t.closest('textarea') || t.closest('input') || (btn && !btn.classList.contains('rc-grpnode'))) { g.current.mode = null; return; }
         g.current.start = p; g.current.last = p;
         g.current.mode = 'pan';
         setDragging(true);
@@ -899,7 +907,6 @@ function Canvas() {
         if (g.current.moved) { e.stopPropagation(); e.preventDefault(); g.current.moved = false; }
     };
 
-
     const reviewedCount = SECTIONS.filter((s) => reviews[s.id] === 'reviewed').length;
     const flagCount = SECTIONS.filter((s) => reviews[s.id] === 'flag').length;
     const findingsCount = SECTIONS.filter((s) => (findings[s.id] ?? '').trim().length > 0).length;
@@ -932,9 +939,20 @@ function Canvas() {
     // Phones spread less: their first landing must still show whole nodes.
     const SPREAD_X = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.35;
     const SPREAD_Y = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.3;
+    // The spread rect must NOT track the live camera: when it did, every
+    // pan re-laid the same diagram around the new camera and the canvas
+    // looked stuck (owner's phone report, 14 Nov). Anchor it in world space;
+    // panning never moves it, so node positions are stable per level/view
+    // and the camera travels freely. Zoom or an intentional viewport resize
+    // changes the spread size and re-anchors at the current camera, which
+    // preserves the existing contextual-zoom re-layout.
+    const layW = visRect.w * SPREAD_X, layH = visRect.h * SPREAD_Y;
+    if (!layAnchor.current || Math.abs(layAnchor.current.w - layW) > 1 || Math.abs(layAnchor.current.h - layH) > 1) {
+        layAnchor.current = { x: cam.x, y: cam.y, w: layW, h: layH };
+    }
     const layRect: Rect = {
-        x: cam.x - (visRect.w * SPREAD_X) / 2, y: cam.y - (visRect.h * SPREAD_Y) / 2,
-        w: visRect.w * SPREAD_X, h: visRect.h * SPREAD_Y,
+        x: layAnchor.current.x - layW / 2, y: layAnchor.current.y - layH / 2,
+        w: layW, h: layH,
     };
     const groupLayout = diagramLayout(CONTAINER_NODES, layRect, cam.z, measuredNodes);
     const sysLayout = diagramLayout(SYS_NODES, layRect, cam.z, measuredNodes);
