@@ -216,8 +216,8 @@ public class SyncEngine {
         String payload = found[0];
         if ("AWAITING".equals(payload)) {
             Prefs.saveCheckFailure(context, "not published yet");
-            Prefs.saveStatus(context, "waiting for Instinct to publish your list");
-            cb.onDone(false, "Instinct has not published your encrypted list yet");
+            Prefs.saveStatus(context, "waiting for your list to be published");
+            cb.onDone(false, "Your encrypted list has not been published yet");
             return;
         }
         if (payload == null) {

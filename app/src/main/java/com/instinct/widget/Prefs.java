@@ -23,7 +23,7 @@ public class Prefs {
     /** Clears the cached list and marks pairing pending (used on key replacement). */
     public static void resetForRepair(Context c) {
         get(c).edit().remove("feed").remove("feed_at").remove("feed_gen").commit();
-        saveStatus(c, "pairing pending: send the new public key to Instinct");
+        saveStatus(c, "pairing pending: send the new public key to your assistant's WhatsApp chat");
     }
     public static String feed(Context c) { return get(c).getString("feed", null); }
     public static long feedAt(Context c) { return get(c).getLong("feed_at", 0); }

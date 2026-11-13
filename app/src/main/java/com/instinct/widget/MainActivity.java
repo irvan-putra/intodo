@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
         if (Prefs.isPaired(this)) {
             new android.app.AlertDialog.Builder(this)
                     .setTitle("Replace pairing key?")
-                    .setMessage("This phone already has a key. Creating a new one means you must send the new public key to Instinct before sync works again.")
+                    .setMessage("This phone already has a key. Creating a new one means you must send the new public key to your assistant's WhatsApp chat before sync works again.")
                     .setPositiveButton("Replace", (d, w) -> doGenerateKeys())
                     .setNegativeButton("Keep current", null)
                     .show();
@@ -202,8 +202,8 @@ public class MainActivity extends Activity {
 
     private void copyKey() {
         ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        cm.setPrimaryClip(ClipData.newPlainText("Instinct widget public key", Prefs.publicKey(this)));
-        Toast.makeText(this, "Public key copied. Send it to Instinct on WhatsApp.", Toast.LENGTH_LONG).show();
+        cm.setPrimaryClip(ClipData.newPlainText("itdapk public key", Prefs.publicKey(this)));
+        Toast.makeText(this, "Public key copied. Send it to your assistant's WhatsApp chat.", Toast.LENGTH_LONG).show();
     }
 
     // Update-check cadence: on app open and on each manual sync, never in the background.

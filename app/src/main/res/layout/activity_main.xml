@@ -4,7 +4,7 @@
     android:orientation="vertical" android:background="#101828" android:padding="20dp">
 
     <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="Instinct" android:textColor="#FFFFFF" android:textSize="24sp" android:textStyle="bold" />
+        android:text="itdapk" android:textColor="#FFFFFF" android:textSize="24sp" android:textStyle="bold" />
     <TextView android:id="@+id/subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="Reminders and todos" android:textColor="#98A2B3" android:textSize="14sp"
         android:layout_marginBottom="16dp" />
@@ -12,10 +12,10 @@
     <LinearLayout android:id="@+id/pairingPane" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:visibility="gone">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Pair this phone with Instinct" android:textColor="#F59E0B" android:textSize="16sp" android:textStyle="bold" />
+            android:text="Pair this phone" android:textColor="#F59E0B" android:textSize="16sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:textColor="#D0D5DD" android:textSize="14sp"
-            android:text="1. Tap the button below to create this phone's private key.\n2. Send the shown public key to Instinct on WhatsApp (it is not secret).\n3. Instinct encrypts your list so only this phone can read it.\n4. Come back and tap Sync now." />
+            android:text="1. Tap the button below to create this phone's private key.\n2. Send the shown public key to your assistant's WhatsApp chat (it is not secret).\n3. Your list is encrypted so only this phone can read it.\n4. Come back and tap Sync now." />
         <Button android:id="@+id/generateKey" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" android:text="Create pairing key" />
         <TextView android:id="@+id/pubkeyLabel" android:layout_width="match_parent" android:layout_height="wrap_content"
