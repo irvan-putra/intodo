@@ -400,6 +400,14 @@ a, .rc-card a { color: var(--ds-ink); }
 .rc-node-system .rc-grplabel { color: var(--ds-ink); }
 .rc-node-system .rc-grpcount { color: var(--ds-ink-2); }
 
+/* Selection vs pan: while a pan/pinch gesture is recognized (rc-panning),
+   selection is suppressed so a drag cannot pan AND paint selection at once
+   (live writer finding on e331264). Idle content stays selectable. */
+.rc-viewport.rc-panning, .rc-viewport.rc-panning * {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 /* Group sheet (phones): a tapped group opens as a readable list of its
    sections; a row opens that section's focus overlay. */
 .rc-gsheet-title { margin: 4px 0 2px; font-size: 22px; }

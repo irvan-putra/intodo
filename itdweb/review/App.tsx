@@ -607,11 +607,13 @@ function Canvas() {
     const appliedSaved = useRef(false);
     const viewTouched = useRef(false);
     const [dragging, setDragging] = useState(false);
+    const [panning, setPanning] = useState(false);
     const vpRef = useRef<HTMLDivElement>(null);
     const pointers = useRef(new Map<number, Pos>());
     const g = useRef<{
         mode: 'pan' | 'card' | 'pinch' | null; cardId?: string;
         start: Pos; last: Pos; off: Pos; moved: boolean;
+        downTime?: number; textDown?: boolean; selDown?: boolean; pt?: string;
         pinch?: { d0: number; z0: number; cam0: Cam; mid: Pos };
     }>({ mode: null, start: { x: 0, y: 0 }, last: { x: 0, y: 0 }, off: { x: 0, y: 0 }, moved: false });
 
@@ -681,7 +683,15 @@ function Canvas() {
         // bounds move with zoom and a DOM measure at the old zoom is stale at
         // the fitted one - iterate the same layout/route functions at the
         // candidate zoom until it converges, then fit that union.
-        let c: Cam = { x: 1086, y: 2420, z: clampZ(Math.min(w / 2252, h / 4920) * 0.98) };
+        // Fit must place the COMPLETE union (nodes incl. labels, routes,
+        // badges) inside the unobscured canvas area ABOVE the dock - content
+        // hidden behind the dock bar is not fitted (live writer finding).
+        // Measure the dock; fall back to a conservative reserve.
+        const dockEl = el ? el.querySelector('.rc-dockbar') as HTMLElement | null : null;
+        const dockH = dockEl && dockEl.offsetParent ? dockEl.getBoundingClientRect().height + 14 : 64;
+        const fw = w, fh = Math.max(120, h - dockH);
+        let c: Cam = { x: 1086, y: 2420, z: clampZ(Math.min(fw / 2252, fh / 4920) * 0.98) };
+        const fitZ = (uw: number, uh: number) => clampZ(Math.min(fw / (uw + 80), fh / (uh + 80)) * 0.98);
         if (view !== 'structure') {
             const set = VIEW_SETS[view as 'flow' | 'flowfeed' | 'deploy'];
             let z = cam.z, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -695,27 +705,45 @@ function Canvas() {
                     x0 = Math.min(x0, r.bx - r.r); y0 = Math.min(y0, r.by - r.r); x1 = Math.max(x1, r.bx + r.r); y1 = Math.max(y1, r.by + r.r);
                 });
                 if (!isFinite(x0) || x1 - x0 < 1 || y1 - y0 < 1) break;
-                const nz = clampZ(Math.min(w / (x1 - x0 + 80), h / (y1 - y0 + 80)) * 0.98);
+                const nz = fitZ(x1 - x0, y1 - y0);
                 if (Math.abs(nz - z) < 0.002) { z = nz; break; }
                 z = nz;
             }
-            if (isFinite(x0) && x1 > x0 && y1 > y0) c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z };
+            // center the union in the visible rect (0..fw, 0..fh): the cam is
+            // the world point at the FULL viewport center, so shift it by
+            // the dock reserve in world units.
+            if (isFinite(x0) && x1 > x0 && y1 > y0) c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + (h - fh) / (2 * z), z };
         } else {
-        const world = vpRef.current?.querySelector('.rc-world') as HTMLElement | null;
-        const m = world?.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([\d.]+)\)/);
-        if (world && m) {
-            const tx = +m[1], ty = +m[2], z = +m[3];
-            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-            world.querySelectorAll('[data-frame], [data-nid], .rc-gedges polyline, .rc-sysedges polyline, .rc-glabels g, .rc-syslabels g, .rc-viewedges polyline, .rc-viewlabels g').forEach((n) => {
-                const r = (n as Element).getBoundingClientRect();
-                if (r.width < 1 && r.height < 1) return;
-                x0 = Math.min(x0, (r.left - tx) / z); y0 = Math.min(y0, (r.top - ty) / z);
-                x1 = Math.max(x1, (r.right - tx) / z); y1 = Math.max(y1, (r.bottom - ty) / z);
-            });
-            if (isFinite(x0) && x1 - x0 > 100 && y1 - y0 > 100) {
-                const pad = 80;
-                c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: clampZ(Math.min(w / (x1 - x0 + pad), h / (y1 - y0 + pad)) * 0.98) };
+        // Band-independent fit: the map is one static world layout, but
+        // external/person nodes and edge badges only RENDER at the container/
+        // system bands - a DOM measure taken at detail zoom misses them and
+        // they overflow after Fit (live writer finding, e331264). Compute the
+        // union from the same layout constants the renderer uses; node half-
+        // heights are inflated to the real band-rendered size (label wraps,
+        // kind chip, person icon), which layout/routing deliberately does not
+        // use. Iterate z because edge routes and badges depend on it.
+        {
+            const fitHH = (n: GroupNode) => (n.g.kind === 'person' ? 170 : n.g.kind === 'external' ? 130 : n.hh);
+            let z = cam.z, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (let it = 0; it < 10; it++) {
+                const rs = [...routeRels(C4_RELS, groupLayout, z, layRect), ...routeRels(SYS_RELS, sysLayout, z, layRect)];
+                x0 = Infinity; y0 = Infinity; x1 = -Infinity; y1 = -Infinity;
+                [...groupLayout, ...sysLayout].forEach((n) => {
+                    const hh = fitHH(n);
+                    x0 = Math.min(x0, n.x - n.hw - 8); y0 = Math.min(y0, n.y - hh - 8);
+                    x1 = Math.max(x1, n.x + n.hw + 8); y1 = Math.max(y1, n.y + hh + 8);
+                });
+                rs.forEach((r) => {
+                    r.pts.forEach((pt) => { x0 = Math.min(x0, pt.x - 10); y0 = Math.min(y0, pt.y - 10); x1 = Math.max(x1, pt.x + 10); y1 = Math.max(y1, pt.y + 10); });
+                    // badge circle plus stroke/halo: inflate past r.r
+                    x0 = Math.min(x0, r.bx - r.r - 10); y0 = Math.min(y0, r.by - r.r - 10); x1 = Math.max(x1, r.bx + r.r + 10); y1 = Math.max(y1, r.by + r.r + 10);
+                });
+                if (!isFinite(x0) || x1 - x0 < 1 || y1 - y0 < 1) break;
+                const nz = fitZ(x1 - x0, y1 - y0);
+                if (Math.abs(nz - z) < 0.002) { z = nz; break; }
+                z = nz;
             }
+            if (isFinite(x0) && x1 > x0 && y1 > y0) c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + (h - fh) / (2 * z), z };
         }
         }
         // no-op guard: resize feedback (iframe height ping-pong) must not
@@ -851,6 +879,16 @@ function Canvas() {
         const btn = t.closest('button');
         if (t.closest('a') || t.closest('textarea') || t.closest('input') || (btn && !btn.classList.contains('rc-grpnode'))) { g.current.mode = null; return; }
         g.current.start = p; g.current.last = p;
+        // Long-press on selectable content starts native text selection on
+        // touch devices; a drag that begins after that hold belongs to the
+        // selection, not to the map (checked in onPointerMove). A press that
+        // lands INSIDE an existing selection is a selection adjustment, not
+        // a pan.
+        g.current.downTime = performance.now();
+        g.current.pt = e.pointerType;
+        g.current.textDown = !!t.closest('.rc-card p, .rc-card li, .rc-fbody, .rc-nlabel, .rc-sublabel');
+        const sel0 = window.getSelection?.();
+        g.current.selDown = !!(sel0 && sel0.rangeCount > 0 && !sel0.isCollapsed && sel0.anchorNode && t.contains(sel0.anchorNode));
         g.current.mode = 'pan';
         setDragging(true);
     };
@@ -861,8 +899,26 @@ function Canvas() {
         pointers.current.set(e.pointerId, p);
         const gg = g.current;
         if (!gg.moved && gg.mode && Math.hypot(p.x - gg.start.x, p.y - gg.start.y) > 6) {
+            // Disambiguate a deliberate text selection from a map pan. A
+            // press inside an active selection is a selection adjustment -
+            // never pan. On TOUCH, a long-press (hold >450ms without moving)
+            // or a selection that already formed is the native selection
+            // gesture - yield. A mouse drag always pans; native drag-select
+            // is cleared at recognition and suppressed by rc-panning while
+            // the gesture is active.
+            const sel1 = window.getSelection?.();
+            const selActive = !!(sel1 && sel1.rangeCount > 0 && !sel1.isCollapsed);
+            if (gg.textDown && (gg.selDown || (gg.pt === 'touch' && (selActive || performance.now() - (gg.downTime || 0) > 450)))) {
+                gg.mode = null; setDragging(false); return;
+            }
             gg.moved = true;
             try { vpRef.current?.setPointerCapture(e.pointerId); } catch { /* noop */ }
+            // A recognized map gesture owns the drag from here: clear any
+            // selection the first few px started (live writer finding: drag
+            // panned AND selected at once). Selection stays available when
+            // idle - clicks, double-click word select, Focus overlay, fields.
+            setPanning(true);
+            try { window.getSelection()?.removeAllRanges(); } catch { /* noop */ }
         }
         if (gg.mode === 'pinch' && gg.pinch && pointers.current.size >= 2) {
             const [a, b] = [...pointers.current.values()];
@@ -909,10 +965,10 @@ function Canvas() {
                 const hit = document.elementFromPoint(e.clientX, e.clientY);
                 const frame = hit?.closest?.('[data-frame]');
                 const gid = frame?.getAttribute('data-frame');
-                if (gid) { gg.mode = null; setDragging(false); focusGroup(gid); return; }
+                if (gid) { gg.mode = null; setDragging(false); setPanning(false); focusGroup(gid); return; }
             }
             if (gg.mode) { viewTouched.current = true; persist(cam, pos, reviews); }
-            gg.mode = null; setDragging(false);
+            gg.mode = null; setDragging(false); setPanning(false);
         }
     };
 
@@ -1039,7 +1095,7 @@ function Canvas() {
         <div className="rc-page">
         <div
             ref={vpRef}
-            className={`rc-viewport${dragging ? ' rc-dragging' : ''}${band === 'sys' ? ' rc-sys' : band === 'grp' ? ' rc-grp' : band === 'lo' ? ' rc-lo' : ''}`}
+            className={`rc-viewport${dragging ? ' rc-dragging' : ''}${panning ? ' rc-panning' : ''}${band === 'sys' ? ' rc-sys' : band === 'grp' ? ' rc-grp' : band === 'lo' ? ' rc-lo' : ''}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endPointer}
