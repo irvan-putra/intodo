@@ -53,6 +53,16 @@ public class BotActivityRenderTest {
         return count;
     }
 
+    private static java.util.List<Button> findButtons(View view) {
+        java.util.List<Button> result = new java.util.ArrayList<>();
+        if (view instanceof Button) result.add((Button) view);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) result.addAll(findButtons(group.getChildAt(i)));
+        }
+        return result;
+    }
+
     private static TextView findText(View view, String prefix) {
         if (view instanceof TextView) {
             CharSequence text = ((TextView) view).getText();
@@ -109,10 +119,17 @@ public class BotActivityRenderTest {
         assertEquals("Setup & account  ▸", setupHeader.getText().toString());
         assertEquals("Logs  ▸", logsHeader.getText().toString());
         assertEquals("all original controls remain available", 8, countButtons(root));
+        for (Button button : findButtons(root)) {
+            assertTrue("button label uses sentence case: " + button.getText(),
+                    button.getText().toString().equals(button.getText().toString().toUpperCase()) == false);
+        }
         render(activity, "/tmp/intodo-bot-compact.png");
 
         logsHeader.performClick();
         assertEquals("Logs  ▾", logsHeader.getText().toString());
+        TextView log = findText(root, "== bot.log ==");
+        assertNotNull("log view is present", log);
+        assertTrue("long log begins on a full line", log.getText().toString().matches("(?s)^== bot\\.log ==\\n01 Jan.*"));
         render(activity, "/tmp/intodo-bot-logs-expanded.png");
     }
 

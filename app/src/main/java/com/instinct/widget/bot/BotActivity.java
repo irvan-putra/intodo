@@ -45,9 +45,9 @@ public class BotActivity extends Activity {
         // Day-to-day controls only.
         LinearLayout primary = new LinearLayout(this);
         primary.setOrientation(LinearLayout.HORIZONTAL);
-        Button live = new Button(this); live.setText("Start bot");
-        Button stop = new Button(this); stop.setText("Stop bot");
-        Button invite = new Button(this); invite.setText("Invitation");
+        Button live = new Button(this); live.setText("Start bot"); live.setAllCaps(false);
+        Button stop = new Button(this); stop.setText("Stop bot"); stop.setAllCaps(false);
+        Button invite = new Button(this); invite.setText("Invitation"); invite.setAllCaps(false);
         primary.addView(live, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         primary.addView(stop, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         primary.addView(invite, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
@@ -55,8 +55,8 @@ public class BotActivity extends Activity {
 
         LinearLayout updates = new LinearLayout(this);
         updates.setOrientation(LinearLayout.HORIZONTAL);
-        Button fetchXdc = new Button(this); fetchXdc.setText("Get latest app");
-        Button publish = new Button(this); publish.setText("Publish update");
+        Button fetchXdc = new Button(this); fetchXdc.setText("Get latest app"); fetchXdc.setAllCaps(false);
+        Button publish = new Button(this); publish.setText("Publish update"); publish.setAllCaps(false);
         updates.addView(fetchXdc, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         updates.addView(publish, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         root.addView(updates);
@@ -70,9 +70,9 @@ public class BotActivity extends Activity {
         TextView steps = new TextView(this);
         steps.setPadding(pad, 0, pad, 0);
         steps.setText("First time: run the offline probe, create a bot account (one-time, uses network), start the bot, then show the invitation. On this phone, tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list.");
-        Button validate = new Button(this); validate.setText("1. Offline probe");
-        Button provision = new Button(this); provision.setText("2. Create bot account");
-        Button importBtn = new Button(this); importBtn.setText("Import bot backup");
+        Button validate = new Button(this); validate.setText("1. Offline probe"); validate.setAllCaps(false);
+        Button provision = new Button(this); provision.setText("2. Create bot account"); provision.setAllCaps(false);
+        Button importBtn = new Button(this); importBtn.setText("Import bot backup"); importBtn.setAllCaps(false);
         setupBox.addView(steps); setupBox.addView(validate); setupBox.addView(provision); setupBox.addView(importBtn);
         root.addView(setupBox);
         setupHeader.setOnClickListener(v -> toggle(setupHeader, setupBox, "Setup & account"));
@@ -102,7 +102,11 @@ public class BotActivity extends Activity {
         logScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, logH));
         logScroll.setVisibility(android.view.View.GONE);
         root.addView(logScroll);
-        logsHeader.setOnClickListener(v -> toggle(logsHeader, logScroll, "Logs"));
+        logsHeader.setOnClickListener(v -> {
+            boolean show = logScroll.getVisibility() == android.view.View.GONE;
+            toggle(logsHeader, logScroll, "Logs");
+            if (show) logScroll.post(() -> logScroll.scrollTo(0, 0));
+        });
 
         ScrollView outer = new ScrollView(this);
         outer.addView(root);
@@ -569,6 +573,10 @@ public class BotActivity extends Activity {
                 if (f.exists()) {
                     String s = read(f);
                     int cut = Math.max(0, s.length() - 4000);
+                    if (cut > 0) {
+                        int nextLine = s.indexOf('\n', cut);
+                        cut = nextLine >= 0 ? nextLine + 1 : s.length();
+                    }
                     sb.append("== ").append(name).append(" ==\n").append(s.substring(cut)).append("\n\n");
                 }
             } catch (Exception ignored) {}
