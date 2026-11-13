@@ -7,7 +7,7 @@ type Cam = { x: number; y: number; z: number };
 type Mark = 'reviewed' | 'flag';
 type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark>; findings?: Record<string, string> };
 
-const WORLD = { w: 2400, h: 4240 };
+const WORLD = { w: 2400, h: 5000 };
 const ZMIN = 0.07, ZMAX = 2.5;
 // Zoom bands, C4-style progressive disclosure (c4model.com):
 //   z < SYS_Z    system context: people + the intodo system + external systems
@@ -124,25 +124,6 @@ const C4_PEOPLE: C4Node[] = [
 ];
 const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNALS];
 
-// Section-band layout: computed container-owned flow. The free-form pos grid
-// mixes containers within rows, so in the section band chips are laid out
-// fresh under their container label in reading order; the detail band keeps
-// the saved/default positions.
-const LO_COL_W = 400, LO_ROW_H = 130, LO_LABEL_H = 60, LO_GAP = 40;
-const LO_LAYOUT: Record<string, { x: number; y: number }> = {};
-const LO_LABELS: Record<string, { x: number; y: number }> = {};
-{
-    let y = 40;
-    for (const g of C4_CONTAINERS) {
-        LO_LABELS[g.id] = { x: 20, y };
-        y += LO_LABEL_H;
-        const all = [...(g.members ?? []), ...(g.attached ?? [])];
-        all.forEach((m, i) => {
-            LO_LAYOUT[m] = { x: 20 + (i % 5) * LO_COL_W, y: y + Math.floor(i / 5) * LO_ROW_H };
-        });
-        y += Math.ceil(all.length / 5) * LO_ROW_H + LO_GAP;
-    }
-}
 // Detail-band nested layout, C4 zoom-in-context style (c4model.com): each
 // container is a labeled frame and its section cards live INSIDE the frame,
 // so zooming in reveals a container's contents within the parent box instead
@@ -167,7 +148,9 @@ const NEST_EST: { frames: Record<string, { x: number; y: number; w: number; h: n
     const frames: Record<string, { x: number; y: number; w: number; h: number }> = {};
     const pos: Record<string, Pos> = {};
     NEST_COLUMNS.forEach((col, ci) => {
-        let y = 40;
+        // y starts below the boundary-label strip: the system boundary box's
+        // label sits in the top strip, clear of the frames.
+        let y = 120;
         for (const gid of col) {
             const g = C4_CONTAINERS.find((c) => c.id === gid)!;
             const all = [...(g.members ?? []), ...(g.attached ?? [])];
@@ -336,25 +319,9 @@ function segHitsNode(p: Pos, q: Pos, n: GroupNode, m: number): boolean {
 }
 function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): RelGeom[] {
     const M = 4 / z, CELL = 4 / z, RB = 11 / z;
-    // connected pairs need room for a badge on the segment between them:
-    // push the far node out until the border-to-border gap fits one
-    for (const rel of rels) {
-        const na = nodes.find((n) => n.g.id === rel.a)!, nb = nodes.find((n) => n.g.id === rel.b)!;
-        const dx = nb.x - na.x, dy = nb.y - na.y, len = Math.hypot(dx, dy) || 1;
-        const ux = dx / len, uy = dy / len;
-        const reach = (n: GroupNode) => Math.min(n.hw / (Math.abs(ux) || 1e-6), n.hh / (Math.abs(uy) || 1e-6));
-        const gap = len - reach(na) - reach(nb);
-        const need = 2 * RB + 30 / z;
-        if (gap < need) {
-            const push = (need - gap) / 2;
-            na.x -= ux * push; na.y -= uy * push;
-            nb.x += ux * push; nb.y += uy * push;
-            for (const n of [na, nb]) {
-                n.x = Math.min(Math.max(n.x, rect.x + n.hw + 8 / z), rect.x + rect.w - n.hw - 8 / z);
-                n.y = Math.min(Math.max(n.y, rect.y + n.hh + 8 / z), rect.y + rect.h - n.hh - 8 / z);
-            }
-        }
-    }
+    // Stable map: node positions are world-fixed. Routing NEVER moves a node
+    // (the old badge-room push re-laid the map per zoom and could clamp
+    // several nodes into one grid cell); badges place along the route below.
     const border = (n: GroupNode, ux: number, uy: number): Pos => {
         const t = Math.min(n.hw / (Math.abs(ux) || 1e-6), n.hh / (Math.abs(uy) || 1e-6));
         return { x: n.x + ux * t, y: n.y + uy * t };
@@ -427,18 +394,20 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
                 while (cur >= 0) { cells.push([cur % W, (cur - (cur % W)) / W]); cur = from[cur]; }
                 cells.reverse();
                 pts = cells.map(([cx, cy]) => cellXY(cx, cy));
-                pts[0] = border(na, pts[1].x - na.x, pts[1].y - na.y);
-                pts[pts.length - 1] = border(nb, pts[pts.length - 2].x - nb.x, pts[pts.length - 2].y - nb.y);
-                // string pulling: keep only waypoints needed to stay clear
-                const pulled: Pos[] = [pts[0]];
-                let a = 0;
-                while (a < pts.length - 1) {
-                    let b = pts.length - 1;
-                    while (b > a + 1 && others.some((n) => segHitsNode(pts[a], pts[b], n, 3 / z))) b--;
-                    pulled.push(pts[b]); a = b;
+                if (pts.length >= 2) {
+                    pts[0] = border(na, pts[1].x - na.x, pts[1].y - na.y);
+                    pts[pts.length - 1] = border(nb, pts[pts.length - 2].x - nb.x, pts[pts.length - 2].y - nb.y);
+                    // string pulling: keep only waypoints needed to stay clear
+                    const pulled: Pos[] = [pts[0]];
+                    let a = 0;
+                    while (a < pts.length - 1) {
+                        let b = pts.length - 1;
+                        while (b > a + 1 && others.some((n) => segHitsNode(pts[a], pts[b], n, 3 / z))) b--;
+                        pulled.push(pts[b]); a = b;
+                    }
+                    pts = pulled;
+                    routed = true;
                 }
-                pts = pulled;
-                routed = true;
             }
         }
         // Opposite-direction edges on the same node pair (marked side: 1/-1)
@@ -611,7 +580,7 @@ function SectionCard({ s, mark, expanded, finding, onToggleExpand, onMark, onFin
 
 function Canvas() {
     const [saved, setSaved, savedMeta] = useLocalState<Saved | null>('review-canvas.v1', null);
-    const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: WORLD.w / 2, y: WORLD.h / 2, z: 0.25 });
+    const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: 1086, y: 2420, z: 0.168 });
     const [pos, setPos] = useState<Record<string, Pos>>(sanePositions(saved?.pos ?? {}));
     const [focusedId, setFocusedId] = useState<string | null>(null);
     const [sheetGroup, setSheetGroup] = useState<string | null>(null);
@@ -693,7 +662,50 @@ function Canvas() {
         const el = vpRef.current;
         const w = el ? el.clientWidth : vp.w, h = el ? el.clientHeight : vp.h;
         if (!w || !h) return;
-        const c: Cam = { x: WORLD.w / 2, y: WORLD.h / 2, z: clampZ(Math.min(w / WORLD.w, h / WORLD.h) * 0.98) };
+        // Fit the actual RENDERED content - frames, external/person nodes,
+        // edge routes AND numbered badges. Structure view: measured live from
+        // the DOM (zoom-stable layout, so one measure is exact). Flow/feed/
+        // deploy views: nodes keep constant SCREEN size, so their world
+        // bounds move with zoom and a DOM measure at the old zoom is stale at
+        // the fitted one - iterate the same layout/route functions at the
+        // candidate zoom until it converges, then fit that union.
+        let c: Cam = { x: 1086, y: 2420, z: clampZ(Math.min(w / 2252, h / 4920) * 0.98) };
+        if (view !== 'structure') {
+            const set = VIEW_SETS[view as 'flow' | 'flowfeed' | 'deploy'];
+            let z = cam.z, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (let it = 0; it < 10; it++) {
+                const ns = diagramLayout(set.nodes as C4Node[], layRect, z, measuredNodes);
+                const rs = routeRels(set.rels as C4Rel[], ns, z, layRect);
+                x0 = Infinity; y0 = Infinity; x1 = -Infinity; y1 = -Infinity;
+                ns.forEach((n) => { x0 = Math.min(x0, n.x - n.hw); y0 = Math.min(y0, n.y - n.hh); x1 = Math.max(x1, n.x + n.hw); y1 = Math.max(y1, n.y + n.hh); });
+                rs.forEach((r) => {
+                    r.pts.forEach((pt) => { x0 = Math.min(x0, pt.x); y0 = Math.min(y0, pt.y); x1 = Math.max(x1, pt.x); y1 = Math.max(y1, pt.y); });
+                    x0 = Math.min(x0, r.bx - r.r); y0 = Math.min(y0, r.by - r.r); x1 = Math.max(x1, r.bx + r.r); y1 = Math.max(y1, r.by + r.r);
+                });
+                if (!isFinite(x0) || x1 - x0 < 1 || y1 - y0 < 1) break;
+                const nz = clampZ(Math.min(w / (x1 - x0 + 80), h / (y1 - y0 + 80)) * 0.98);
+                if (Math.abs(nz - z) < 0.002) { z = nz; break; }
+                z = nz;
+            }
+            if (isFinite(x0) && x1 > x0 && y1 > y0) c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z };
+        } else {
+        const world = vpRef.current?.querySelector('.rc-world') as HTMLElement | null;
+        const m = world?.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([\d.]+)\)/);
+        if (world && m) {
+            const tx = +m[1], ty = +m[2], z = +m[3];
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            world.querySelectorAll('[data-frame], [data-nid], .rc-gedges polyline, .rc-sysedges polyline, .rc-glabels g, .rc-syslabels g, .rc-viewedges polyline, .rc-viewlabels g').forEach((n) => {
+                const r = (n as Element).getBoundingClientRect();
+                if (r.width < 1 && r.height < 1) return;
+                x0 = Math.min(x0, (r.left - tx) / z); y0 = Math.min(y0, (r.top - ty) / z);
+                x1 = Math.max(x1, (r.right - tx) / z); y1 = Math.max(y1, (r.bottom - ty) / z);
+            });
+            if (isFinite(x0) && x1 - x0 > 100 && y1 - y0 > 100) {
+                const pad = 80;
+                c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: clampZ(Math.min(w / (x1 - x0 + pad), h / (y1 - y0 + pad)) * 0.98) };
+            }
+        }
+        }
         // no-op guard: resize feedback (iframe height ping-pong) must not
         // turn into a setState/persist storm
         if (Math.abs(cam.x - c.x) < 0.5 && Math.abs(cam.y - c.y) < 0.5 && Math.abs(cam.z - c.z) < 0.001) return;
@@ -766,58 +778,34 @@ function Canvas() {
     // Detail-band landing correction. The C4 bands re-lay around wherever
     // the camera is, but nested content lives at fixed world coordinates,
     // so wheel-zooming through the container band can surface empty canvas.
-    // When the detail band renders, center a tapped frame exactly, or nudge
-    // the camera into the frames' bounds once per entry.
+    // Deliberate navigation only: tapping a container centers its frame.
+    // There is NO automatic landing correction - with one stable world map
+    // the camera simply stays where the user leaves it at every zoom.
     const pendingFrame = useRef<string | null>(null);
-    const layAnchor = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
-    const detailNudged = useRef(false);
     useEffect(() => {
-        if (view !== 'structure' || band !== 'detail') { detailNudged.current = false; return; }
+        if (view !== 'structure' || band !== 'detail') return;
+        const gid = pendingFrame.current;
+        if (!gid) return;
         const vp = vpRef.current;
         const worldEl = vp?.querySelector('.rc-world') as HTMLElement | null;
-        const frameEls = vp?.querySelectorAll('[data-frame]');
-        if (!vp || !worldEl || !frameEls || frameEls.length === 0) return;
+        if (!vp || !worldEl) return;
         const wr = worldEl.getBoundingClientRect();
         const toWorld = (r: DOMRect) => ({
             x0: (r.left - wr.left) / cam.z, y0: (r.top - wr.top) / cam.z,
             x1: (r.right - wr.left) / cam.z, y1: (r.bottom - wr.top) / cam.z,
         });
-        if (pendingFrame.current) {
-            const gid = pendingFrame.current;
-            pendingFrame.current = null;
-            detailNudged.current = true;
-            const el = vp.querySelector(`[data-frame="${gid}"]`);
-            if (el) {
-                const b = toWorld(el.getBoundingClientRect());
-                let cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
-                // A frame larger than the viewport centers as a void; align
-                // its top-left instead so the parent label shows with its
-                // contents below/right - the nested reading.
-                if ((b.y1 - b.y0) * cam.z > evp.h * 0.9) cy = b.y0 + (evp.h / 2 - 16) / cam.z;
-                if ((b.x1 - b.x0) * cam.z > evp.w * 0.95) cx = b.x0 + (evp.w / 2 - 16) / cam.z;
-                const c = clampCam({ x: cx, y: cy, z: cam.z });
-                if (Math.abs(c.x - cam.x) > 1 || Math.abs(c.y - cam.y) > 1) { setCam(c); persist(c, pos, reviews); }
-            }
-            return;
-        }
-        if (detailNudged.current) return;
-        detailNudged.current = true;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        const bounds: { x0: number; y0: number; x1: number; y1: number }[] = [];
-        frameEls.forEach((el) => {
+        pendingFrame.current = null;
+        const el = vp.querySelector(`[data-frame="${gid}"]`);
+        if (el) {
             const b = toWorld(el.getBoundingClientRect());
-            bounds.push(b);
-            minX = Math.min(minX, b.x0); minY = Math.min(minY, b.y0);
-            maxX = Math.max(maxX, b.x1); maxY = Math.max(maxY, b.y1);
-        });
-        // Landing inside a frame: align its top-left so the parent label is
-        // visible with its cards below. Outside all frames: nudge into bounds.
-        const inside = bounds.find((b) => cam.x >= b.x0 && cam.x <= b.x1 && cam.y >= b.y0 && cam.y <= b.y1);
-        const nx = inside ? inside.x0 + (evp.w / 2 - 16) / cam.z : Math.min(Math.max(cam.x, minX - 80), maxX + 80);
-        const ny = inside ? inside.y0 + (evp.h / 2 - 16) / cam.z : Math.min(Math.max(cam.y, minY - 80), maxY + 80);
-        if (Math.abs(nx - cam.x) > 1 || Math.abs(ny - cam.y) > 1) {
-            const c = clampCam({ x: nx, y: ny, z: cam.z });
-            setCam(c); persist(c, pos, reviews);
+            let cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+            // A frame larger than the viewport centers as a void; align
+            // its top-left instead so the parent label shows with its
+            // contents below/right - the nested reading.
+            if ((b.y1 - b.y0) * cam.z > evp.h * 0.9) cy = b.y0 + (evp.h / 2 - 16) / cam.z;
+            if ((b.x1 - b.x0) * cam.z > evp.w * 0.95) cx = b.x0 + (evp.w / 2 - 16) / cam.z;
+            const c = clampCam({ x: cx, y: cy, z: cam.z });
+            if (Math.abs(c.x - cam.x) > 1 || Math.abs(c.y - cam.y) > 1) { setCam(c); persist(c, pos, reviews); }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [band, view]);
@@ -898,6 +886,19 @@ function Canvas() {
             const remaining = [...pointers.current.values()][0];
             gg.mode = 'pan'; gg.start = remaining; gg.last = remaining;
         } else if (pointers.current.size === 0) {
+            // Touch tap resolution. Container frames are divs (the collapsed
+            // frame IS the tap target), and Chrome's touch hit-adjustment
+            // retargets taps on small non-button divs to the nearest ancestor,
+            // so the native click never reaches the frame (mouse clicks are
+            // unaffected). Resolve a no-movement touch tap at its exact point
+            // instead; genuine controls (List pill, links) never reach this
+            // branch because pointerdown already nulled the gesture mode.
+            if (e.pointerType === 'touch' && e.type === 'pointerup' && gg.mode === 'pan' && !gg.moved && band === 'grp') {
+                const hit = document.elementFromPoint(e.clientX, e.clientY);
+                const frame = hit?.closest?.('[data-frame]');
+                const gid = frame?.getAttribute('data-frame');
+                if (gid) { gg.mode = null; setDragging(false); focusGroup(gid); return; }
+            }
             if (gg.mode) { viewTouched.current = true; persist(cam, pos, reviews); }
             gg.mode = null; setDragging(false);
         }
@@ -911,8 +912,8 @@ function Canvas() {
     const flagCount = SECTIONS.filter((s) => reviews[s.id] === 'flag').length;
     const findingsCount = SECTIONS.filter((s) => (findings[s.id] ?? '').trim().length > 0).length;
     useEffect(() => {
-        if (band !== 'grp' && band !== 'sys') return;
-        const sel = band === 'grp' ? '.rc-groups .rc-grpnode' : '.rc-sysnodes .rc-grpnode';
+        const sel = view !== 'structure' ? '.rc-viewnodes .rc-grpnode' : band === 'grp' ? '.rc-groups .rc-grpnode' : band === 'sys' ? '.rc-sysnodes .rc-grpnode' : null;
+        if (!sel) return;
         let changed = false;
         const next = { ...measuredNodes };
         document.querySelectorAll(sel).forEach((el) => {
@@ -926,7 +927,7 @@ function Canvas() {
             }
         });
         if (changed) setMeasuredNodes(next);
-    }, [band, measuredNodes]);
+    }, [band, view, measuredNodes]);
 
     const visRect: Rect = { x: cam.x - evp.w / 2 / cam.z, y: cam.y - evp.h / 2 / cam.z, w: evp.w / cam.z, h: evp.h / cam.z };
     // Owner feedback (14 Nov): laid out against exactly the visible screen,
@@ -939,23 +940,42 @@ function Canvas() {
     // Phones spread less: their first landing must still show whole nodes.
     const SPREAD_X = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.35;
     const SPREAD_Y = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.3;
-    // The spread rect must NOT track the live camera: when it did, every
-    // pan re-laid the same diagram around the new camera and the canvas
-    // looked stuck (owner's phone report, 14 Nov). Anchor it in world space;
-    // panning never moves it, so node positions are stable per level/view
-    // and the camera travels freely. Zoom or an intentional viewport resize
-    // changes the spread size and re-anchors at the current camera, which
-    // preserves the existing contextual-zoom re-layout.
-    const layW = visRect.w * SPREAD_X, layH = visRect.h * SPREAD_Y;
-    if (!layAnchor.current || Math.abs(layAnchor.current.w - layW) > 1 || Math.abs(layAnchor.current.h - layH) > 1) {
-        layAnchor.current = { x: cam.x, y: cam.y, w: layW, h: layH };
-    }
-    const layRect: Rect = {
-        x: layAnchor.current.x - layW / 2, y: layAnchor.current.y - layH / 2,
-        w: layW, h: layH,
-    };
-    const groupLayout = diagramLayout(CONTAINER_NODES, layRect, cam.z, measuredNodes);
-    const sysLayout = diagramLayout(SYS_NODES, layRect, cam.z, measuredNodes);
+    // One fixed world-anchored layout for every band and view (owner
+    // direction 14 Nov): a single continuous map. Bands change only how much
+    // detail renders inside each frame, never where anything sits; zoom and
+    // pan never re-lay.
+    const layRect: Rect = { x: 40, y: 40, w: WORLD.w - 80, h: WORLD.h - 80 };
+    // One stable world map (owner direction 14 Nov): at the container and
+    // container/system bands each container renders as its SAME frame with
+    // its FULL detail bounds reserved at every zoom; deeper zooms reveal
+    // chips, then full cards, inside those same bounds. Edge endpoints use
+    // the same NEST_EST rects the frames render with, so lines and boxes
+    // match at every zoom. Externals/people are fixed-position nodes below
+    // the frames, at the SAME world positions in both structure layouts.
+    // Nothing re-lays with the camera.
+    const frameNodes: GroupNode[] = NEST_COLUMNS.flatMap((col) =>
+        col.map((gid) => {
+            const g = C4_CONTAINERS.find((c) => c.id === gid)!;
+            const f = NEST_EST.frames[gid];
+            return { g, x: f.x + f.w / 2, y: f.y + f.h / 2, hw: f.w / 2, hh: f.h / 2 };
+        }));
+    const extNode = (id: string, defs: C4Node[], cx: number, cy: number): GroupNode =>
+        ({ g: defs.find((x) => x.id === id)!, x: cx, y: cy, hw: 150, hh: 60 });
+    // Full frame bounds stack to y=4330 (measured from NEST_EST: c-app bottom
+    // 2244, c-devsupport bottom 4330); externals sit below them. Nodes shared
+    // by the container and system layouts keep identical world coordinates.
+    const groupLayout: GroupNode[] = [
+        ...frameNodes,
+        extNode('x-files', CONTAINER_NODES, 300, 4480), extNode('x-github', CONTAINER_NODES, 1800, 4480),
+        extNode('x-dc', CONTAINER_NODES, 1300, 4480), extNode('p-dev', CONTAINER_NODES, 800, 4480),
+    ];
+    const sysLayout: GroupNode[] = [
+        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1086, y: 2190, hw: 1066, hh: 2170 },
+        extNode('p-owner', SYS_NODES, 500, 4760), extNode('p-members', SYS_NODES, 1050, 4760),
+        extNode('p-dev', SYS_NODES, 800, 4480),
+        extNode('x-gha', SYS_NODES, 1600, 4760), extNode('x-files', SYS_NODES, 300, 4480),
+        extNode('x-github', SYS_NODES, 1800, 4480), extNode('x-dc', SYS_NODES, 1300, 4480),
+    ];
     const grpRels = routeRels(C4_RELS, groupLayout, cam.z, layRect);
     const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, layRect);
     // Supporting views (dynamic flow / deployment) reuse the same
@@ -1043,24 +1063,15 @@ function Canvas() {
                     ))}
                 </svg>
                 <div className="rc-groups">
-                    {groupLayout.map((n) => {
+                    {/* containers render as their (collapsed) frames, so only
+                        externals/people appear as nodes here */}
+                    {groupLayout.filter((n) => n.g.kind === 'external' || n.g.kind === 'person').map((n) => {
                         const g = n.g;
-                        if (g.kind === 'external' || g.kind === 'person') {
-                            return (
-                                <div key={g.id} data-nid={g.id} className="rc-grpnode rc-node-ext" style={{ left: n.x, top: n.y }}>
-                                    <span className="rc-grplabel">{g.label}</span>
-                                    <span className="rc-grpcount">{g.sub}</span>
-                                </div>
-                            );
-                        }
-                        const members = [...(g.members ?? []), ...(g.attached ?? [])];
-                        const rev = members.filter((m) => reviews[m] === 'reviewed').length;
                         return (
-                            <button key={g.id} type="button" className={`rc-grpnode${g.kind === 'support' ? ' rc-node-support' : ''}`} style={{ left: n.x, top: n.y }} onClick={() => focusGroup(g.id)}>
+                            <div key={g.id} data-nid={g.id} className="rc-grpnode rc-node-ext" style={{ left: n.x, top: n.y }}>
                                 <span className="rc-grplabel">{g.label}</span>
                                 <span className="rc-grpcount">{g.sub}</span>
-                                <span className="rc-grpcount">{members.length} {members.length === 1 ? 'section' : 'sections'}{rev > 0 ? ` · ${rev} reviewed` : ''}</span>
-                            </button>
+                            </div>
                         );
                     })}
                 </div>
@@ -1103,9 +1114,9 @@ function Canvas() {
                             <span className="rc-grpcount">{g.sub}</span>
                         </>;
                         return g.kind === 'system' ? (
-                            <button key={g.id} data-nid={g.id} type="button" className={cls} style={{ left: n.x, top: n.y }} onClick={() => {
+                            <button key={g.id} data-nid={g.id} type="button" className={`${cls} rc-node-boundary`} style={{ left: n.x, top: n.y, width: n.hw * 2, height: n.hh * 2 }} onClick={() => {
                                 viewTouched.current = true;
-                                const c = clampCam({ x: 1080, y: 1280, z: 0.2 });
+                                const c = clampCam({ x: 1086, y: 2420, z: 0.168 });
                                 setCam(c); persist(c, pos, reviews);
                             }}>{inner}</button>
                         ) : (
@@ -1159,13 +1170,14 @@ function Canvas() {
                     with its cards inside (NEST), C4 zoom-in-context style;
                     in the section band chips flow under their container label
                     in reading order (LO_LAYOUT). */}
-                {view === 'structure' && band === 'detail' && NEST_COLUMNS.map((col, ci) => (
-                    <div key={ci} className="rc-nest-col" style={{ left: NEST_COL_X[ci], top: 40 }}>
+                {view === 'structure' && NEST_COLUMNS.map((col, ci) => (
+                    <div key={ci} className="rc-nest-col" style={{ left: NEST_COL_X[ci], top: 120 }}>
                         {col.map((gid) => {
                             const g = C4_CONTAINERS.find((c) => c.id === gid)!;
                             return (
-                                <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid) }}>
-                                    <div className="rc-frame-label">{g.label}<span className="rc-frame-sub">{g.sub}</span>{evp.w < 560 ? (
+                                <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid), height: NEST_EST.frames[gid].h }}
+                                    onClick={band === 'grp' ? () => focusGroup(gid) : undefined}>
+                                    <div className="rc-frame-label">{g.label}<span className="rc-frame-sub">{g.sub}</span><span className="rc-frame-count">{(() => { const n = (g.members?.length ?? 0) + (g.attached?.length ?? 0); return `${n} ${n === 1 ? 'item' : 'items'}`; })()}</span>{evp.w < 560 ? (
                                         <button type="button" className="rc-frame-list" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSheetGroup(gid); }}>List</button>
                                     ) : null}</div>
                                     <div className="rc-frame-cards">
@@ -1185,17 +1197,6 @@ function Canvas() {
                         })}
                     </div>
                 ))}
-                {view === 'structure' && band === 'lo' && C4_CONTAINERS.map((g) => (
-                    <div key={g.id} className="rc-seclabel" style={{ left: LO_LABELS[g.id].x, top: LO_LABELS[g.id].y }}>{g.label}</div>
-                ))}
-                {view === 'structure' && band !== 'detail' && Object.keys(cards).map((id) => {
-                    const p = LO_LAYOUT[id];
-                    return (
-                        <div key={id} style={{ position: 'absolute', left: p.x, top: p.y, width: CARD_SIZES[id].w, zIndex: expandedId === id ? 5 : undefined }}>
-                            {cards[id]}
-                        </div>
-                    );
-                })}
             </div>
             {/* navigation chrome (zoom buttons, Fit, minimap) intentionally
                 removed per owner request - pan and pinch remain; controls come
@@ -1206,16 +1207,6 @@ function Canvas() {
                 <div className="rc-status rc-warn" aria-live="polite">{savedMeta.message}</div>
             ) : null}
 
-            {view !== 'structure' || band !== 'detail' ? (
-                <div className="rc-bandcap">{
-                    view === 'flow' ? 'Understand - a shared list edit, step by step' :
-                    view === 'flowfeed' ? 'Understand - the app list feed, step by step' :
-                    view === 'deploy' ? 'Understand - where intodo runs' :
-                    band === 'sys' ? 'Understand - the system context' :
-                    band === 'grp' ? 'Understand - the containers' :
-                    `Look up - the ${SECTIONS.length} sections`
-                }</div>
-            ) : null}
         </div>
         {/* Bottom navigation: a compact dock bar that never covers the
             canvas; the key and the menu open as docked panels above the
@@ -1256,9 +1247,27 @@ function Canvas() {
         ) : null}
         <div className="rc-dockbar">
             <button type="button" className={`rc-dockchip${dock === 'menu' ? ' rc-dockchip-on' : ''}`} onClick={() => setDock(dock === 'menu' ? 'none' : 'menu')}>{dock === 'menu' ? 'Close menu' : 'Menu'}</button>
+            <button type="button" className="rc-dockchip" onClick={() => { viewTouched.current = true; fitView(); }}>Fit map</button>
             {dockRels ? (
                 <button type="button" className={`rc-dockchip${dock === 'legend' ? ' rc-dockchip-on' : ''}`} onClick={() => setDock(dock === 'legend' ? 'none' : 'legend')}>{dock === 'legend' ? 'Hide key' : view === 'flow' || view === 'flowfeed' ? 'Step key' : 'Relationship key'}</button>
             ) : null}
+            {/* the band/view caption lives in the dock, never on the canvas:
+                as a bottom-right overlay it covered the external nodes and
+                their labels exactly where a full-map fit places them. The
+                row is ALWAYS rendered (hidden but space-reserved in the
+                detail band): appearing/disappearing would resize the canvas
+                mid-gesture and retrigger the viewport fit, yanking the pan. */}
+            {(() => {
+                const cap = view === 'flow' ? 'Understand - a shared list edit, step by step' :
+                    view === 'flowfeed' ? 'Understand - the app list feed, step by step' :
+                    view === 'deploy' ? 'Understand - where intodo runs' :
+                    band === 'sys' ? 'Understand - the system context' :
+                    band === 'grp' ? 'Understand - the containers' :
+                    band === 'detail' ? '' :
+                    `Look up - the ${SECTIONS.length} sections`;
+                const hide = cap === '';
+                return <span className="rc-bandcap" style={hide ? { visibility: 'hidden' } : undefined} aria-hidden={hide}>{hide ? '\u00a0' : cap}</span>;
+            })()}
         </div>
         {overlayId && cards[overlayId] ? (
             <div className="rc-overlay" role="dialog" aria-modal="true" aria-label={TITLES[overlayId]}>

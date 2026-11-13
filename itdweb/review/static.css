@@ -209,7 +209,7 @@ a, .rc-card a { color: var(--ds-ink); }
    The key/menu open as docked panels above it (see .rc-legend/.rc-menu),
    shrinking the viewport rather than overlaying the diagram. */
 .rc-dockbar {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     padding: 6px 14px;
     background: #fbfaf9; border-top: 1px solid var(--ds-hairline);
 }
@@ -364,8 +364,12 @@ a, .rc-card a { color: var(--ds-ink); }
 
 /* Zoom-band purpose caption, non-interactive, top-left (legend stays bottom-left). */
 .rc-bandcap {
-    position: absolute; right: 14px; bottom: 14px; z-index: 8; pointer-events: none;
-    max-width: 80%; padding: 4px 12px;
+    /* docked caption, never on the canvas: as a bottom-right overlay it
+       covered the external nodes and labels where a full-map fit places
+       them. Lives in the dockbar, wraps to its own row on narrow phones. */
+    position: static; pointer-events: none;
+    flex: 1 1 100%; order: 9; text-align: center;
+    padding: 4px 12px;
     font-size: 12px; line-height: 18px; color: var(--ds-ink-2);
     background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 999px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -388,3 +392,38 @@ a, .rc-card a { color: var(--ds-ink); }
     color: var(--ds-ink);
     cursor: pointer;
 }
+
+/* Stable world map (owner direction 14 Nov): the same frames render at
+   every zoom band. Collapsed to their label at container/system bands,
+   chip-high cards at the section band, full cards in detail - position and
+   identity never change with zoom. */
+.rc-grp .rc-frame-cards, .rc-sys .rc-frame-cards { display: none; }
+.rc-grp .rc-frame, .rc-sys .rc-frame { cursor: pointer; }
+/* Frames reserve their full detail bounds at every zoom; a card that renders
+   taller than its estimate spills into the frame gap instead of shifting the
+   map. */
+.rc-frame { overflow: visible; }
+.rc-lo .rc-card { max-height: 72px; overflow: hidden; }
+/* Stable-map nodes: at the container/system bands node boxes and labels are
+   WORLD-sized, so the map zooms like a map - positions and sizes fixed in
+   the world, readable when you zoom in, complete when you zoom out. */
+.rc-grp .rc-grpnode, .rc-sys .rc-grpnode {
+    width: 300px; padding: 22px 26px; gap: 8px;
+    border-width: 3px; border-radius: 28px;
+}
+.rc-grp .rc-grplabel, .rc-sys .rc-grplabel { font-size: 34px; }
+.rc-grp .rc-grpcount, .rc-sys .rc-grpcount { font-size: 24px; }
+.rc-grp .rc-frame-label, .rc-sys .rc-frame-label { font-size: 40px; }
+.rc-grp .rc-frame-sub, .rc-sys .rc-frame-sub { font-size: 26px; }
+.rc-node-boundary { border-style: dashed; background: transparent; }
+/* The system boundary box's label sits in the top strip, clear of the frames. */
+.rc-node-boundary { justify-content: flex-start; align-items: flex-start; padding: 24px 32px; }
+/* Kill Chrome Android font boosting inside the canvas: it inflated nowrap
+   frame labels ~2x past their computed size (computed 20px, painted ~40px),
+   breaking the inverse-zoom label sizing. */
+.rc-world, .rc-world * { -webkit-text-size-adjust: none; text-size-adjust: none; }
+/* Far-zoom cue: item count inside a frame's reserved bounds, so a zoomed-out
+   frame reads as a full container, not an empty box. Hidden at near bands;
+   world-sized at far bands like the rest of the label block. */
+.rc-frame-count { display: none; }
+.rc-grp .rc-frame-count, .rc-sys .rc-frame-count { display: block; font-size: 24px; font-weight: 400; color: var(--ds-ink-2); margin-top: 6px; }
