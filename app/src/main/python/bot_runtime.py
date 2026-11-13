@@ -227,10 +227,8 @@ def _account(dc):
     raise RuntimeError("no configured account - run provision() first")
 
 
-# Owner-requested public display name (Irvan, 2026-11-13: "try rename it
-# yourself into itdapk Irvan's bot"). Applied at every bot start; the new
-# name reaches contacts with the bot's next outgoing message (core sends
-# the display name in the From: header). Idempotent, non-fatal on error.
+# Public bot display name applied at each start; contacts see the change
+# with its next outgoing message. Idempotent, non-fatal on error.
 BOT_DISPLAY_NAME = "itdapk Irvan's bot"
 
 
