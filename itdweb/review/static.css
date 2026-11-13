@@ -106,39 +106,146 @@ a, .rc-card a { color: var(--ds-ink); }
     opacity: 0.55;
 }
 
-/* Context level (furthest out): section cards and their edges give way to
-   one node per section group plus the aggregated group-to-group
-   connections. Node text counter-scales with --camz like the section
-   titles do, so the overview stays readable at phone fit zoom. */
+/* Container level (C4): section cards and their edges give way to one node
+   per runnable container (plus externals and a supporting cluster) with
+   labeled relationships. Node text counter-scales with --camz like the
+   section titles do, so the overview stays readable at phone fit zoom. */
 .rc-groups { display: none; }
 .rc-gedges { display: none; }
 .rc-grp .rc-world .rc-card, .rc-grp .rc-edges { display: none; }
 .rc-grp .rc-groups { display: block; }
 .rc-grp .rc-gedges { display: block; }
-.rc-gedges { position: absolute; top: 0; left: 0; pointer-events: none; }
-.rc-grp .rc-gedges line {
+.rc-gedges, .rc-glabels, .rc-syslabels { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.rc-groups, .rc-sysnodes { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.rc-groups .rc-grpnode, .rc-sysnodes .rc-grpnode { pointer-events: auto; }
+.rc-glabels, .rc-syslabels { display: none; }
+.rc-grp .rc-glabels { display: block; }
+.rc-sys .rc-syslabels { display: block; }
+.rc-grp .rc-gedges polyline {
     stroke: var(--ds-teal);
-    stroke-width: min(calc(2.5px / var(--camz)), 16px);
-    opacity: 0.5;
+    stroke-width: calc(2.5px / var(--camz));
+    opacity: 0.55;
+}
+.rc-gedges polyline.rc-rel-dash {
+    stroke: var(--ds-ink-2);
+    stroke-dasharray: calc(10px / var(--camz)) calc(6px / var(--camz));
+    opacity: 0.65;
+}
+.rc-rel-badge circle {
+    fill: var(--ds-page);
+    stroke: var(--ds-teal);
+    stroke-width: calc(1.5px / var(--camz));
+}
+.rc-rel-badge.rc-rel-badge-dash circle {
+    stroke: var(--ds-ink-2);
+    stroke-dasharray: calc(3.5px / var(--camz)) calc(2.5px / var(--camz));
+}
+.rc-rel-badge text {
+    fill: var(--ds-ink-2);
+    font-size: calc(10px / var(--camz));
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+.rc-grp .rc-legend-grp, .rc-sys .rc-legend-sys { display: flex; }
+.rc-legend-chip {
+    display: none;
+    position: absolute; left: 14px; bottom: 14px; z-index: 8;
+    padding: 5px 10px;
+    background: rgba(251, 250, 249, 0.92);
+    border: 1px solid var(--ds-hairline); border-radius: 999px;
+    font: inherit; font-size: 10.5px; color: var(--ds-ink-2);
+    cursor: pointer;
+}
+.rc-grp .rc-legend-chip-grp, .rc-sys .rc-legend-chip-sys { display: block; }
+.rc-grp .rc-legend, .rc-sys .rc-legend { bottom: 44px; }
+.rc-legend {
+    display: none;
+    position: absolute; left: 14px; bottom: 14px; z-index: 8;
+    flex-direction: column; gap: 3px;
+    padding: 7px 10px;
+    max-width: min(72vw, 340px);
+    background: #fbfaf9;
+    border: 1px solid var(--ds-hairline); border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(30, 41, 38, 0.12);
+    font-size: 10.5px; line-height: 1.25; color: var(--ds-ink-2);
+    pointer-events: none;
+}
+.rc-legend-item { display: flex; align-items: center; gap: 8px; }
+.rc-legend-key { margin-top: 2px; font-size: 10px; }
+.rc-legend-line {
+    display: inline-block; width: 24px; height: 0; flex: none;
+    border-top: 2.5px solid var(--ds-teal);
+}
+.rc-legend-line.rc-legend-dash { border-top: 2.5px dashed var(--ds-ink-2); }
+.rc-legend-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; flex: none;
+    border: 1.5px solid var(--ds-teal); border-radius: 50%;
+    font-size: 9.5px; color: var(--ds-ink-2);
+}
+.rc-legend-num.rc-legend-num-dash { border-style: dashed; border-color: var(--ds-ink-2); }
+
+/* System context level (furthest out, C4 system landscape): people + the
+   intodo system + external systems. */
+.rc-sysnodes { display: none; }
+.rc-sysedges { display: none; }
+.rc-sys .rc-world .rc-card, .rc-sys .rc-edges,
+.rc-sys .rc-groups, .rc-sys .rc-gedges, .rc-sys .rc-glabels { display: none; }
+.rc-sys .rc-sysnodes { display: block; }
+.rc-sys .rc-sysedges { display: block; }
+.rc-sysedges { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.rc-sys .rc-sysedges polyline {
+    stroke: var(--ds-teal);
+    stroke-width: calc(2.5px / var(--camz));
+    opacity: 0.55;
+}
+.rc-sysedges polyline.rc-rel-dash {
+    stroke: var(--ds-ink-2);
+    stroke-dasharray: calc(10px / var(--camz)) calc(6px / var(--camz));
+    opacity: 0.65;
 }
 .rc-grpnode {
     position: absolute; transform: translate(-50%, -50%);
     display: flex; flex-direction: column; align-items: center;
-    gap: min(calc(3px / var(--camz)), 18px);
-    padding: min(calc(10px / var(--camz)), 56px) min(calc(20px / var(--camz)), 112px);
+    gap: calc(3px / var(--camz));
+    padding: calc(9px / var(--camz)) calc(14px / var(--camz));
     background: var(--ds-page);
-    border: min(calc(1.5px / var(--camz)), 9px) solid var(--ds-teal);
-    border-radius: min(calc(14px / var(--camz)), 78px);
-    font-family: inherit; cursor: pointer; white-space: nowrap;
+    border: calc(1.5px / var(--camz)) solid var(--ds-teal);
+    border-radius: calc(12px / var(--camz));
+    font-family: inherit; cursor: pointer;
+    white-space: normal; text-align: center;
+    box-sizing: border-box; width: calc(150px / var(--camz));
 }
 .rc-grplabel {
     font-family: Aime, Georgia, serif; color: var(--ds-ink);
-    font-size: min(calc(15px / var(--camz)), 84px); line-height: 1.15;
+    font-size: calc(13.5px / var(--camz)); line-height: 1.15;
 }
 .rc-grpcount {
     color: var(--ds-ink-2);
-    font-size: min(calc(10px / var(--camz)), 56px);
+    font-size: calc(10px / var(--camz));
 }
+/* C4 node kinds */
+.rc-node-ext {
+    background: #f0efee;
+    border-color: var(--ds-hairline);
+    cursor: default;
+}
+.rc-node-support {
+    border-style: dashed;
+    border-color: var(--ds-ink-2);
+}
+.rc-node-person {
+    background: var(--ds-page);
+    border-color: var(--ds-ink);
+    border-radius: 999px;
+    cursor: default;
+}
+.rc-node-system {
+    background: var(--ds-teal);
+    border-color: var(--ds-teal);
+}
+.rc-node-system .rc-grplabel { color: #fff; }
+.rc-node-system .rc-grpcount { color: rgba(255, 255, 255, 0.85); }
 
 /* Group sheet (phones): a tapped group opens as a readable list of its
    sections; a row opens that section's focus overlay. */

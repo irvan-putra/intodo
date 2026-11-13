@@ -8,12 +8,15 @@ type Mark = 'reviewed' | 'flag';
 type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark> };
 
 const WORLD = { w: 2160, h: 2560 };
-const ZMIN = 0.15, ZMAX = 2.5;
-// Zoom bands, endless-paper/C4 style progressive disclosure:
-//   z < GROUP_Z  context level: one node per section group, group-to-group
-//                connections; tap a group to zoom into its sections
+const ZMIN = 0.07, ZMAX = 2.5;
+// Zoom bands, C4-style progressive disclosure (c4model.com):
+//   z < SYS_Z    system context: people + the intodo system + external systems
+//   z < GROUP_Z  container level: the repo's runnable units + code-evidenced
+//                relationships; tap a container to open its sections
 //   z < LO_Z     section level: concept cards (icon + title + mark), no
 //                per-file detail; tap a card to focus it
+//   otherwise    detail level: the full review cards, unchanged
+const SYS_Z = 0.11;
 //   otherwise    detail level: the full review cards, unchanged
 const GROUP_Z = 0.28;
 const LO_Z = 0.6;
@@ -96,74 +99,303 @@ function center(id: string, pos: Record<string, Pos>): Pos {
     return { x: pos[id].x + s.w / 2, y: pos[id].y + s.h / 2 };
 }
 
-// Context-level grouping. Member lists come from the authored section tags
-// in src/sections.ts (the prefix before " - "); the four guide/progress
-// cards and the three support cards are presentational clusters, not repo
-// claims. Group connections are derived from the authored EDGES pairs only.
-const GROUPS: { id: string; label: string; members: string[] }[] = [
-    { id: 'android', label: 'Android app', members: ['list-ui', 'feed-sync', 'self-update', 'native-canvas'] },
-    { id: 'bot', label: 'DeltaChat bot', members: ['bot-app', 'bot-runtime', 'bot-delivery', 'witness'] },
-    { id: 'miniapp', label: 'DeltaChat mini-app', members: ['xdc-app', 'xdc-canvas'] },
-    { id: 'shared', label: 'Shared list', members: ['merge-core'] },
-    { id: 'tests', label: 'Test suites', members: ['tests-android', 'tests-bot', 'tests-xdc'] },
-    { id: 'surface', label: 'Review surface', members: ['this-page'] },
-    { id: 'support', label: 'Repo, tools & docs', members: ['build-ci', 'feed-tool', 'assets-docs'] },
-    { id: 'guide', label: 'Review guide', members: ['howto', 'rule', 'permanence', 'progress'] },
+// C4 model, grounded in the public repo at the pinned snapshot 7e0bb57
+// (each relationship names its evidence file). Three runnable containers;
+// the feed publisher script, tests, CI and docs are supporting elements,
+// not architecture. Solid lines are runtime flows seen in code; dashed
+// lines are design similarity or designed-but-never-deployed pieces.
+//
+// The container and system bands are true semantic zoom: instead of
+// shrinking a fixed world-space diagram, each band re-lays-out against the
+// CURRENTLY VISIBLE world rect, so node type stays a constant on-screen
+// size at every zoom level, and edges route around unrelated boxes.
+type C4Node = { id: string; label: string; sub: string; kind: 'container' | 'support' | 'external' | 'person' | 'system'; members?: string[]; frac: { fx: number; fy: number } };
+const C4_CONTAINERS: C4Node[] = [
+    { id: 'c-app', label: 'itdapk - Android app', sub: 'Java/Kotlin + Chaquopy', kind: 'container', frac: { fx: 0.5, fy: 0.08 },
+      members: ['list-ui', 'feed-sync', 'self-update', 'native-canvas', 'merge-core', 'bot-app', 'bot-runtime', 'bot-delivery', 'witness'] },
+    { id: 'c-xdc', label: 'itdxdc - webxdc app', sub: 'JavaScript in DeltaChat', kind: 'container', frac: { fx: 0.22, fy: 0.44 }, members: ['xdc-app', 'xdc-canvas'] },
+    { id: 'c-web', label: 'itdweb - review page', sub: 'static GitHub Pages site', kind: 'container', frac: { fx: 0.72, fy: 0.48 }, members: ['this-page'] },
+    { id: 'c-support', label: 'Tests, tools & docs', sub: 'supporting - not architecture', kind: 'support', frac: { fx: 0.28, fy: 0.74 },
+      members: ['tests-android', 'tests-bot', 'tests-xdc', 'build-ci', 'assets-docs', 'feed-tool', 'howto', 'rule', 'permanence', 'progress'] },
 ];
-const GROUP_OF: Record<string, string> = {};
-for (const g of GROUPS) for (const m of g.members) GROUP_OF[m] = g.id;
-const GROUP_EDGES: [string, string][] = [];
-for (const [a, b] of EDGES) {
-    const ga = GROUP_OF[a], gb = GROUP_OF[b];
-    if (ga && gb && ga !== gb && !GROUP_EDGES.some(([x, y]) => (x === ga && y === gb) || (x === gb && y === ga))) GROUP_EDGES.push([ga, gb]);
-}
-function groupCenter(gid: string, pos: Record<string, Pos>): Pos {
-    const g = GROUPS.find((x) => x.id === gid)!;
-    let x = 0, y = 0;
-    for (const m of g.members) { const c = center(m, pos); x += c.x; y += c.y; }
-    return { x: x / g.members.length, y: y / g.members.length };
-}
-// nodes are wider than cards at far zoom; keep the whole node inside the
-// world so edge groups don't clip off screen at fit zoom. Edges and nodes
-// share these laid-out centers so lines stay under their nodes.
-type GroupNode = { g: { id: string; label: string; members: string[] }; x: number; y: number; hw: number; hh: number };
-function layoutGroupNodes(pos: Record<string, Pos>, z: number): GroupNode[] {
-    const nodes: GroupNode[] = GROUPS.map((g) => {
-        const c = groupCenter(g.id, pos);
-        const fontPx = Math.min(15 / z, 84);
-        const padX = Math.min(20 / z, 112);
-        const hw = (g.label.length * fontPx * 0.72 + 2 * padX + 80) / 2;
-        const hh = (fontPx + Math.min(10 / z, 56) + 2 * Math.min(10 / z, 56) + 60) / 2;
-        return {
-            g,
-            x: Math.min(Math.max(c.x, hw), WORLD.w - hw),
-            y: Math.min(Math.max(c.y, hh), WORLD.h - hh),
-            hw, hh,
-        };
+const C4_EXTERNALS: C4Node[] = [
+    { id: 'x-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.16, fy: 0.24 } },
+    { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.84, fy: 0.24 } },
+    { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.72, fy: 0.78 } },
+    { id: 'x-turso', label: 'Turso', sub: 'designed, not deployed', kind: 'external', frac: { fx: 0.86, fy: 0.62 } },
+];
+const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_EXTERNALS];
+type C4Rel = { a: string; b: string; label: string; dashed?: boolean; side?: 1 | -1 };
+const C4_RELS: C4Rel[] = [
+    { a: 'c-app', b: 'x-files', label: 'encrypted feed (HTTPS)' },                      // app/.../SyncEngine.java
+    { a: 'c-app', b: 'x-github', label: 'update check + APK download' },                // app/.../UpdateCheck.java
+    { a: 'c-app', b: 'x-dc', label: 'bot bridge + webxdc (RPC)' },                      // app/src/main/python/bot.py, bot_runtime.py, delivery_bot.py
+    { a: 'c-xdc', b: 'x-dc', label: 'webxdc updates' },                                 // webxdc/js/app.js
+    { a: 'c-web', b: 'x-github', label: 'links at pinned commit' },                     // itdweb/src/sections.ts
+    { a: 'c-app', b: 'c-xdc', label: 'same merge algorithm, no runtime link', dashed: true }, // app/.../merge/MergeDoc.java vs webxdc/js/mergedoc.js
+    { a: 'c-app', b: 'x-turso', label: 'ops storage - not deployed', dashed: true },    // app/src/main/python/turso_store.py STATUS note
+];
+// encrypt_feed.py is deliberately NOT a container and has NO edge to
+// Instinct Files: the script only emits ciphertext; publishing is a manual
+// handoff outside this repo, so there is no runtime integration to draw.
+const SYS_NODES: C4Node[] = [
+    { id: 'p-owner', label: 'Irvan', sub: 'owner', kind: 'person', frac: { fx: 0.22, fy: 0.2 } },
+    { id: 'p-members', label: 'Group members', sub: 'DeltaChat chat', kind: 'person', frac: { fx: 0.78, fy: 0.2 } },
+    { id: 's-intodo', label: 'intodo', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
+    { id: 'x-files', label: 'Instinct Files', sub: 'feed page', kind: 'external', frac: { fx: 0.18, fy: 0.7 } },
+    { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.82, fy: 0.7 } },
+    { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.86 } },
+];
+const SYS_RELS: C4Rel[] = [
+    { a: 'p-owner', b: 's-intodo', label: 'uses + reviews' },
+    { a: 'p-members', b: 's-intodo', label: 'edit shared list' },
+    { a: 's-intodo', b: 'x-files', label: 'feed page' },
+    { a: 's-intodo', b: 'x-github', label: 'source, releases, pages' },
+    { a: 's-intodo', b: 'x-dc', label: 'bot + webxdc' },
+];
+type Rect = { x: number; y: number; w: number; h: number };
+type GroupNode = { g: C4Node; x: number; y: number; hw: number; hh: number };
+// Screen-constant metrics: every size is device px, divided by the zoom to
+// get world units - text never shrinks with distance, the layout breathes.
+const D_LABEL = 13.5, D_SUB = 10, D_PADX = 14, D_PADY = 9, D_GAP = 3;
+function diagramLayout(defs: C4Node[], rect: Rect, z: number, measured: Record<string, { w: number; h: number }>): GroupNode[] {
+    const nodes: GroupNode[] = defs.map((g) => {
+        // labels wrap: boxes stay narrow enough to leave routable corridors
+        const MAXW = 150;
+        const labelCpl = Math.max(6, Math.floor((MAXW - 2 * D_PADX) / (D_LABEL * 0.62)));
+        const subCpl = Math.max(8, Math.floor((MAXW - 2 * D_PADX) / (D_SUB * 0.58)));
+        const labelLines = Math.ceil(g.label.length / labelCpl);
+        const subLines = Math.ceil(g.sub.length / subCpl);
+        let wPx = MAXW;
+        let hPx = 2 * D_PADY + labelLines * D_LABEL * 1.2 + D_GAP + subLines * D_SUB * 1.3;
+        if (g.members) hPx += D_GAP + D_SUB * 1.3;
+        const m = measured[g.id];
+        if (m) { wPx = m.w; hPx = m.h; }
+        return { g, x: rect.x + g.frac.fx * rect.w, y: rect.y + g.frac.fy * rect.h, hw: wPx / 2 / z, hh: hPx / 2 / z };
     });
-    // nearby centroids overlap at these sizes; push pairs apart along the
-    // shallower axis until every node clears its neighbours
+    // fractions are chosen collision-free, but narrow viewports compress x;
+    // push overlapping pairs apart AND clamp inside the visible rect, in the
+    // same loop, so clamping cannot re-create overlaps
+    const clampN = (n: GroupNode) => {
+        n.x = Math.min(Math.max(n.x, rect.x + n.hw + 8 / z), rect.x + rect.w - n.hw - 8 / z);
+        n.y = Math.min(Math.max(n.y, rect.y + n.hh + 8 / z), rect.y + rect.h - n.hh - 8 / z);
+    };
     for (let iter = 0; iter < 60; iter++) {
         let moved = false;
         for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
             const a = nodes[i], b = nodes[j];
-            const ox = a.hw + b.hw + 60 - Math.abs(a.x - b.x);
-            const oy = a.hh + b.hh + 40 - Math.abs(a.y - b.y);
+            const ox = a.hw + b.hw + 20 / z - Math.abs(a.x - b.x);
+            const oy = a.hh + b.hh + 16 / z - Math.abs(a.y - b.y);
             if (ox > 0 && oy > 0) {
                 moved = true;
                 if (ox < oy) { const d = (a.x <= b.x ? -1 : 1) * (ox / 2); a.x += d; b.x -= d; }
                 else { const d = (a.y <= b.y ? -1 : 1) * (oy / 2); a.y += d; b.y -= d; }
+                clampN(a); clampN(b);
             }
         }
         if (!moved) break;
     }
-    for (const n of nodes) {
-        n.x = Math.min(Math.max(n.x, n.hw), WORLD.w - n.hw);
-        n.y = Math.min(Math.max(n.y, n.hh), WORLD.h - n.hh);
-    }
+    for (const n of nodes) clampN(n);
     return nodes;
 }
-
+// Edge routing: straight border-to-border where clear; where a segment
+// crosses an unrelated box, insert a perpendicular detour waypoint beyond
+// that box and re-check. Badge goes on the longest unobstructed segment,
+// beside the line, flipping sides if it would sit on a box.
+type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; dashed?: boolean };
+function segHitsNode(p: Pos, q: Pos, n: GroupNode, m: number): boolean {
+    const x0 = n.x - n.hw - m, x1 = n.x + n.hw + m, y0 = n.y - n.hh - m, y1 = n.y + n.hh + m;
+    // Liang-Barsky segment vs AABB
+    const dx = q.x - p.x, dy = q.y - p.y;
+    let t0 = 0, t1 = 1;
+    const clip = (d: number, o: number) => {
+        if (d === 0) return o >= 0;
+        const t = o / d;
+        if (d < 0) { if (t > t1) return false; if (t > t0) t0 = t; }
+        else { if (t < t0) return false; if (t < t1) t1 = t; }
+        return true;
+    };
+    return clip(-dx, p.x - x0) && clip(dx, x1 - p.x) && clip(-dy, p.y - y0) && clip(dy, y1 - p.y) && t0 < t1;
+}
+function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): RelGeom[] {
+    const M = 4 / z, CELL = 4 / z, RB = 11 / z;
+    // connected pairs need room for a badge on the segment between them:
+    // push the far node out until the border-to-border gap fits one
+    for (const rel of rels) {
+        const na = nodes.find((n) => n.g.id === rel.a)!, nb = nodes.find((n) => n.g.id === rel.b)!;
+        const dx = nb.x - na.x, dy = nb.y - na.y, len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        const reach = (n: GroupNode) => Math.min(n.hw / (Math.abs(ux) || 1e-6), n.hh / (Math.abs(uy) || 1e-6));
+        const gap = len - reach(na) - reach(nb);
+        const need = 2 * RB + 30 / z;
+        if (gap < need) {
+            const push = (need - gap) / 2;
+            na.x -= ux * push; na.y -= uy * push;
+            nb.x += ux * push; nb.y += uy * push;
+            for (const n of [na, nb]) {
+                n.x = Math.min(Math.max(n.x, rect.x + n.hw + 8 / z), rect.x + rect.w - n.hw - 8 / z);
+                n.y = Math.min(Math.max(n.y, rect.y + n.hh + 8 / z), rect.y + rect.h - n.hh - 8 / z);
+            }
+        }
+    }
+    const border = (n: GroupNode, ux: number, uy: number): Pos => {
+        const t = Math.min(n.hw / (Math.abs(ux) || 1e-6), n.hh / (Math.abs(uy) || 1e-6));
+        return { x: n.x + ux * t, y: n.y + uy * t };
+    };
+    // grid bounds cover every node plus breathing room
+    let gx0 = Infinity, gy0 = Infinity, gx1 = -Infinity, gy1 = -Infinity;
+    for (const n of nodes) {
+        gx0 = Math.min(gx0, n.x - n.hw - 60 / z); gy0 = Math.min(gy0, n.y - n.hh - 60 / z);
+        gx1 = Math.max(gx1, n.x + n.hw + 60 / z); gy1 = Math.max(gy1, n.y + n.hh + 60 / z);
+    }
+    // keep routes on screen: never path outside the visible band rect
+    gx0 = Math.max(gx0, rect.x + 8 / z); gy0 = Math.max(gy0, rect.y + 8 / z);
+    gx1 = Math.min(gx1, rect.x + rect.w - 8 / z); gy1 = Math.min(gy1, rect.y + rect.h - 8 / z);
+    const gw = Math.max(4, Math.ceil((gx1 - gx0) / CELL)), gh = Math.max(4, Math.ceil((gy1 - gy0) / CELL));
+    const cellOf = (x: number, y: number): [number, number] => [
+        Math.min(gw - 1, Math.max(0, Math.round((x - gx0) / CELL))),
+        Math.min(gh - 1, Math.max(0, Math.round((y - gy0) / CELL))),
+    ];
+    const cellXY = (cx: number, cy: number): Pos => ({ x: gx0 + cx * CELL, y: gy0 + cy * CELL });
+    const inBox = (x: number, y: number, n: GroupNode, m: number) =>
+        Math.abs(x - n.x) < n.hw + m && Math.abs(y - n.y) < n.hh + m;
+    // pass 1: route every edge
+    const routed = rels.map((rel) => {
+        const na = nodes.find((n) => n.g.id === rel.a)!, nb = nodes.find((n) => n.g.id === rel.b)!;
+        const dx = nb.x - na.x, dy = nb.y - na.y;
+        const len = Math.hypot(dx, dy) || 1;
+        let pts: Pos[] = [border(na, dx / len, dy / len), border(nb, -dx / len, -dy / len)];
+        const others = nodes.filter((n) => n !== na && n !== nb);
+        const straightBlocked = others.some((n) => segHitsNode(pts[0], pts[1], n, M));
+        let routed = !straightBlocked;
+        for (let attempt = 0; attempt < 2 && !routed; attempt++) {
+            const mAtt = attempt === 0 ? M : 2 / z;
+            // A* over a coarse grid; cells inside a non-endpoint box are walls
+            const [scx, scy] = cellOf(pts[0].x, pts[0].y), [tcx, tcy] = cellOf(pts[1].x, pts[1].y);
+            const blocked = (cx: number, cy: number) => {
+                if ((cx === scx && cy === scy) || (cx === tcx && cy === tcy)) return false;
+                const { x, y } = cellXY(cx, cy);
+                return others.some((n) => inBox(x, y, n, mAtt));
+            };
+            const W = gw, H = gh;
+            const idx = (cx: number, cy: number) => cy * W + cx;
+            const gcost = new Float64Array(W * H).fill(Infinity);
+            const from = new Int32Array(W * H).fill(-1);
+            const open: [number, number][] = [[0, idx(scx, scy)]];
+            gcost[idx(scx, scy)] = 0;
+            const h = (cx: number, cy: number) => Math.abs(cx - tcx) + Math.abs(cy - tcy);
+            let found = false, guard = W * H * 8;
+            while (open.length && guard-- > 0) {
+                let bi = 0;
+                for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k;
+                const [, cur] = open.splice(bi, 1)[0];
+                const cx = cur % W, cy = (cur - cx) / W;
+                if (cx === tcx && cy === tcy) { found = true; break; }
+                const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+                for (const [ox, oy] of dirs) {
+                    const nx = cx + ox, ny = cy + oy;
+                    if (nx < 0 || ny < 0 || nx >= W || ny >= H || blocked(nx, ny)) continue;
+                    const pi = from[cur];
+                    const turn = pi >= 0 && ((pi % W) !== cx && ((pi - (pi % W)) / W) !== cy) && ((pi % W) !== nx || ((pi - (pi % W)) / W) !== ny) ? 0.6 : 0;
+                    const ng = gcost[cur] + 1 + turn;
+                    if (ng < gcost[idx(nx, ny)]) {
+                        gcost[idx(nx, ny)] = ng; from[idx(nx, ny)] = cur;
+                        open.push([ng + h(nx, ny), idx(nx, ny)]);
+                    }
+                }
+            }
+            if (found) {
+                const cells: [number, number][] = [];
+                let cur = idx(tcx, tcy);
+                while (cur >= 0) { cells.push([cur % W, (cur - (cur % W)) / W]); cur = from[cur]; }
+                cells.reverse();
+                pts = cells.map(([cx, cy]) => cellXY(cx, cy));
+                pts[0] = border(na, pts[1].x - na.x, pts[1].y - na.y);
+                pts[pts.length - 1] = border(nb, pts[pts.length - 2].x - nb.x, pts[pts.length - 2].y - nb.y);
+                // string pulling: keep only waypoints needed to stay clear
+                const pulled: Pos[] = [pts[0]];
+                let a = 0;
+                while (a < pts.length - 1) {
+                    let b = pts.length - 1;
+                    while (b > a + 1 && others.some((n) => segHitsNode(pts[a], pts[b], n, 3 / z))) b--;
+                    pulled.push(pts[b]); a = b;
+                }
+                pts = pulled;
+                routed = true;
+            }
+        }
+        return { rel, na, nb, pts };
+    });
+    const segDist = (x: number, y: number, p: Pos, q: Pos): number => {
+        const vx = q.x - p.x, vy = q.y - p.y;
+        const L2 = vx * vx + vy * vy || 1;
+        const t = Math.max(0, Math.min(1, ((x - p.x) * vx + (y - p.y) * vy) / L2));
+        return Math.hypot(x - (p.x + vx * t), y - (p.y + vy * t));
+    };
+    // pass 2: badges - candidates along the route by arc length, avoiding
+    // boxes, other badges, and every OTHER edge's path
+    const placed: Pos[] = [];
+    return routed.map(({ rel, na, nb, pts }, i) => {
+        const seglens: number[] = [];
+        let total = 0;
+        for (let si = 0; si < pts.length - 1; si++) {
+            const L = Math.hypot(pts[si + 1].x - pts[si].x, pts[si + 1].y - pts[si].y);
+            seglens.push(L); total += L;
+        }
+        const arcAt = (t: number): { x: number; y: number; ux: number; uy: number } => {
+            let d = t * total;
+            for (let si = 0; si < seglens.length; si++) {
+                if (d <= seglens[si] || si === seglens.length - 1) {
+                    const L = seglens[si] || 1;
+                    const ux = (pts[si + 1].x - pts[si].x) / L, uy = (pts[si + 1].y - pts[si].y) / L;
+                    return { x: pts[si].x + ux * d, y: pts[si].y + uy * d, ux, uy };
+                }
+                d -= seglens[si];
+            }
+            return { x: pts[0].x, y: pts[0].y, ux: 1, uy: 0 };
+        };
+        const side = rel.side ?? (i % 2 === 0 ? 1 : -1);
+        const badgeHits = (x: number, y: number) =>
+            nodes.some((n) => inBox(x, y, n, RB + 2 / z)) ||
+            placed.some((b) => Math.hypot(x - b.x, y - b.y) < 2 * RB + 4 / z) ||
+            routed.some((r2, j) => j !== i && r2.pts.some((p2, si) => si < r2.pts.length - 1 && segDist(x, y, p2, r2.pts[si + 1]) < 2 * RB + 2 / z)) ||
+            x - RB < rect.x + 6 / z || x + RB > rect.x + rect.w - 6 / z ||
+            y - RB < rect.y + 6 / z || y + RB > rect.y + rect.h - 6 / z;
+        const mid0 = arcAt(0.5);
+        let bx = mid0.x, by = mid0.y;
+        const cands: [number, number][] = [];
+        for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78, 0.15, 0.85, 0.08, 0.92]) {
+            const a = arcAt(t);
+            cands.push([a.x - a.uy * side * (RB + 4 / z), a.y + a.ux * side * (RB + 4 / z)]);
+            cands.push([a.x + a.uy * side * (RB + 4 / z), a.y - a.ux * side * (RB + 4 / z)]);
+        }
+        cands.push([mid0.x, mid0.y]);
+        let free = false;
+        for (const [cx, cy] of cands) if (!badgeHits(cx, cy)) { bx = cx; by = cy; free = true; break; }
+        if (!free) {
+            // crowded corner: take the candidate with the most clearance
+            let bestScore = -Infinity;
+            for (const [cx, cy] of cands) {
+                let score = Infinity;
+                for (const n of nodes) {
+                    const gx = Math.max(Math.abs(cx - n.x) - n.hw, 0), gy = Math.max(Math.abs(cy - n.y) - n.hh, 0);
+                    score = Math.min(score, Math.hypot(gx, gy));
+                }
+                for (const b of placed) score = Math.min(score, Math.hypot(cx - b.x, cy - b.y));
+                if (score > bestScore) { bestScore = score; bx = cx; by = cy; }
+            }
+        }
+        placed.push({ x: bx, y: by });
+        const tuck = (n: GroupNode, at: number, from: number) => {
+            const ux = n.x - pts[from].x, uy = n.y - pts[from].y;
+            const L = Math.hypot(ux, uy) || 1;
+            pts[at] = { x: pts[at].x + (ux / L) * 2.5 / z, y: pts[at].y + (uy / L) * 2.5 / z };
+        };
+        tuck(na, 0, 1);
+        tuck(nb, pts.length - 1, pts.length - 2);
+        return { key: `${rel.a}-${rel.b}`, pts, bx, by, r: RB, dashed: rel.dashed };
+    });
+}
 // keep a saved position only if it lands clear of every other card's slot;
 // positions saved against an older card set would otherwise overlap the grid
 function sanePositions(savedPos: Record<string, Pos>): Record<string, Pos> {
@@ -247,6 +479,8 @@ function Canvas() {
     const [pos, setPos] = useState<Record<string, Pos>>(sanePositions(saved?.pos ?? {}));
     const [focusedId, setFocusedId] = useState<string | null>(null);
     const [sheetGroup, setSheetGroup] = useState<string | null>(null);
+    const [legendOpen, setLegendOpen] = useState(false);
+    const [measuredNodes, setMeasuredNodes] = useState<Record<string, { w: number; h: number }>>({});
     const [reviews, setReviews] = useState<Record<string, Mark>>(saved?.reviews ?? {});
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [vp, setVp] = useState({ w: 0, h: 0 });
@@ -340,9 +574,9 @@ function Canvas() {
     // its member concept cards fill the view (lands inside the section band)
     const focusGroup = (gid: string) => {
         viewTouched.current = true;
-        const g = GROUPS.find((x) => x.id === gid)!;
-        // phones can't fit a wide group's cards side by side readably, so
-        // the group opens as a list sheet of its sections instead
+        const g = C4_CONTAINERS.find((x) => x.id === gid)!;
+        // phones can't fit a wide container's cards side by side readably,
+        // so the container opens as a list sheet of its sections instead
         if (evp.w < 560) { setSheetGroup(gid); return; }
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const m of g.members) {
@@ -370,6 +604,8 @@ function Canvas() {
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = prev; };
     }, [overlayId, sheetOpen]);
+
+    const band = cam.z < SYS_Z ? 'sys' : cam.z < GROUP_Z ? 'grp' : cam.z < LO_Z ? 'lo' : 'detail';
 
     const markSection = (id: string, m?: Mark) => {
         const r = { ...reviews };
@@ -452,7 +688,29 @@ function Canvas() {
 
     const reviewedCount = SECTIONS.filter((s) => reviews[s.id] === 'reviewed').length;
     const flagCount = SECTIONS.filter((s) => reviews[s.id] === 'flag').length;
-    const groupLayout = layoutGroupNodes(pos, cam.z);
+    useEffect(() => {
+        if (band !== 'grp' && band !== 'sys') return;
+        const sel = band === 'grp' ? '.rc-groups .rc-grpnode' : '.rc-sysnodes .rc-grpnode';
+        let changed = false;
+        const next = { ...measuredNodes };
+        document.querySelectorAll(sel).forEach((el) => {
+            const id = (el as HTMLElement).dataset.nid;
+            if (!id) return;
+            const r = el.getBoundingClientRect();
+            const old = next[id];
+            if (!old || Math.abs(old.w - r.width) > 0.5 || Math.abs(old.h - r.height) > 0.5) {
+                next[id] = { w: r.width, h: r.height };
+                changed = true;
+            }
+        });
+        if (changed) setMeasuredNodes(next);
+    }, [band, measuredNodes]);
+
+    const visRect: Rect = { x: cam.x - evp.w / 2 / cam.z, y: cam.y - evp.h / 2 / cam.z, w: evp.w / cam.z, h: evp.h / cam.z };
+    const groupLayout = diagramLayout(CONTAINER_NODES, visRect, cam.z, measuredNodes);
+    const sysLayout = diagramLayout(SYS_NODES, visRect, cam.z, measuredNodes);
+    const grpRels = routeRels(C4_RELS, groupLayout, cam.z, visRect);
+    const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, visRect);
 
     const cards: Record<string, React.ReactNode> = {
         progress: <CardShell id="progress" tag="Center" title="Review progress" centerCard onFocus={focusCard}>
@@ -493,7 +751,7 @@ function Canvas() {
     return <>
         <div
             ref={vpRef}
-            className={`rc-viewport${dragging ? ' rc-dragging' : ''}${cam.z < GROUP_Z ? ' rc-grp' : cam.z < LO_Z ? ' rc-lo' : ''}`}
+            className={`rc-viewport${dragging ? ' rc-dragging' : ''}${band === 'sys' ? ' rc-sys' : band === 'grp' ? ' rc-grp' : band === 'lo' ? ' rc-lo' : ''}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endPointer}
@@ -522,26 +780,103 @@ function Canvas() {
                         return <line key={`${a}-${b}`} x1={ca.x} y1={ca.y} x2={cb.x} y2={cb.y} stroke="var(--ds-hairline)" strokeWidth={2} />;
                     })}
                 </svg>
-                {/* context level: aggregated group connections, derived from
-                    the authored EDGES pairs; visible only in the rc-grp band */}
+                {/* container level: C4 relationships with labels; solid =
+                    runtime flow seen in code, dashed = design similarity or
+                    designed-but-never-deployed. Visible only in rc-grp */}
                 <svg className="rc-gedges" width={WORLD.w} height={WORLD.h}>
-                    {GROUP_EDGES.map(([a, b]) => {
-                        const na = groupLayout.find((n) => n.g.id === a)!, nb = groupLayout.find((n) => n.g.id === b)!;
-                        return <line key={`${a}-${b}`} x1={na.x} y1={na.y} x2={nb.x} y2={nb.y} />;
-                    })}
+                    <defs>
+                        <marker id="rc-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
+                        </marker>
+                        <marker id="rc-arr-dash" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-ink-2)" />
+                        </marker>
+                    </defs>
+                    {grpRels.map((g) => (
+                        <polyline key={g.key} points={g.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none"
+                            className={g.dashed ? 'rc-rel-dash' : undefined}
+                            markerEnd={`url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'})`} />
+                    ))}
                 </svg>
                 <div className="rc-groups">
                     {groupLayout.map((n) => {
                         const g = n.g;
-                        const rev = g.members.filter((m) => reviews[m] === 'reviewed').length;
+                        if (g.kind === 'external') {
+                            return (
+                                <div key={g.id} data-nid={g.id} className="rc-grpnode rc-node-ext" style={{ left: n.x, top: n.y }}>
+                                    <span className="rc-grplabel">{g.label}</span>
+                                    <span className="rc-grpcount">{g.sub}</span>
+                                </div>
+                            );
+                        }
+                        const members = g.members!;
+                        const rev = members.filter((m) => reviews[m] === 'reviewed').length;
                         return (
-                            <button key={g.id} type="button" className="rc-grpnode" style={{ left: n.x, top: n.y }} onClick={() => focusGroup(g.id)}>
+                            <button key={g.id} type="button" className={`rc-grpnode${g.kind === 'support' ? ' rc-node-support' : ''}`} style={{ left: n.x, top: n.y }} onClick={() => focusGroup(g.id)}>
                                 <span className="rc-grplabel">{g.label}</span>
-                                <span className="rc-grpcount">{g.members.length} {g.members.length === 1 ? 'section' : 'sections'}{rev > 0 ? ` · ${rev} reviewed` : ''}</span>
+                                <span className="rc-grpcount">{g.sub}</span>
+                                <span className="rc-grpcount">{members.length} {members.length === 1 ? 'section' : 'sections'}{rev > 0 ? ` · ${rev} reviewed` : ''}</span>
                             </button>
                         );
                     })}
                 </div>
+                {/* relationship labels sit above the nodes so long labels stay
+                    readable where lines pass under neighbouring nodes */}
+                <svg className="rc-glabels" width={WORLD.w} height={WORLD.h}>
+                    {grpRels.map((g, i) => (
+                        <g key={g.key} className={`rc-rel-badge${g.dashed ? ' rc-rel-badge-dash' : ''}`}>
+                            <circle cx={g.bx} cy={g.by} r={g.r} />
+                            <text x={g.bx} y={g.by}>{i + 1}</text>
+                        </g>
+                    ))}
+                </svg>
+                {/* system context level: people + the intodo system + external
+                    systems, furthest zoomed out. Tapping the system drops
+                    into the container level. */}
+                <svg className="rc-sysedges" width={WORLD.w} height={WORLD.h}>
+                    {/* markers must live in THIS svg: url(#...) into the
+                        display:none container-band svg does not paint */}
+                    <defs>
+                        <marker id="rc-arr-sys" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
+                        </marker>
+                        <marker id="rc-arr-dash-sys" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-ink-2)" />
+                        </marker>
+                    </defs>
+                    {sysRels.map((g) => (
+                        <polyline key={g.key} points={g.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none"
+                            className={g.dashed ? 'rc-rel-dash' : undefined}
+                            markerEnd={`url(#${g.dashed ? 'rc-arr-dash-sys' : 'rc-arr-sys'})`} />
+                    ))}
+                </svg>
+                <div className="rc-sysnodes">
+                    {sysLayout.map((n) => {
+                        const g = n.g;
+                        const cls = `rc-grpnode rc-node-${g.kind}`;
+                        const inner = <>
+                            <span className="rc-grplabel">{g.label}</span>
+                            <span className="rc-grpcount">{g.sub}</span>
+                        </>;
+                        return g.kind === 'system' ? (
+                            <button key={g.id} data-nid={g.id} type="button" className={cls} style={{ left: n.x, top: n.y }} onClick={() => {
+                                viewTouched.current = true;
+                                const c = clampCam({ x: 1080, y: 1280, z: 0.2 });
+                                setCam(c); persist(c, pos, reviews);
+                            }}>{inner}</button>
+                        ) : (
+                            <div key={g.id} data-nid={g.id} className={cls} style={{ left: n.x, top: n.y }}>{inner}</div>
+                        );
+                    })}
+                </div>
+                <svg className="rc-syslabels" width={WORLD.w} height={WORLD.h}>
+                    {sysRels.map((g, i) => (
+                        <g key={g.key} className="rc-rel-badge">
+                            <circle cx={g.bx} cy={g.by} r={g.r} />
+                            <text x={g.bx} y={g.by}>{i + 1}</text>
+                        </g>
+                    ))}
+                </svg>
                 {Object.keys(cards).map((id) => (
                     <div key={id} style={{ position: 'absolute', left: pos[id].x, top: pos[id].y, width: CARD_SIZES[id].w, zIndex: expandedId === id ? 5 : undefined }}>
                         {cards[id]}
@@ -556,6 +891,30 @@ function Canvas() {
             {savedMeta.ready && /^Not saved/.test(savedMeta.message) ? (
                 <div className="rc-status rc-warn" aria-live="polite">{savedMeta.message}</div>
             ) : null}
+            {/* C4 relationship key, container/system bands only: badges on
+                the edges are numbered into this list; dashed badge ring =
+                design similarity / not deployed */}
+            <button type="button" className="rc-legend-chip rc-legend-chip-grp" onClick={() => setLegendOpen((v) => !v)}>
+                {legendOpen ? 'hide key' : 'relationship key'}
+            </button>
+            {legendOpen ? (
+                <div className="rc-legend rc-legend-grp">
+                    {C4_RELS.map((r, i) => (
+                        <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
+                    ))}
+                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>runtime flow (code-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>design similarity / not deployed</span>
+                </div>
+            ) : null}
+            <button type="button" className="rc-legend-chip rc-legend-chip-sys" onClick={() => setLegendOpen((v) => !v)}>
+                {legendOpen ? 'hide key' : 'relationship key'}
+            </button>
+            {legendOpen ? (
+                <div className="rc-legend rc-legend-sys">
+                    {SYS_RELS.map((r, i) => (
+                        <span className="rc-legend-item" key={r.label}><span className="rc-legend-num">{i + 1}</span>{r.label}</span>
+                    ))}
+                </div>
+            ) : null}
         </div>
         {overlayId && cards[overlayId] ? (
             <div className="rc-overlay" role="dialog" aria-modal="true" aria-label={TITLES[overlayId]}>
@@ -566,13 +925,13 @@ function Canvas() {
             </div>
         ) : null}
         {sheetOpen ? (
-            <div className="rc-overlay rc-gsheet" role="dialog" aria-modal="true" aria-label={GROUPS.find((x) => x.id === sheetGroup)!.label}>
+            <div className="rc-overlay rc-gsheet" role="dialog" aria-modal="true" aria-label={C4_CONTAINERS.find((x) => x.id === sheetGroup)!.label}>
                 <div className="rc-overlay-head">
                     <button type="button" className="rc-overlay-back" onClick={() => setSheetGroup(null)}>Back to canvas</button>
                 </div>
                 <div className="rc-overlay-body">
                     {(() => {
-                        const g = GROUPS.find((x) => x.id === sheetGroup)!;
+                        const g = C4_CONTAINERS.find((x) => x.id === sheetGroup)!;
                         const rev = g.members.filter((m) => reviews[m] === 'reviewed').length;
                         return (
                             <>
