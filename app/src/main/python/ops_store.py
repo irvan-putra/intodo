@@ -82,10 +82,23 @@ def is_bot_envelope(payload):
 
 
 def is_boot(payload):
-    """True only for an exact-shape boot hint: {"list_id", "boot"} and
-    nothing else. Boot hints are control traffic, never history."""
+    """True only for an exact-shape boot hint: {"list_id", "boot"} plus an
+    optional "complete" (64-hex latest verified-complete generation claim)
+    and nothing else. Boot hints are control traffic, never history."""
     return (isinstance(payload, dict) and "boot" in payload
-            and set(payload.keys()) <= {"list_id", "boot"})
+            and set(payload.keys()) <= {"list_id", "boot", "complete"})
+
+
+def is_resume_hint(payload):
+    """True only for an exact-shape resume hint: {"list_id", "boot",
+    "resume", "missing?"} and nothing else, with a 64-hex generation id.
+    Control traffic like a boot hint, never history."""
+    if not (isinstance(payload, dict)
+            and set(payload.keys()) <= {"list_id", "boot", "resume", "missing"}):
+        return False
+    gen = payload.get("resume")
+    return (isinstance(gen, str) and len(gen) == 64
+            and all(c in "0123456789abcdef" for c in gen))
 
 
 def validate_op(op):

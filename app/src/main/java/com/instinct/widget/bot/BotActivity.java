@@ -40,14 +40,22 @@ public class BotActivity extends Activity {
         Button fetchXdc = new Button(this); fetchXdc.setText("6. Get latest app version (.xdc) from GitHub");
         candBox = new LinearLayout(this); candBox.setOrientation(LinearLayout.VERTICAL);
         logView = new TextView(this);
-        ScrollView sv = new ScrollView(this); sv.addView(logView);
         TextView steps = new TextView(this);
         steps.setText("Setup: 1 probe, 2 create account, 3 start bot, 4 show the invitation - on this same phone tap 'Open in DeltaChat' in its dialog (or scan the QR from another device). Add the bot to any chat: each group gets its own shared list and each direct chat its own personal list, kept separate. Button 5 publishes a new .xdc from this app to every chat the bot serves; button 6 downloads the newest .xdc from GitHub so you do not have to pick a file yourself.");
-        root.addView(steps);
-        root.addView(validate); root.addView(provision); root.addView(importBtn); root.addView(live); root.addView(invite); root.addView(stop);
-        root.addView(publish);
-        root.addView(fetchXdc);
-        root.addView(candBox); root.addView(sv);
+        // One scroll container for everything: the setup text and buttons
+        // scroll out of the way so the log can fill the screen (user request:
+        // screenshot more of the log). All controls preserved.
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.addView(steps);
+        content.addView(validate); content.addView(provision); content.addView(importBtn); content.addView(live); content.addView(invite); content.addView(stop);
+        content.addView(publish);
+        content.addView(fetchXdc);
+        content.addView(candBox); content.addView(logView);
+        ScrollView sv = new ScrollView(this); sv.addView(content);
+        root.addView(sv, new LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
         if (Build.VERSION.SDK_INT >= 33

@@ -35,7 +35,7 @@ from types import SimpleNamespace
 from deltachat_rpc_client import Bot, Chat, EventType, Message
 from deltachat_rpc_client.events import NewMessage, RawEvent
 
-from ops_store import OpsStore, is_boot, is_bot_envelope
+from ops_store import OpsStore, is_boot, is_bot_envelope, is_resume_hint
 
 
 def _account_addr(acct):
@@ -56,7 +56,8 @@ class BridgeBot:
     def __init__(self, account, store: OpsStore, gate):
         """`gate` is the DeliveryBot owning trust decisions: chat_allowed,
         instance_trusted, handle_private_message, handle_boot,
-        restore_into. Ingestion without the gate's trust is refused."""
+        handle_resume, restore_into, resume. Ingestion without the gate's
+        trust is refused."""
         self.account = account
         self.store = store
         self.gate = gate
@@ -296,6 +297,13 @@ class BridgeBot:
                 self.account._rpc.download_full_message(self.account.id,
                                                         pend["msg_id"])
                 self._reconcile_pending_download()
+        # bounded resume of any restore generation interrupted mid-queue
+        # (crash between envelope sends): requeue its un-queued batches
+        for instance, gen in self.gate.incomplete_generations():
+            try:
+                self.gate.resume(instance, self.send_update, gen=gen, crash=True)
+            except Exception:
+                log.exception("crash-resume of generation %s failed", gen[:12])
         # finish any register->ingest interrupted by a restart
         for mid in self.gate.pending_ingest():
             try:
@@ -332,8 +340,15 @@ class BridgeBot:
         for u in updates:
             payload = u.get("payload") or {}
             if is_boot(payload):
-                if self.gate.handle_boot(msg_id, payload) == "restore-authorized":
+                decision = self.gate.handle_boot(msg_id, payload)
+                if decision == "restore-authorized":
                     self.gate.restore_into(msg_id, self.send_update)
+                elif decision == "resume-authorized":
+                    self.gate.resume(msg_id, self.send_update)
+                # "complete-current": member verified it holds this exact
+                # generation - nothing to send, no budget burned
+            elif is_resume_hint(payload):
+                self.gate.handle_resume(msg_id, payload, self.send_update)
             elif is_bot_envelope(payload):
                 log.info("own restore echo on %s consumed, not ingested", msg_id)
         new = self.store.apply_updates(msg_id, updates)

@@ -86,8 +86,19 @@ from ops_store import RESTORE_MARKER
 
 log = logging.getLogger("delivery-bot")
 
-RESTORE_BATCH = 50       # ops per status update; each update is a separate mail
+RESTORE_BATCH = 50       # ops per status update; the core coalesces status
+                         # updates up to 100 KiB, so this is NOT one mail per batch
 MIN_RESTORE_INTERVAL = 300  # seconds between boot-triggered restores per instance
+# v2.1 bounded recovery (itd_restore_v2 envelopes): generation-frozen plans,
+# queued-cursor resume, per-generation retry budget with cooldown, loud limits.
+RESTORE_SCHEMA = "itd_restore_v2"
+DIGEST_RULE = "canon-v1"     # canonical_digest below; pinned in the frozen plan
+MAX_BATCHES = 1000           # fail loud above this, never silently truncate
+MAX_BATCH_BYTES = 32768      # per-envelope safety cap; an oversize single op
+                             # blocks the generation LOUDLY, never gets dropped
+MAX_MISSING_HINT = 1000      # resume-hint missing-indices array cap
+RESUME_BUDGET = 3            # resume attempts per generation per cooldown window
+RESUME_COOLDOWN = 1800       # seconds; a new attempt window may open after this
 
 ORIGIN_BOT = "bot"      # delivered by this bot via publish_version
 ORIGIN_OWNER = "owner"  # explicitly named by the verified owner
@@ -228,6 +239,9 @@ class DeliveryBot:
         self._publishes = {}        # str msg id -> {targets, delivered, file, chat_id}
         self._pending_ingest = []   # owner-registered msg ids whose existing
                                     # update history has not been ingested yet
+        self._plans = {}            # generation_id -> frozen RestorePlan dict
+        self._gen_queue = {}        # generation_id -> {"queued","attempts",
+                                    #   "window_start","state","instance"}
         self._load()
 
     # ---- crash-safe state persistence (OpsStore meta table) ---------------
@@ -243,6 +257,8 @@ class DeliveryBot:
             "pending_download": self._pending_download,
             "publishes": self._publishes,
             "pending_ingest": self._pending_ingest,
+            "plans": getattr(self, "_plans", {}),
+            "gen_queue": getattr(self, "_gen_queue", {}),
         }))
 
     def _load(self):
@@ -257,6 +273,10 @@ class DeliveryBot:
         self._pending_download = data.get("pending_download")
         self._publishes = data.get("publishes", {})
         self._pending_ingest = [int(m) for m in data.get("pending_ingest", [])]
+        self._plans = data.get("plans", {})
+        self._gen_queue = data.get("gen_queue", {})
+        self._gen_queue = {g: q for g, q in self._gen_queue.items()
+                           if g in self._plans}
 
     def pending_ingest(self):
         """Peek msg ids of owner-registered instances whose pre-registration
@@ -661,12 +681,17 @@ class DeliveryBot:
     def handle_boot(self, instance_msg_id, payload):
         """A boot hint NEVER authorizes an unknown instance.
 
-        Returns "restore-authorized" only when the instance is already
-        trusted (bot-delivered or owner-named), the payload carries the
-        pinned list_id, the version matches registration, and the throttle
-        window has passed; "throttled" when a restore ran recently. A
-        forged boot on a trusted instance can only cause one bounded,
-        throttled re-replay into that same instance (data its chat already
+        Routing after the trust gates (trusted instance, pinned list_id,
+        exact registered version):
+        - a "complete" claim equal to the current store generation for this
+          instance -> "complete-current": verified no-op, no budget burn;
+        - an active (or budget-exhausted) plan matching the CURRENT store
+          state -> "resume-authorized": bounded requeue of that same
+          generation, throttle-exempt, budget-gated (never a fresh budget);
+        - otherwise the 300s throttle applies; a passed throttle means
+          "restore-authorized" (a new generation is frozen and sent).
+        A forged boot on a trusted instance can only cause bounded,
+        budgeted re-replays into that same instance (data its chat already
         sees) - wasted mails, not a leak, and rate-limited.
         """
         inst = self._instances.get(instance_msg_id)
@@ -682,6 +707,26 @@ class DeliveryBot:
             log.warning("boot version %r != registered %r for %s",
                         payload.get("boot"), inst["version"], instance_msg_id)
             return None
+        gen, _hw, _gd, _n = self._compute_generation(instance_msg_id)
+        # Verified-complete claim: the app retains the generation whose
+        # WHOLE-SET digest it verified. When that equals the current store
+        # generation FOR THIS SAME INSTANCE, the member is provably up to
+        # date: no-op with NO budget burn and NO throttle state change, so
+        # healthy opens cost nothing. The claim only ever suppresses this
+        # instance's own requeue - it never gates any other member, and a
+        # stale or foreign claim simply falls through to the normal path.
+        complete = payload.get("complete")
+        if complete is not None:
+            if not (isinstance(complete, str) and len(complete) == 64
+                    and all(c in "0123456789abcdef" for c in complete)):
+                log.warning("boot with malformed complete claim for %s; "
+                            "treating as plain hint", instance_msg_id)
+                complete = None
+        if complete and complete == gen:
+            return "complete-current"
+        q = self._gen_queue.get(gen)
+        if q and q.get("state") in ("active", "exhausted"):
+            return "resume-authorized"
         elapsed = self._now() - self._last_restore.get(instance_msg_id, 0)
         if elapsed < self.min_restore_interval:
             log.info("boot for %s throttled (%.0fs < %ss)", instance_msg_id,
@@ -715,55 +760,285 @@ class DeliveryBot:
         self._send_counter[instance_msg_id] = n
         return "%s:%d:%s:%d" % (instance_msg_id, highwater, digest[:12], n)
 
-    # ---- continuity: ack-free full replay -------------------------------------
+    # ---- continuity: generation-frozen bounded replay (itd_restore_v2) ----
 
-    def restore_plan(self, from_seq=0):
-        """Batches of ops to replay, in order, FULL history (tombstones too).
+    def _compute_generation(self, instance_msg_id):
+        """Deterministic generation identity for the CURRENT store state:
+        (gen_id, highwater, generation_digest, op_count). Same store state ->
+        same id, so a plain hint for an unchanged store resumes the SAME
+        generation instead of pretending a fresh one. Whole-op-set digest
+        uses the pinned canonical rule (insertion-order independent)."""
+        ops = self.store.ops_since(0)
+        highwater = ops[-1][0] if ops else 0
+        flat = [op for _seq, op, _info in ops]
+        generation_digest = self.canonical_digest(flat)
+        version = self._instances[instance_msg_id]["version"]
+        gen = hashlib.sha256(
+            ("%s|%s|%s|%d|%s" % (self.list_id, instance_msg_id, version,
+                                 highwater, generation_digest)).encode()).hexdigest()
+        return gen, highwater, generation_digest, len(flat)
 
-        Each batch is a list of (seq, op, info) tuples from the store's
-        canonical global stream - HLC stamps inside ops untouched.
+    def _split_batches(self, flat):
+        """Freeze-time batching: count AND byte caps. Returns batch list, or
+        None when one genuine op alone exceeds the byte cap - the caller then
+        blocks LOUDLY instead of dropping or truncating it."""
+        batches, cur, cur_bytes = [], [], 0
+        for op in flat:
+            b = len(json.dumps(op, sort_keys=True, separators=(",", ":")).encode())
+            if b > MAX_BATCH_BYTES:
+                return None
+            if cur and (len(cur) >= RESTORE_BATCH or cur_bytes + b > MAX_BATCH_BYTES):
+                batches.append(cur)
+                cur, cur_bytes = [], 0
+            cur.append(op)
+            cur_bytes += b
+        batches.append(cur)  # empty history -> [[]]: one empty completion batch
+        if len(batches) > MAX_BATCHES:
+            return None
+        return batches
+
+    def _freeze_plan(self, instance_msg_id):
+        """Freeze and persist a RestorePlan for the current store state.
+        Persisted BEFORE the first send - intent, never success. Returns the
+        plan, or None when limits tripped (already logged loudly + blocked).
         """
-        ops = self.store.ops_since(from_seq)
-        return [ops[i:i + RESTORE_BATCH] for i in range(0, len(ops), RESTORE_BATCH)]
+        gen, highwater, generation_digest, op_count =             self._compute_generation(instance_msg_id)
+        existing = self._plans.get(gen)
+        if existing:
+            return existing
+        flat = [op for _seq, op, _info in self.store.ops_since(0)]
+        batches = self._split_batches(flat)
+        if batches is None:
+            self._plans[gen] = {
+                "instance": instance_msg_id, "list_id": self.list_id,
+                "version": self._instances[instance_msg_id]["version"],
+                "highwater": highwater, "op_count": op_count,
+                "batch_sizes": [], "batch_size": RESTORE_BATCH,
+                "schema": RESTORE_SCHEMA, "digest_rule": DIGEST_RULE,
+                "generation_digest": generation_digest, "generation_id": gen,
+                "created_at": self._now(),
+            }
+            self._gen_queue[gen] = {"queued": [], "attempts": 0,
+                                    "window_start": self._now(),
+                                    "state": "blocked", "instance": instance_msg_id}
+            self._persist()
+            log.error("restore BLOCKED for %s generation %s: %d op(s) exceed "
+                      "count/byte caps; nothing sent, NOTHING dropped - this "
+                      "needs an owner-visible fix, not silent truncation",
+                      instance_msg_id, gen[:12], op_count)
+            return None
+        plan = {
+            "instance": instance_msg_id, "list_id": self.list_id,
+            "version": self._instances[instance_msg_id]["version"],
+            "highwater": highwater, "op_count": op_count,
+            "batch_sizes": [len(b) for b in batches],
+            "batch_size": RESTORE_BATCH, "schema": RESTORE_SCHEMA,
+            "digest_rule": DIGEST_RULE,
+            "generation_digest": generation_digest, "generation_id": gen,
+            "created_at": self._now(),
+        }
+        self._plans[gen] = plan
+        self._gen_queue.setdefault(gen, {"queued": [], "attempts": 0,
+                                         "window_start": self._now(),
+                                         "state": "active",
+                                         "instance": instance_msg_id})
+        # a new current plan supersedes older plans for this instance
+        for g, p in self._plans.items():
+            if p["instance"] == instance_msg_id and g != gen:
+                og = self._gen_queue.get(g)
+                if og and og.get("state") == "active":
+                    og["state"] = "superseded"
+        self._persist()
+        return plan
+
+    def _plan_batches(self, plan):
+        """Re-derive the frozen batches: append-only store sliced at the
+        plan's highwater, split by the PLAN's frozen batch sizes (never the
+        live constant), and verified against the plan's whole-op digest -
+        fail-closed when the store no longer matches the frozen plan."""
+        ops = [op for seq, op, _info in self.store.ops_since(0)
+               if seq <= plan["highwater"]]
+        if self.canonical_digest(ops) != plan["generation_digest"]:
+            log.error("restore plan %s no longer matches the store; refusing "
+                      "to send an inconsistent generation",
+                      plan["generation_id"][:12])
+            return None
+        batches, i = [], 0
+        for size in plan["batch_sizes"]:
+            batches.append(ops[i:i + size])
+            i += size
+        return batches
+
+    def _envelope(self, plan, index, ops):
+        return {
+            RESTORE_MARKER: True,
+            "schema": plan["schema"],
+            "list_id": plan["list_id"],
+            "target_version": plan["version"],
+            "generation_id": plan["generation_id"],
+            "generation_digest": plan["generation_digest"],
+            "highwater": plan["highwater"],
+            "batch_index": index,
+            "batch_count": len(plan["batch_sizes"]),
+            "nonce": "%s:%d" % (plan["generation_id"][:12], index),
+            "digest": self.canonical_digest(ops),
+            "ops": ops,
+        }
+
+    def _send_batches(self, plan, send_update, indices):
+        """Queue the given batch indices into the core; persist the queued
+        cursor only AFTER the core accepted each send - never before, so a
+        crash requeues instead of lying about coverage."""
+        batches = self._plan_batches(plan)
+        if batches is None:
+            return 0
+        q = self._gen_queue[plan["generation_id"]]
+        sent = 0
+        for i in indices:
+            send_update(plan["instance"], self._envelope(plan, i, batches[i]), "")
+            q["queued"] = sorted(set(q["queued"]) | {i})
+            self._persist()
+            sent += len(batches[i])
+        return sent
+
+    def _burn_attempt(self, gen):
+        """One shared resume budget per generation per cooldown window
+        (crash-resumes and hint-resumes burn the same budget). A window that
+        expired opens ONE fresh bounded window - the cooldown is the bound
+        that prevents both a permanent stuck state and a tight reset loop.
+        Exhaustion is logged owner-visibly, never silent."""
+        q = self._gen_queue[gen]
+        now = self._now()
+        if now - q["window_start"] >= RESUME_COOLDOWN:
+            q["attempts"] = 0
+            q["window_start"] = now
+            if q["state"] == "exhausted":
+                q["state"] = "active"
+        if q["attempts"] >= RESUME_BUDGET:
+            if q["state"] != "exhausted":
+                q["state"] = "exhausted"
+                self._persist()
+            log.error("restore generation %s for %s EXHAUSTED its resume "
+                      "budget (%d per %ds); nothing more is sent until the "
+                      "cooldown passes - the app keeps showing its "
+                      "incomplete state",
+                      gen[:12], q["instance"], RESUME_BUDGET, RESUME_COOLDOWN)
+            return False
+        q["attempts"] += 1
+        self._persist()
+        return True
+
+    def incomplete_generations(self):
+        """(instance, gen_id) of active generations with un-queued batches -
+        the crash-resume set for reconcile_on_boot."""
+        out = []
+        for gen, q in self._gen_queue.items():
+            plan = self._plans.get(gen)
+            if not plan or q.get("state") != "active":
+                continue
+            if len(q["queued"]) < len(plan["batch_sizes"]):
+                out.append((plan["instance"], gen))
+        return out
+
+    def resume(self, instance_msg_id, send_update, gen=None, missing=None,
+               crash=False):
+        """Bounded requeue. A plain hint (gen None) requeues ALL indices of
+        the current-store generation: a member that lost its whole local
+        state must get the full generation even when the queued cursor says
+        every batch was already sent (queued != delivered). An explicit gen
+        with missing indices requeues exactly those; without missing, ALL.
+        crash=True (bot restart reconcile) requeues only un-queued indices:
+        the bot's own crash says nothing about member-side loss. An unknown
+        or superseded gen falls forward to the CURRENT plan. Every non-empty
+        requeue burns one shared-budget attempt; an empty computed set
+        returns BEFORE any budget mutation. Throttle-exempt."""
+        if instance_msg_id not in self._instances:
+            log.warning("resume for untrusted instance %s ignored", instance_msg_id)
+            return 0
+        cur_gen, _hw, _gd, _n = self._compute_generation(instance_msg_id)
+        plan = self._plans.get(gen) if gen else self._plans.get(cur_gen)
+        if not plan or plan["instance"] != instance_msg_id \
+                or self._gen_queue.get(plan["generation_id"], {}).get("state") == "superseded":
+            plan = self._plans.get(cur_gen)
+        if not plan:
+            return 0
+        gen_id = plan["generation_id"]
+        total = len(plan["batch_sizes"])
+        if missing:
+            indices = sorted({i for i in missing
+                              if isinstance(i, int) and 0 <= i < total})
+        elif crash:
+            indices = [i for i in range(total)
+                       if i not in self._gen_queue[gen_id]["queued"]]
+        else:
+            indices = list(range(total))
+        if not indices:
+            return 0
+        if not self._burn_attempt(gen_id):
+            return 0
+        sent = self._send_batches(plan, send_update, indices)
+        log.info("resume %s into %s: requeued %d batch(es), %d op(s)",
+                 gen_id[:12], instance_msg_id, len(indices), sent)
+        return sent
+
+    def handle_resume(self, instance_msg_id, payload, send_update):
+        """Explicit resume hint {list_id, boot, resume, missing}: same trust
+        gates as a boot hint (trusted instance, pinned list_id, exact
+        version), then strict shape/limits validation before any requeue."""
+        inst = self._instances.get(instance_msg_id)
+        if not inst:
+            log.warning("resume from unknown instance %s ignored", instance_msg_id)
+            return 0
+        if payload.get("list_id") != self.list_id:
+            log.warning("resume with wrong/missing list_id for %s ignored",
+                        instance_msg_id)
+            return 0
+        if payload.get("boot") != inst["version"]:
+            log.warning("resume version %r != registered %r for %s",
+                        payload.get("boot"), inst["version"], instance_msg_id)
+            return 0
+        gen = payload.get("resume")
+        missing = payload.get("missing") or []
+        if not isinstance(gen, str) or len(gen) != 64 \
+                or any(c not in "0123456789abcdef" for c in gen):
+            log.warning("resume with malformed generation id for %s ignored",
+                        instance_msg_id)
+            return 0
+        if not isinstance(missing, list) or len(missing) > MAX_MISSING_HINT:
+            log.warning("resume with oversized missing list for %s ignored",
+                        instance_msg_id)
+            return 0
+        return self.resume(instance_msg_id, send_update, gen=gen, missing=missing)
 
     def restore_into(self, instance_msg_id, send_update):
-        """Replay the FULL history into a trusted app instance. Ack-free:
-        the app cannot send automatic authenticated acks on this transport,
-        so nothing here waits for one. Idempotent by design - the app's
-        MergeDoc dedups by op HLC stamp, so replaying known ops is a no-op
-        app-side. No cursor is kept: every trigger replays everything, so
-        no cursor can ever starve a future restore, and no state grows per
-        boot. Crash mid-replay is harmless: the next trigger replays the
-        full history again.
+        """Start a restore for a trusted instance: freeze a generation plan
+        over the FULL history (tombstones too) and queue every un-queued
+        batch. Ack-free: the app cannot send automatic authenticated acks on
+        this transport, so nothing here waits for one. Idempotent: the app's
+        MergeDoc dedups by op HLC stamp. Crash mid-send is recovered by
+        resume() from the persisted queued cursor.
 
-        No-op (0 sent) for an untrusted instance.
+        No-op (0 sent) for an untrusted instance or a BLOCKED generation
+        (loud, owner-visible; never silently truncated).
         """
         if instance_msg_id not in self._instances:
             log.warning("restore refused for untrusted instance %s", instance_msg_id)
             return 0
+        plan = self._freeze_plan(instance_msg_id)
+        if plan is None:
+            return 0
+        gen = plan["generation_id"]
+        q = self._gen_queue[gen]
+        if q.get("state") != "active":
+            log.warning("restore into %s: generation %s is %s; use resume",
+                        instance_msg_id, gen[:12], q.get("state"))
+            return 0
         self._last_restore[instance_msg_id] = self._now()
-        self._persist()  # throttle state durable even if the replay crashes
-        sent = 0
-        for batch in self.restore_plan(from_seq=0):
-            ops = [op for _seq, op, _info in batch]
-            if not ops:
-                continue
-            last_info = batch[-1][2] or ""
-            digest = self.canonical_digest(ops)
-            highwater = batch[-1][0]  # informational: global seq of last op
-            nonce = self._next_nonce(instance_msg_id, highwater, digest)
-            self._persist()  # nonce counter durable per batch: no reuse across a crash
-            payload = {
-                RESTORE_MARKER: True,
-                "list_id": self.list_id,
-                "batch_highwater": highwater,
-                "target_version": self._instances[instance_msg_id]["version"],
-                "nonce": nonce,
-                "digest": digest,
-                "ops": ops,
-            }
-            send_update(instance_msg_id, payload, last_info)
-            sent += len(ops)
-        log.info("restore into %s: replayed %d op(s) (full history, ack-free)",
-                 instance_msg_id, sent)
+        self._persist()  # throttle state durable even if the send crashes
+        sent = self._send_batches(
+            plan, send_update,
+            [i for i in range(len(plan["batch_sizes"])) if i not in q["queued"]])
+        log.info("restore into %s: generation %s, %d op(s) in %d batch(es) "
+                 "(%s, ack-free)", instance_msg_id, gen[:12], sent,
+                 len(plan["batch_sizes"]), RESTORE_SCHEMA)
         return sent

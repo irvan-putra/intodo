@@ -14,7 +14,7 @@
   const DELETED = window.MERGE_DELETED;
   const STORE_KEY = 'instinct-shared-list-doc-v1';
   const BIND_KEY = 'instinct-shared-list-binding-v1';
-  const APP_VERSION = '0.4.3'; // keep in step with manifest.toml version
+  const APP_VERSION = '0.4.5'; // keep in step with manifest.toml version
   // List binding: an instance only accepts restore envelopes for its bound
   // list_id. Binding comes from trusted packaging (list.json packed by the
   // bot at publish) or an explicit in-app owner confirmation - NEVER from
@@ -80,7 +80,12 @@
   function loadDoc() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) return MergeDoc.deserialize(raw);
+      if (raw) {
+        // repair docs persisted before seed stamps were fixed (seedfix.js):
+        // re-runs the merge so displaced real edits win again; local only
+        const r = window.SEEDFIX.repairSeedStamps(MergeDoc, MergeDoc.deserialize(raw));
+        return r.doc;
+      }
     } catch (e) { /* corrupted store: start clean */ }
     const d = new MergeDoc();
     seed(d);
@@ -88,18 +93,8 @@
   }
 
   function seed(d) {
-    // invented, non-sensitive sample items
-    const s = { hlc: Date.now() - 60000, device: 'sample' };
-    const items = [
-      ['sample-1', 'Buy oat milk', ''],
-      ['sample-2', 'Pay electricity bill', 'Due Friday'],
-      ['sample-3', 'Call Mom', ''],
-    ];
-    for (const [id, title, note] of items) {
-      d.apply(id, 'title', title, s);
-      if (note) d.apply(id, 'note', note, s);
-      d.apply(id, 'done', 'false', s);
-    }
+    // invented, non-sensitive sample items - fixed ancient stamp (seedfix.js)
+    window.SEEDFIX.seedDoc(d);
   }
 
   let doc = loadDoc();
@@ -136,7 +131,7 @@
 
   function applyUpdate(update) {
     const p = update.payload;
-    if (p && p.itd_restore_v1 === true) { applyRestoreEnvelope(p); return; }
+    if (p && p.itd_restore_v1 === true) { queueRestoreEnvelope(p); return; }
     if (p && typeof p.list_id === 'string' && typeof p.boot !== 'undefined' && !p.ops) return; // boot hint: not ops
     const ops = p && p.ops;
     if (!ops) return;
@@ -146,6 +141,74 @@
     }
     persist();
     render();
+  }
+
+  // ---------- restore generations (itd_restore_v2) ----------
+  // Serialized per-generation tracking: batch dedup by (generation, index),
+  // op dedup by identity, completion only when every batch arrived AND the
+  // whole accumulated op set matches the generation digest. Coverage of the
+  // latest incomplete generation persists across app restarts.
+  const restoreTracker = window.ItdRestoreGen.create({});
+  let restoreQueue = Promise.resolve();
+  let resumeHintLast = 0;
+
+  function queueRestoreEnvelope(env) {
+    restoreQueue = restoreQueue.then(() => handleRestoreEnvelope(env));
+  }
+
+  function handleRestoreEnvelope(env) {
+    if (boundListId && env.list_id !== boundListId) {
+      diag('ignored batch for a different list');
+      return Promise.resolve();
+    }
+    if (!boundListId) return applyRestoreEnvelope(env); // unbound: owner-link flow
+    return restoreTracker.acceptEnvelope(env, applyOps).then(st => {
+      switch (st.status) {
+        case 'legacy': return applyRestoreEnvelope(env);
+        case 'malformed': diag('ignored malformed batch'); break;
+        case 'rejected': diag('rejected batch (digest or op domain)'); break;
+        case 'duplicate': break; // idempotent redelivery: nothing to do
+        case 'accepted':
+          diag('received ' + st.received + '/' + st.total + ' batches');
+          break;
+        case 'complete':
+          diag('complete (' + st.ops + ' ops)');
+          break;
+        case 'digest-mismatch':
+          diag('restore inconsistent - requesting it again');
+          break;
+      }
+      render();
+    });
+  }
+
+  function applyOps(ops) {
+    for (const op of ops) {
+      doc.apply(op.item, op.field, op.value, op.stamp);
+      if (op.stamp.hlc > lastHlc) lastHlc = op.stamp.hlc;
+    }
+    persist();
+  }
+
+  // While a generation is incomplete, ask the bot for exactly the missing
+  // batches: once per open, then at most every 300s while open. The bot
+  // enforces its own per-generation resume budget on top of this.
+  function maybeSendResumeHint() {
+    if (!boundListId || !restoreTracker.isIncomplete()) return;
+    const now = Date.now();
+    if (now - resumeHintLast < 300000) return;
+    // persisted per-generation budget (3 per 30 min, same bound as the bot):
+    // an app restart cannot reset it, an exhausted window stays silent
+    if (!restoreTracker.resumeHintAllowed(now, 3, 1800000)) return;
+    resumeHintLast = now;
+    try {
+      window.webxdc.sendUpdate({ payload: {
+        list_id: boundListId,
+        boot: APP_VERSION,
+        resume: restoreTracker.currentGeneration(),
+        missing: restoreTracker.missingIndices() || [],
+      } }, '');
+    } catch (e) { resumeHintLast = 0; }
   }
 
   function applyRestoreEnvelope(env) {
@@ -187,6 +250,11 @@
     bootHintSent = true;
     try {
       const hint = { list_id: boundListId, boot: APP_VERSION };
+      // verified-complete claim: lets the bot no-op healthy opens with no
+      // recovery-budget burn; omitted after total loss (plain hint then
+      // requeues the full generation, bounded by the shared budget)
+      const complete = restoreTracker.latestComplete();
+      if (complete) hint.complete = complete;
       window.webxdc.sendUpdate({ payload: hint }, '');
       window.__lastBootHint = hint; // test hook
     } catch (e) {
@@ -280,7 +348,11 @@
     const list = document.getElementById('list');
     const rows = [];
     const ids = [...doc.items.keys()].filter(id => doc.isVisible(id));
-    ids.sort((a, b) => (((doc.getStamp(a, 'title') || {}).hlc || 0) - ((doc.getStamp(b, 'title') || {}).hlc || 0)));
+    // primary: title-write stamp (creation order, unchanged semantics);
+    // tie-break: item id, so equal stamps (the fixed hlc-0 seeds) order
+    // deterministically on every client instead of by Map insertion order
+    ids.sort((a, b) => (((doc.getStamp(a, 'title') || {}).hlc || 0) - ((doc.getStamp(b, 'title') || {}).hlc || 0))
+      || (a < b ? -1 : a > b ? 1 : 0));
     for (const id of ids) {
       const _dv = doc.get(id, 'done'); const done = _dv === 'true' || _dv === true;
       const _tv = doc.get(id, 'title'); const title = (_tv === null || _tv === undefined) ? '' : String(_tv);
@@ -439,6 +511,8 @@
   loadPackagedBinding().then(() => {
     render();
     maybeSendBootHint();
+    maybeSendResumeHint();
+    setInterval(maybeSendResumeHint, 300000);
     return window.webxdc.setUpdateListener(applyUpdate, 0);
   }).then(render);
 })();
