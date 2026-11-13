@@ -1,0 +1,84 @@
+/* Static full-screen canvas styles (GitHub Pages variant).
+   The --ds-* tokens and typography mirror the hosted Instinct Files runtime
+   (measured from the live hosted canvas) so the shared rc-* rules in
+   ../src/style.css render the same here as they do hosted.
+   Layout: the canvas IS the page - no page framing, no square viewport.
+   Navigation chrome (zoom buttons, Fit, minimap) is intentionally absent per
+   owner request; pan and pinch remain, controls return in a later iteration. */
+:root {
+    --ds-page: #fbfaf9;
+    --ds-hairline: #eae9ea;
+    --ds-ink: #251f21;
+    --ds-ink-2: #585254;
+    --ds-teal: #73a89a;
+}
+html, body, #root { margin: 0; height: 100%; }
+body {
+    font-family: "GT America", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    background: var(--ds-page);
+    color: #101113;
+    overflow: hidden;
+}
+h1, h2, h3 { font-family: Aime, Georgia, serif; font-weight: 400; }
+
+/* Full-window canvas, FreeForm/Miro-style. Overrides the square aspect-ratio
+   rule from ../src/style.css. */
+.rc-viewport {
+    height: 100vh;
+    height: 100dvh;
+    aspect-ratio: auto;
+    border: none;
+    border-radius: 0;
+}
+
+/* Live storage-state note, non-interactive. */
+.rc-status {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    z-index: 3; pointer-events: none;
+    max-width: 80%; padding: 4px 12px;
+    font-size: 12px; line-height: 18px; color: var(--ds-ink-2);
+    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 999px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Focus overlay: full-screen readable card detail on phones (<560px).
+   Focus there opens this instead of zooming the canvas, so long cards stay
+   readable (real 16px text, 44px tap targets) and every file link and the
+   review action stay reachable by scrolling. */
+.rc-overlay {
+    position: fixed; inset: 0; z-index: 40;
+    background: var(--ds-page);
+    overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+.rc-overlay-head {
+    position: sticky; top: 0; z-index: 2;
+    padding: 10px 12px; background: var(--ds-page);
+    border-bottom: 1px solid var(--ds-hairline);
+}
+.rc-overlay-back {
+    min-height: 44px; padding: 0 16px;
+    font-size: 14px; font-weight: 600; color: var(--ds-ink);
+    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 8px;
+    cursor: pointer;
+}
+.rc-overlay-body { max-width: 640px; margin: 0 auto; padding: 16px 16px 64px; }
+.rc-overlay .rc-card {
+    position: static; width: auto; padding: 0;
+    border: none; box-shadow: none; background: transparent;
+    font-size: 16px; line-height: 26px;
+}
+.rc-overlay .rc-card p, .rc-overlay .rc-card li { font-size: 16px; line-height: 26px; }
+.rc-overlay .rc-card code { font-size: 13px; }
+.rc-overlay .rc-focus { display: none; }
+.rc-overlay .rc-files a { display: inline-block; padding: 3px 0; }
+.rc-overlay .rc-reviewbtns button { min-height: 44px; font-size: 14px; }
+
+/* Canvas body text matches the hosted card typography. */
+.rc-card { font-size: 14px; line-height: 24px; }
+a, .rc-card a { color: var(--ds-ink); }
+.rc-card code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+}

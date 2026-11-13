@@ -1,0 +1,13 @@
+{
+  "name": "intodo-review-canvas-static",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static GitHub Pages build of the intodo section review canvas",
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
