@@ -122,7 +122,6 @@ const C4_EXTERNALS: C4Node[] = [
     { id: 'x-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.16, fy: 0.24 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.84, fy: 0.24 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.72, fy: 0.78 } },
-    { id: 'x-turso', label: 'Turso', sub: 'designed, not deployed', kind: 'external', frac: { fx: 0.86, fy: 0.62 } },
 ];
 const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_EXTERNALS];
 type C4Rel = { a: string; b: string; label: string; dashed?: boolean; side?: 1 | -1 };
@@ -133,7 +132,6 @@ const C4_RELS: C4Rel[] = [
     { a: 'c-xdc', b: 'x-dc', label: 'webxdc updates' },                                 // webxdc/js/app.js
     { a: 'c-web', b: 'x-github', label: 'links at pinned commit' },                     // itdweb/src/sections.ts
     { a: 'c-app', b: 'c-xdc', label: 'same merge algorithm, no runtime link', dashed: true }, // app/.../merge/MergeDoc.java vs webxdc/js/mergedoc.js
-    { a: 'c-app', b: 'x-turso', label: 'ops storage - not deployed', dashed: true },    // app/src/main/python/turso_store.py STATUS note
 ];
 // encrypt_feed.py is deliberately NOT a container and has NO edge to
 // Instinct Files: the script only emits ciphertext; publishing is a manual

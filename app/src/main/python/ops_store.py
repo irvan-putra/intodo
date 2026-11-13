@@ -32,9 +32,7 @@ numbering the app-side setUpdateListener(cb, serial) replays from.
 Global ordering of history lives in the ops' HLC stamps, kept untouched
 inside each op.
 
-Local file today. The Turso cloud step is a constructor change to
-TursoHTTPStore (same interface). Cloud path is untested until the user
-creates/approves a Turso database.
+Local file today; no cloud storage backend is configured.
 """
 
 import json
