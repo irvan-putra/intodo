@@ -28,6 +28,10 @@ import org.robolectric.annotation.GraphicsMode;
 @Config(sdk = 32, qualifiers = "xxhdpi")
 public class BotActivityRenderTest {
     private static Activity activityWithState(String state, boolean running, String log) throws Exception {
+        return activityWithFixtures(state, running, log, null);
+    }
+
+    private static Activity activityWithFixtures(String state, boolean running, String log, String witnessCfg) throws Exception {
         org.robolectric.android.controller.ActivityController<BotActivity> controller = Robolectric.buildActivity(BotActivity.class);
         Activity activity = controller.get();
         File dir = activity.getFilesDir();
@@ -35,6 +39,9 @@ public class BotActivityRenderTest {
             try (FileWriter w = new FileWriter(new File(dir, "bot_state.json"))) { w.write(state); }
         }
         if (running) new File(dir, "RUNNING").createNewFile();
+        if (witnessCfg != null) {
+            try (FileWriter w = new FileWriter(new File(dir, "witness_config.json"))) { w.write(witnessCfg); }
+        }
         if (log != null) {
             try (FileWriter w = new FileWriter(new File(dir, "bot.log"))) { w.write(log); }
         }
@@ -118,7 +125,7 @@ public class BotActivityRenderTest {
         assertNotNull(logsHeader);
         assertEquals("Setup & account  ▸", setupHeader.getText().toString());
         assertEquals("Logs  ▸", logsHeader.getText().toString());
-        assertEquals("all original controls remain available", 8, countButtons(root));
+        assertEquals("original 8 controls plus 3 witness controls remain available", 11, countButtons(root));
         for (Button button : findButtons(root)) {
             assertTrue("button label uses sentence case: " + button.getText(),
                     button.getText().toString().equals(button.getText().toString().toUpperCase()) == false);
@@ -143,7 +150,52 @@ public class BotActivityRenderTest {
         assertTrue(status.getText().toString().contains("Service: stopped"));
         assertNotNull(setupHeader);
         assertTrue("first-run setup is available", setupHeader.getText().toString().endsWith("▾"));
-        assertEquals("all original controls remain available", 8, countButtons(root));
+        assertEquals("original 8 controls plus 3 witness controls remain available", 11, countButtons(root));
         render(activity, "/tmp/intodo-bot-setup-expanded.png");
+    }
+
+    @Test
+    public void witnessSectionDefaultOffThenExpanded() throws Exception {
+        String state = "{\"provisioned\":true,\"bot_addr\":\"bot-fixture@example.invalid\","
+            + "\"chats\":{\"fixture-group\":{}}}";
+        String cfg = "{\"chats\":[7],\"watched\":[\"witness-actor@example.invalid\"]}";
+        Activity activity = activityWithFixtures(state, true, null, cfg);
+        View root = activity.getWindow().getDecorView();
+
+        TextView witnessHeader = findText(root, "Witness");
+        assertNotNull("witness section header present", witnessHeader);
+        assertTrue("witness section collapsed by default: " + witnessHeader.getText(), witnessHeader.getText().toString().endsWith("▸"));
+        TextView witnessText = findText(root, "The witness records");
+        assertNotNull("witness explainer present", witnessText);
+        assertTrue("witness box hidden by default", !witnessText.isShown());
+
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        for (Button b : findButtons(root)) labels.add(b.getText().toString());
+        assertTrue("choose-chats control present", labels.contains("Choose witness chats"));
+        assertTrue("refresh control present", labels.contains("Refresh witness report"));
+        assertTrue("delete control present", labels.contains("Delete witness data"));
+
+        witnessHeader.performClick();
+        assertTrue("witness section expands", witnessHeader.getText().toString().endsWith("▾"));
+        assertTrue("witness box shown after tap", witnessText.isShown());
+
+        boolean actorFound = false;
+        for (Button b : findButtons(root)) { }
+        java.util.List<android.widget.EditText> edits = new java.util.ArrayList<>();
+        collectEdits(root, edits);
+        for (android.widget.EditText e : edits) {
+            if ("witness-actor@example.invalid".contentEquals(e.getText())) actorFound = true;
+        }
+        assertTrue("configured witnessed account prefilled (synthetic fixture)", actorFound);
+
+        render(activity, "/tmp/integ-bot-witness.png");
+    }
+
+    private static void collectEdits(View view, java.util.List<android.widget.EditText> out) {
+        if (view instanceof android.widget.EditText) out.add((android.widget.EditText) view);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) collectEdits(group.getChildAt(i), out);
+        }
     }
 }

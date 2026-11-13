@@ -925,11 +925,26 @@ def _watchdog(files_dir, rpc):
             return
 
 
+def _witness_watcher(files_dir, witness):
+    """App-side witness report/reset requests (file pattern, same as
+    _invite_watcher). The Android report view writes a request file; the
+    bot answers with a summary file or clears witness data."""
+    while True:
+        time.sleep(2)
+        try:
+            witness.heartbeat()  # bounded liveness; a crash freezes coverage
+            witness.handle_app_requests()
+        except Exception:
+            log.exception("witness request handling failed")
+
+
 def run(native_lib_dir, files_dir):
     """Live loop. Provision required. Serves every accepted chat; management
     (invite QR, publishing) is app-side via the file request watchers."""
     from deltachat_rpc_client import Bot, EventType
     from deltachat_rpc_client.events import NewMessage, RawEvent
+
+    from witness import BotWitness
 
     st = load_state(files_dir)
     if not st.get("provisioned"):
@@ -960,16 +975,30 @@ def run(native_lib_dir, files_dir):
         pw = threading.Thread(target=_publish_watcher, args=(files_dir, control),
                               daemon=True, name="bot-app-publish")
         pw.start()
+        witness = BotWitness(bot_acct, files_dir, control._served_chat_ids)
+        witness.live_start()
         ctl_bot = Bot(bot_acct, hooks=[
             (control.on_new_message, NewMessage),
             (control.on_status_update, RawEvent(EventType.WEBXDC_STATUS_UPDATE)),
             (control.on_msgs_changed, RawEvent(EventType.MSGS_CHANGED)),
+            (witness.on_new_message, NewMessage),
+            (witness.on_msgs_changed, RawEvent(EventType.MSGS_CHANGED)),
+            (witness.on_reactions_changed,
+             RawEvent(EventType.REACTIONS_CHANGED)),
+            (witness.on_msg_deleted, RawEvent(EventType.MSG_DELETED)),
         ])
+        ww = threading.Thread(target=_witness_watcher, args=(files_dir, witness),
+                              daemon=True, name="bot-witness-requests")
+        ww.start()
         control.boot_runtimes()  # needs IO (download retries)
         log.info("live bot running as %s (chats %s)",
                  control.bot_addr, sorted(control.runtimes))
         ctl_bot.run_forever()
     finally:
+        try:
+            witness.live_stop()
+        except Exception:
+            pass
         try:
             rpc.close()
         finally:

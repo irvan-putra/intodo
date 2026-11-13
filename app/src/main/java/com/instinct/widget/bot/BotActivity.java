@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.webkit.WebView;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -60,6 +61,149 @@ public class BotActivity extends Activity {
         updates.addView(fetchXdc, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         updates.addView(publish, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         root.addView(updates);
+
+        // Witness: on-device report of what the bot independently observed
+        // in its served chats, plus the user deletion control. No report
+        // content ever leaves the device.
+        TextView witnessHeader = sectionHeader("Witness");
+        witnessHeader.setText("Witness  \u25b8");
+        witnessHeader.setFocusable(true);
+        root.addView(witnessHeader);
+        LinearLayout witnessBox = new LinearLayout(this);
+        witnessBox.setOrientation(LinearLayout.VERTICAL);
+        TextView witnessView = new TextView(this);
+        witnessView.setPadding(pad, 0, pad, 0);
+        witnessView.setText("The witness records which messages the bot observed in its chats, so missed or mistaken acknowledgments can be reviewed. Observations stay on this phone.");
+        Button wRefresh = new Button(this); wRefresh.setText("Refresh witness report"); wRefresh.setAllCaps(false);
+        Button wDelete = new Button(this); wDelete.setText("Delete witness data"); wDelete.setAllCaps(false);
+        TextView actorLabel = new TextView(this);
+        actorLabel.setPadding(pad, 0, pad, 0);
+        actorLabel.setText("Account whose acknowledgments are witnessed (its DeltaChat address):");
+        EditText actorInput = new EditText(this);
+        actorInput.setSingleLine(true);
+        Button wChoose = new Button(this); wChoose.setText("Choose witness chats"); wChoose.setAllCaps(false);
+        witnessBox.addView(witnessView); witnessBox.addView(actorLabel); witnessBox.addView(actorInput);
+        witnessBox.addView(wChoose); witnessBox.addView(wRefresh); witnessBox.addView(wDelete);
+        witnessBox.setVisibility(android.view.View.GONE);
+        root.addView(witnessBox);
+        witnessHeader.setOnClickListener(v -> toggle(witnessHeader, witnessBox, "Witness"));
+        {
+            File cfg = new File(getFilesDir(), "witness_config.json");
+            if (cfg.exists()) {
+                try {
+                    org.json.JSONArray w = new JSONObject(read(cfg)).optJSONArray("watched");
+                    if (w != null && w.length() > 0) actorInput.setText(w.getString(0));
+                } catch (Exception ignored) {}
+            }
+        }
+        wChoose.setOnClickListener(v -> {
+            if (!new File(getFilesDir(), "RUNNING").exists()) {
+                Toast.makeText(this, "Start the bot service first", Toast.LENGTH_LONG).show();
+                return;
+            }
+            File out = new File(getFilesDir(), "witness-chats.json");
+            out.delete();
+            try { new FileWriter(new File(getFilesDir(), "WITNESS_CHATS_REQUEST")).close(); }
+            catch (Exception e) { return; }
+            Toast.makeText(this, "Loading chats...", Toast.LENGTH_SHORT).show();
+            final long tap = System.currentTimeMillis();
+            final Runnable[] poll = new Runnable[1];
+            poll[0] = new Runnable() { public void run() {
+                if (out.exists() && out.lastModified() >= tap) {
+                    try {
+                        org.json.JSONArray arr = new org.json.JSONArray(read(out));
+                        int n = arr.length();
+                        String[] labels = new String[n];
+                        boolean[] checked = new boolean[n];
+                        final int[] ids = new int[n];
+                        for (int i = 0; i < n; i++) {
+                            JSONObject c = arr.getJSONObject(i);
+                            ids[i] = c.getInt("chat_id");
+                            String name = c.optString("name", "");
+                            labels[i] = name.isEmpty() ? ("chat " + ids[i]) : name;
+                            checked[i] = c.optBoolean("witnessed", false);
+                        }
+                        new android.app.AlertDialog.Builder(BotActivity.this)
+                            .setTitle("Witness these chats")
+                            .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> checked[which] = isChecked)
+                            .setPositiveButton("Save", (d, which) -> {
+                                try {
+                                    JSONObject cfg = new JSONObject();
+                                    org.json.JSONArray chats = new org.json.JSONArray();
+                                    for (int i = 0; i < n; i++) if (checked[i]) chats.put(ids[i]);
+                                    cfg.put("chats", chats);
+                                    org.json.JSONArray watched = new org.json.JSONArray();
+                                    String actor = actorInput.getText().toString().trim();
+                                    if (!actor.isEmpty()) watched.put(actor);
+                                    cfg.put("watched", watched);
+                                    FileWriter fw = new FileWriter(new File(getFilesDir(), "witness_config.json"));
+                                    fw.write(cfg.toString()); fw.close();
+                                    Toast.makeText(BotActivity.this, "Witness selection saved", Toast.LENGTH_SHORT).show();
+                                } catch (Exception e) {
+                                    Toast.makeText(BotActivity.this, "Save failed", Toast.LENGTH_LONG).show();
+                                }
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show();
+                    } catch (Exception e) {
+                        Toast.makeText(BotActivity.this, "Chat list unreadable", Toast.LENGTH_LONG).show();
+                    }
+                } else if (System.currentTimeMillis() - tap < 10000) {
+                    handler.postDelayed(poll[0], 500);
+                } else {
+                    Toast.makeText(BotActivity.this, "Chat list not ready - is the bot service running?", Toast.LENGTH_LONG).show();
+                }
+            }};
+            handler.postDelayed(poll[0], 500);
+        });
+        wRefresh.setOnClickListener(v -> {
+            if (!new File(getFilesDir(), "RUNNING").exists()) {
+                Toast.makeText(this, "Start the bot service first", Toast.LENGTH_LONG).show();
+                return;
+            }
+            // Persist the witnessed-account field (merging the chat selection)
+            // so editing it alone takes effect without reopening the chooser.
+            try {
+                File cfgFile = new File(getFilesDir(), "witness_config.json");
+                JSONObject cfg = cfgFile.exists() ? new JSONObject(read(cfgFile)) : new JSONObject();
+                org.json.JSONArray watched = new org.json.JSONArray();
+                String actor = actorInput.getText().toString().trim();
+                if (!actor.isEmpty()) watched.put(actor);
+                cfg.put("watched", watched);
+                if (!cfg.has("chats")) cfg.put("chats", new org.json.JSONArray());
+                FileWriter cfw = new FileWriter(cfgFile); cfw.write(cfg.toString()); cfw.close();
+            } catch (Exception ignored) {}
+            File out = new File(getFilesDir(), "witness-summary.json");
+            out.delete();
+            try { new FileWriter(new File(getFilesDir(), "WITNESS_REPORT_REQUEST")).close(); }
+            catch (Exception e) { return; }
+            Toast.makeText(this, "Preparing the witness report...", Toast.LENGTH_SHORT).show();
+            final long tap = System.currentTimeMillis();
+            final Runnable[] poll = new Runnable[1];
+            poll[0] = new Runnable() { public void run() {
+                if (out.exists() && out.lastModified() >= tap) {
+                    witnessView.setText(read(out));
+                } else if (System.currentTimeMillis() - tap < 10000) {
+                    handler.postDelayed(poll[0], 500);
+                } else {
+                    Toast.makeText(BotActivity.this, "Report not ready - is the bot service running?", Toast.LENGTH_LONG).show();
+                }
+            }};
+            handler.postDelayed(poll[0], 500);
+        });
+        wDelete.setOnClickListener(v -> {
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Delete witness data?")
+                .setMessage("This deletes all recorded observations from this phone. It cannot be undone.")
+                .setPositiveButton("Delete", (d, which) -> {
+                    try { new FileWriter(new File(getFilesDir(), "WITNESS_RESET_REQUEST")).close(); }
+                    catch (Exception e) { return; }
+                    new File(getFilesDir(), "witness-summary.json").delete();
+                    witnessView.setText("Witness data deletion requested.");
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+        });
 
         // Setup & account: collapsed once the bot is provisioned.
         setupHeader = sectionHeader("Setup & account");
