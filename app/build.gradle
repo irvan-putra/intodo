@@ -8,8 +8,8 @@ android {
         applicationId 'com.instinct.widget'
         minSdk 26
         targetSdk 34
-        versionCode 16
-        versionName '0.5.1'
+        versionCode 17
+        versionName '0.5.2'
         // Bot runtime (DeltaChat core) is bundled for arm64-v8a only, same
         // constraint as the scratch bot builds; librpcsrv.so exists for no
         // other ABI yet.
