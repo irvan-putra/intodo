@@ -10,7 +10,13 @@ OUT="${1:-$HERE/dist}"
 mkdir -p "$OUT"
 cd "$HERE"
 if [ ! -d node_modules ]; then
-  npm install --no-fund --no-audit
+  if [ -n "$CI" ]; then
+    # CI (GitHub Actions build job, contents:read only): locked deterministic
+    # install from package-lock.json, dependency lifecycle scripts disabled.
+    npm ci --ignore-scripts --no-fund --no-audit
+  else
+    npm install --no-fund --no-audit
+  fi
 fi
 ./node_modules/.bin/esbuild main.tsx --bundle --outfile="$OUT/app.js" --jsx=automatic --minify
 cp index.html "$OUT/index.html"

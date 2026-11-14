@@ -1,0 +1,152 @@
+# Build the review canvas and deploy the WHOLE site to GitHub Pages from
+# an artifact, on every review change.
+#
+# Why this exists: manual publication kept failing in repeatable ways -
+# publishing from a checkout whose origin was a local review clone instead
+# of GitHub, and treating "pushed" as "live" while Pages still served the
+# old build. And the naive automation of that push cannot work: per
+# https://docs.github.com/en/actions/concepts/security/github_token a
+# GITHUB_TOKEN push to the publishing branch does not trigger a Pages
+# build. So this workflow deploys through the Pages artifact API instead.
+#
+# REQUIRED ONE-TIME SETTING (repo owner, in the GitHub UI): set the Pages
+# source to "GitHub Actions" instead of "Deploy from a branch". Until that
+# is done the deploy step fails WITHOUT harming the current site - the
+# gh-pages branch content keeps being served. No token or secret is added.
+#
+# Security shape, two jobs:
+#   build  - holds ONLY contents: read. Dependency install (npm ci
+#            --ignore-scripts, locked to package-lock.json) and esbuild run
+#            here, so no dependency lifecycle script or build tool ever
+#            executes in a job holding Pages/OIDC privileges. Stages the
+#            site and uploads the Pages artifact plus the raw dist.
+#   deploy - the ONLY job holding pages: write / id-token: write, bound to
+#            the github-pages environment. Runs no dependency or build
+#            tooling: deploys the artifact, then verifies the live URL
+#            serves the exact build bytes.
+#
+# Single release owner assumption: after the Pages-source migration this
+# workflow is the only deployer to the github-pages environment. The
+# concurrency group serializes runs of THIS workflow; it cannot gate other
+# workflows, so no other workflow may deploy to github-pages (checked at
+# introduction: release.yml and render-check.yml are manual-trigger review
+# drafts that never touch Pages) and the gh-pages branch is no longer the
+# served source. The fetch-then-compare tip check below still aborts the
+# run if the staged gh-pages checkout moved mid-run.
+#
+# What it does, on every push to main that touches itdweb/review/ (or a
+# manual dispatch from main - the job guard refuses other refs):
+#   1. Builds the static bundle (itdweb/review/build.sh, fingerprinted assets).
+#   2. Checks out the full current site from gh-pages and stages the bundle
+#      via tools/release/stage_pages.sh, which refuses a wrong origin, a
+#      wrong branch, a dirty tree, or any change outside review/ - the demo
+#      page, photos/ and everything else are always preserved.
+#   3. Deploys the staged site through the Pages artifact API.
+#   4. Verifies the live page serves the exact build bytes - a green check
+#      means LIVE, not just deployed.
+
+name: publish review canvas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'itdweb/review/**'
+      - 'tools/release/**'
+      - '.github/workflows/review-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  LIVE_URL: https://vanipy.com/intodo/review/
+
+jobs:
+  build:
+    # Manual dispatch publishes main only, never a side branch.
+    if: github.ref_name == 'main'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: source
+
+      - name: Check out the full current site (gh-pages)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Build the review bundle (locked deps, no lifecycle scripts)
+        run: sh source/itdweb/review/build.sh "$PWD/dist"
+
+      - name: Verify the staged site tip and scope
+        run: |
+          git -C site fetch --depth=1 origin gh-pages
+          if [ "$(git -C site rev-parse HEAD)" != "$(git -C site rev-parse FETCH_HEAD)" ]; then
+            echo "gh-pages moved between checkout and staging; aborting." >&2
+            exit 1
+          fi
+          sh source/tools/release/stage_pages.sh "$PWD/dist" "$PWD/site"
+
+      - name: Drop git metadata from the artifact
+        run: rm -rf site/.git
+
+      - name: Upload the whole site as the Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: site
+
+      - name: Upload the built dist for the live-bytes check
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: review-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    # Deploy-only: the single privileged job, no dependency or build tooling.
+    needs: build
+    if: github.ref_name == 'main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: https://vanipy.com/intodo/review/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+      - name: Check out the verifier script
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: source
+          sparse-checkout: |
+            tools/release
+
+      - name: Download the built dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: review-dist
+          path: dist
+
+      - name: Verify the live page serves the exact build bytes
+        run: sh source/tools/release/verify_live.sh "$LIVE_URL" "$PWD/dist" 300
