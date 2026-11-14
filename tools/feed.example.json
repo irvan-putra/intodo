@@ -1,0 +1,21 @@
+{
+ "generated_at": "2026-01-01T00:00:00Z",
+ "sections": [
+  {
+   "id": "reminders",
+   "title": "Reminders",
+   "items": [
+    { "id": "r1", "title": "Example water bill", "note": "Monthly on the 5th, around 9:00 AM", "status": "" },
+    { "id": "r2", "title": "Example dentist checkup", "note": "Mon Jan 12, around 9:00 AM", "status": "" }
+   ]
+  },
+  {
+   "id": "todos",
+   "title": "Todos",
+   "items": [
+    { "id": "t1", "title": "Example task one", "note": "", "status": "pending" },
+    { "id": "t2", "title": "Example task two", "note": "", "status": "in_progress" }
+   ]
+  }
+ ]
+}
