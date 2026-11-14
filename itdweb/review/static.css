@@ -18,6 +18,8 @@
        also carries a «kind» tag, people carry a silhouette. */
     --c4-system: #3066b7;
     --c4-container: #438dd5;
+    --c4-component: #5d9bd8;
+    --c4-component-tint: #f0f6fc;
     --c4-person: #4e7c43;
     --c4-external: #c2601f;
     --c4-system-ink: #3066b7;
@@ -480,8 +482,9 @@ a, .rc-card a { color: var(--ds-ink); }
     flex: 1 1 100%; order: 9; text-align: center;
     padding: 4px 12px;
     font-size: 12px; line-height: 18px; color: var(--ds-ink-2);
-    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 999px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: var(--ds-page); border: 1px solid var(--ds-hairline); border-radius: 16px;
+    white-space: normal; overflow: hidden; min-height: 44px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
 }
 
 /* per-frame explicit sheet entry on phones: the sheet complements the
@@ -522,6 +525,69 @@ a, .rc-card a { color: var(--ds-ink); }
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* Component + code bands (generated facts, gen_code.py): attached
+   verification/meta cards keep the section band's compact shape. */
+.rc-band-comp .rc-card { max-height: 128px; overflow: hidden; }
+.rc-band-comp .rc-card h3 {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: min(calc(13px / var(--camz)), 37px);
+    line-height: 1.15;
+}
+.rc-band-comp .rc-icon { display: none; }
+.rc-band-comp .rc-tag { display: none; }
+.rc-band-comp .rc-purpose { display: none; }
+.rc-band-comp .rc-focus { display: none; }
+.rc-band-comp .rc-badge { font-size: min(calc(10px / var(--camz)), 44px); }
+.rc-band-comp .rc-frame-label { font-size: calc(min(calc(15px / var(--camz)), 72px, var(--ftmax, 999px)) * var(--lfscale, 1)); }
+.rc-band-comp .rc-frame-row1, .rc-band-comp .rc-frame-row2,
+.rc-band-comp .rc-frame-row1, .rc-band-comp .rc-frame-row2 { flex-wrap: wrap; }
+.rc-band-comp .rc-frame-label { white-space: normal; max-width: calc(100% - 36px); line-height: 1.15; padding-top: min(calc(3px / var(--camz)), 14px); padding-bottom: min(calc(3px / var(--camz)), 14px); }
+.rc-frame-label .rc-kindchip-component, .rc-frame-label .rc-frame-pin { font-size: min(calc(7px / var(--camz)), 20px); }
+
+/* Component boxes: C4 component style, same counter-scaled text pattern
+   as cards - screen-constant sizes capped in world units. */
+.rc-comp {
+    position: relative; flex: none; box-sizing: border-box;
+    border: 2px solid var(--c4-component); border-radius: 14px;
+    background: var(--c4-component-tint);
+    padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.rc-comp-tile { overflow: hidden; padding: 6px 10px; gap: 4px; }
+.rc-comp-tile .rc-comp-name { line-height: 1.1; }
+.rc-comp-tile .rc-comp-flag { font-size: calc(min(calc(9px / var(--camz)), 40px) * var(--tnscale, 1)); }
+.rc-comp-tile .rc-comp-cornertags { position: static; display: inline; }
+.rc-comp-tile .rc-comp-cornertags .rc-comp-flag { margin-left: 6px; }
+.rc-comp-tile .rc-comp-name { font-size: calc(min(calc(13px / var(--camz)), 37px) * var(--tnscale, 1)); }
+.rc-comp-focus {
+    position: absolute; top: 0; left: 0; z-index: 60; height: auto;
+    background: var(--c4-component-tint);
+    box-shadow: 0 calc(8px / var(--camz)) calc(30px / var(--camz)) rgba(15, 40, 80, 0.25);
+}
+.rc-comp-shared { border-style: dashed; }
+.rc-comp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rc-comp-name { font-weight: 700; font-size: min(calc(13px / var(--camz)), 37px); line-height: 1.15; }
+.rc-kindchip-component { background: var(--c4-component); border-color: var(--c4-component); color: #fff; font-size: min(calc(9px / var(--camz)), 30px); }
+.rc-comp-flag { font-size: min(calc(9px / var(--camz)), 30px); color: var(--ds-ink-2); border: calc(1.5px / var(--camz)) dashed var(--ds-ink-2); border-radius: 4px; padding: 0 6px; }
+.rc-comp-tech { font-size: min(calc(10px / var(--camz)), 33px); color: var(--ds-ink-2); }
+.rc-comp-resp { font-size: min(calc(10px / var(--camz)), 33px); line-height: 1.35; }
+.rc-comp-els, .rc-cfile-els { display: flex; flex-wrap: wrap; gap: 5px; }
+.rc-comp-el { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: min(calc(9px / var(--camz)), 30px); background: #fff; border: 1px solid var(--ds-hairline); border-radius: 4px; padding: 0 5px; }
+.rc-comp-el em { font-style: normal; color: var(--ds-ink-2); }
+.rc-comp-more { color: var(--ds-ink-2); }
+.rc-comp-ref { font-size: min(calc(9.5px / var(--camz)), 31px); }
+.rc-comp-via { display: block; color: var(--ds-ink-2); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.rc-comp-secs { font-size: min(calc(9px / var(--camz)), 30px); color: var(--ds-ink-2); }
+.rc-frame-pin { font-size: min(calc(9px / var(--camz)), 40px); color: var(--ds-ink-2); border: 1px solid var(--ds-hairline); border-radius: 999px; padding: 0 8px; }
+.rc-comp-files { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; border-top: 1px solid var(--ds-hairline); padding-top: 8px; }
+.rc-cfile { background: #fff; border: 1px solid var(--ds-hairline); border-radius: 8px; padding: 6px 9px; display: flex; flex-direction: column; gap: 4px; }
+.rc-cfile-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rc-cfile-name { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; font-size: min(calc(10px / var(--camz)), 33px); }
+.rc-cfile-lines { color: var(--ds-ink-2); font-size: min(calc(9px / var(--camz)), 30px); }
+.rc-cfile-refs { font-size: min(calc(9px / var(--camz)), 30px); color: var(--ds-ink-2); }
+.rc-cfile-role { font-size: min(calc(9px / var(--camz)), 30px); line-height: 1.3; }
 /* Stable-map nodes: at the container/system bands node boxes and labels are
    WORLD-sized, so the map zooms like a map - positions and sizes fixed in
    the world, readable when you zoom in, complete when you zoom out.
@@ -642,3 +708,4 @@ a, .rc-card a { color: var(--ds-ink); }
 }
 .rc-grp .rc-frame-row1 { flex-wrap: nowrap; }
 .rc-grp .rc-frame-title { display: block; min-width: 0; }
+
