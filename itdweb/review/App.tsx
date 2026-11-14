@@ -7,7 +7,7 @@ type Cam = { x: number; y: number; z: number };
 type Mark = 'reviewed' | 'flag';
 type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark>; findings?: Record<string, string> };
 
-const WORLD = { w: 2400, h: 5000 };
+const WORLD = { w: 3200, h: 3200 };
 const ZMIN = 0.07, ZMAX = 2.5;
 // Zoom bands, C4-style progressive disclosure (c4model.com):
 //   z < SYS_Z    system context: people + the intodo system + external systems
@@ -23,14 +23,20 @@ const GROUP_Z = 0.28;
 const LO_Z = 0.6;
 
 const CARD_SIZES: Record<string, { w: number; h: number }> = {
-    progress: { w: 360, h: 210 },
-    howto: { w: 360, h: 260 },
-    permanence: { w: 360, h: 250 },
-    rule: { w: 360, h: 190 },
+    progress: { w: 360, h: 110 },
+    howto: { w: 360, h: 110 },
+    permanence: { w: 360, h: 110 },
+    rule: { w: 360, h: 110 },
 };
-// measured real card heights run up to ~472px (fit view, unexpanded); the row
-// pitch below must clear the tallest card, not this estimate
-for (const s of SECTIONS) CARD_SIZES[s.id] = { w: 360, h: 480 };
+// One coherent spatial composition at every zoom:
+// "approach this like designing a city", C4 sample proportions): cards are
+// compact title rows on the map at EVERY band - bodies, file lists and the
+// review controls live in the reading overlay one tap away - so frames
+// reserve only their real compact stack and the system footprint shrinks
+// to roughly 2x the external boxes, C4 System Context proportions on the
+// one continuous map. The estimate must clear the tallest compact cardhead
+// (counter-scaled titles peak at the section band's lowest zoom).
+for (const s of SECTIONS) CARD_SIZES[s.id] = { w: 360, h: 110 };
 
 const ICONS: Record<string, string> = {
     progress: '\u{1F3AF}',
@@ -105,7 +111,7 @@ const C4_CONTAINERS: C4Node[] = [
     // application): it reads feed JSON on stdin and prints the IFW1 payload.
     // It does NOT sign and does NOT upload - publishing the feed page is a
     // manual handoff, so there is no edge from it to Instinct Files.
-    { id: 'c-feedtool', label: 'Feed encryption tool', sub: 'Python CLI, run by hand', kind: 'container', frac: { fx: 0.3, fy: 0.72 }, members: ['feed-tool'] },
+    { id: 'c-feedtool', label: 'Feed tool', sub: 'Python CLI, run by hand', kind: 'container', frac: { fx: 0.3, fy: 0.72 }, members: ['feed-tool'] },
     // Tests attach to the containers they verify; build/CI and repo docs stay
     // one honestly-labeled supporting group, not fake runtime architecture.
     { id: 'c-devsupport', label: 'Build, CI & repo docs', sub: 'supporting - not runtime', kind: 'support', frac: { fx: 0.32, fy: 0.85 },
@@ -120,7 +126,7 @@ const C4_EXTERNALS: C4Node[] = [
 // The developer appears on the container view as the person who builds and
 // tests the apps and runs the feed tool - an ordinary external role only.
 const C4_PEOPLE: C4Node[] = [
-    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.2, fy: 0.62 } },
+    { id: 'p-dev', label: 'Developer', sub: 'builds + publishes', kind: 'person', frac: { fx: 0.2, fy: 0.62 } },
 ];
 const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNALS];
 
@@ -134,9 +140,9 @@ const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNA
 // the label is inverse-scaled (constant screen size), so its world height
 // grows as zoom falls; 78 world px clears it down to z ~ 0.55.
 const NEST_PAD = 28, NEST_LABEL_H = 78, NEST_GAP = 22, NEST_COL_W = 392, NEST_FRAME_GAP = 60;
-const NEST_COLS: Record<string, number> = { 'c-app': 3, 'c-xdc': 2, 'c-web': 2, 'c-feedtool': 1, 'c-devsupport': 2 };
+const NEST_COLS: Record<string, number> = { 'c-app': 2, 'c-xdc': 2, 'c-web': 2, 'c-feedtool': 1, 'c-devsupport': 2 };
 // Two frame columns, height-balanced so the whole map fits a phone screen
-// at a meaningfully higher zoom (owner feedback 14 Nov: better spread):
+// at a meaningfully higher zoom (better spread):
 // the tall app frame pairs with the supporting frame on the left, the other
 // three stack on the right (~3300 vs ~3470 world px, was ~2120 vs ~4330).
 // Frames size themselves by DOM flow (real card heights, no estimates),
@@ -144,7 +150,13 @@ const NEST_COLS: Record<string, number> = { 'c-app': 3, 'c-xdc': 2, 'c-web': 2, 
 // nothing re-lays with the camera.
 const NEST_COLUMNS: string[][] = [['c-app', 'c-devsupport'], ['c-xdc', 'c-web', 'c-feedtool']];
 const NEST_FRAME_W = (gid: string) => (NEST_COLS[gid] ?? 2) * NEST_COL_W - NEST_GAP + 2 * NEST_PAD;
-const NEST_COL_X = [40, 40 + NEST_FRAME_W('c-app') + NEST_FRAME_GAP];
+// v4 composition (C4 sample proportions): the whole
+// frame complex shifts right so externals can spread on ALL FOUR sides of
+// the boundary - people on top, Developer/Instinct Files on the left flank,
+// GitHub Actions/GitHub on the right flank, DeltaChat on the bottom. Short
+// edges exit the nearest side instead of crowding the bottom strip.
+const FRAME_DX = 712;
+const NEST_COL_X = [40 + FRAME_DX, 40 + FRAME_DX + NEST_FRAME_W('c-app') + NEST_FRAME_GAP];
 // Estimated frame/card bounds, used only to zoom toward a container or card
 // before the frames have rendered. Rendering never uses these: frames size
 // themselves by DOM flow so real card heights can never overflow a frame.
@@ -152,9 +164,10 @@ const NEST_EST: { frames: Record<string, { x: number; y: number; w: number; h: n
     const frames: Record<string, { x: number; y: number; w: number; h: number }> = {};
     const pos: Record<string, Pos> = {};
     NEST_COLUMNS.forEach((col, ci) => {
-        // y starts below the boundary-label strip: the system boundary box's
-        // label sits in the top strip, clear of the frames.
-        let y = 120;
+        // y starts below the people row and the boundary-label strip: the
+        // system boundary box's label sits in the top strip, clear of the
+        // frames.
+        let y = 560;
         for (const gid of col) {
             const g = C4_CONTAINERS.find((c) => c.id === gid)!;
             const all = [...(g.members ?? []), ...(g.attached ?? [])];
@@ -184,14 +197,11 @@ const C4_RELS: C4Rel[] = [
     { a: 'p-dev', b: 'c-feedtool', label: 'feed JSON in, IFW1 payload out' },  // tools/encrypt_feed.py (stdin -> stdout, print-only)
 ];
 const SYS_NODES: C4Node[] = [
-    { id: 'p-owner', label: 'Irvan', sub: 'owner', kind: 'person', frac: { fx: 0.22, fy: 0.2 } },
+    { id: 'p-owner', label: 'Owner', sub: 'personal user', kind: 'person', frac: { fx: 0.22, fy: 0.2 } },
     { id: 'p-members', label: 'Group members', sub: 'DeltaChat chat', kind: 'person', frac: { fx: 0.78, fy: 0.2 } },
-    // Same human as the owner, in the developer role: builds, tests and
-    // publishes. Modeled separately because the owner asked for developers as
-    // users of the build/publish services, not as runtime architecture.
-    { id: 'p-dev', label: 'Developer', sub: 'the owner, building + publishing', kind: 'person', frac: { fx: 0.5, fy: 0.1 } },
+    { id: 'p-dev', label: 'Developer', sub: 'builds + publishes', kind: 'person', frac: { fx: 0.5, fy: 0.1 } },
     { id: 's-intodo', label: 'intodo', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
-    { id: 'x-gha', label: 'GitHub Actions', sub: 'draft workflows, manual trigger', kind: 'external', frac: { fx: 0.84, fy: 0.44 } },
+    { id: 'x-gha', label: 'GitHub Actions', sub: 'build + deploy on push', kind: 'external', frac: { fx: 0.84, fy: 0.44 } },
     { id: 'x-files', label: 'Instinct Files', sub: 'feed page', kind: 'external', frac: { fx: 0.18, fy: 0.7 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.82, fy: 0.7 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.82 } },
@@ -205,13 +215,13 @@ const SYS_RELS: C4Rel[] = [
     { a: 'p-dev', b: 's-intodo', label: 'builds + tests (Gradle)' },
     // Both workflows are REVIEW DRAFTS, manual workflow_dispatch only: no
     // automatic CI runs on push (grounded in .github/workflows/*.yml).
-    { a: 'p-dev', b: 'x-gha', label: 'triggers release + render-check (draft)', dashed: true },
-    { a: 'x-gha', b: 'x-github', label: 'stamps version, signs + publishes APK (draft)', dashed: true },
+    { a: 'p-dev', b: 'x-gha', label: 'triggers release + render-check (manual run)', dashed: true },
+    { a: 'x-gha', b: 'x-github', label: 'signs + publishes APK (manual run)', dashed: true },
     // encrypt_feed.py only prints ciphertext; publishing the feed page is a
     // manual human step (rebuild + publish the File), not an integration.
     { a: 'p-dev', b: 'x-files', label: 'encrypts feed, publishes page by hand' },
 ];
-// Supporting C4 views (owner-approved alongside the nested structure):
+// Supporting C4 views alongside the nested structure:
 // two dynamic diagrams (each ONE verifiable causal scenario, numbered over
 // time) and a deployment diagram (where each container actually runs). Same
 // canvas, same pan/zoom, same numbered-badge + docked-key mechanics; every
@@ -232,7 +242,7 @@ const FLOW_STEPS: C4Rel[] = [
 ];
 // Scenario 2: the Android app list feed (a separate, manual publication).
 const FEED_NODES: C4Node[] = [
-    { id: 'g-dev', label: 'Developer', sub: 'the owner', kind: 'person', frac: { fx: 0.12, fy: 0.5 } },
+    { id: 'g-dev', label: 'Developer', sub: 'build + publish', kind: 'person', frac: { fx: 0.12, fy: 0.5 } },
     { id: 'g-tool', label: 'feed encryption tool', sub: 'Python CLI', kind: 'container', frac: { fx: 0.4, fy: 0.22 } },
     { id: 'g-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.68, fy: 0.22 } },
     { id: 'g-app', label: 'itdapk', sub: 'Android app', kind: 'container', frac: { fx: 0.88, fy: 0.6 } },
@@ -257,9 +267,12 @@ const DEPLOY_RELS: C4Rel[] = [
     { a: 'd-devmachine', b: 'd-files', label: 'publishes feed page (manual)' },      // tools/encrypt_feed.py output handoff
 ];
 const VIEW_SETS = { flow: { nodes: FLOW_NODES, rels: FLOW_STEPS }, flowfeed: { nodes: FEED_NODES, rels: FEED_STEPS }, deploy: { nodes: DEPLOY_NODES, rels: DEPLOY_RELS } } as const;
+// key lookup: short edge labels stay nameless on the map, so the docked key
+// names each relation's endpoints explicitly (container + system ids)
+const REL_NODE_LABEL = (id: string) => [...CONTAINER_NODES, ...SYS_NODES].find((n) => n.id === id)?.label ?? id;
 // c4model.com-style element vocabulary: a kind tag on every node and frame
 // (so color is never the only cue) plus a per-kind outline hue sampled from
-// the owner's c4-static.png reference and a stick-figure silhouette for
+// the C4 system-context reference and a stick-figure silhouette for
 // people. Numeric contrast of every hue vs the page ground is in the
 // patch notes; all outline hues pass 3:1, all tag inks pass 4.5:1.
 const KIND_TAG: Record<string, string> = { container: '\u00abcontainer\u00bb', support: '\u00absupporting\u00bb', external: '\u00abexternal system\u00bb', person: '\u00abperson\u00bb', system: '\u00absoftware system\u00bb' };
@@ -318,7 +331,11 @@ function diagramLayout(defs: C4Node[], rect: Rect, z: number, measured: Record<s
 // crosses an unrelated box, insert a perpendicular detour waypoint beyond
 // that box and re-check. Badge goes on the longest unobstructed segment,
 // beside the line, flipping sides if it would sit on a box.
-type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; dashed?: boolean; hidden?: boolean };
+type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; label?: string; lines?: string[]; hw?: number; hh?: number; dashed?: boolean; hidden?: boolean; auth?: boolean };
+// short on-map edge text: provenance after " · " and ";" detail stay in the
+// docked key, and a trailing parenthetical is dropped (the dashed style +
+// legend already say "manual run"); the key always lists the full relation
+const shortRel = (l: string) => l.split(' · ')[0].split(';')[0].replace(/ \([^)]*\)\s*$/, '').trim();
 function segHitsNode(p: Pos, q: Pos, n: GroupNode, m: number): boolean {
     const x0 = n.x - n.hw - m, x1 = n.x + n.hw + m, y0 = n.y - n.hh - m, y1 = n.y + n.hh + m;
     // Liang-Barsky segment vs AABB
@@ -333,8 +350,23 @@ function segHitsNode(p: Pos, q: Pos, n: GroupNode, m: number): boolean {
     };
     return clip(-dx, p.x - x0) && clip(dx, x1 - p.x) && clip(-dy, p.y - y0) && clip(dy, y1 - p.y) && t0 < t1;
 }
-function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): RelGeom[] {
+function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect, textLabels = false, avoid: GroupNode[] = []): RelGeom[] {
     const M = 4 / z, CELL = 4 / z, RB = 11 / z;
+    // text-label pill half-size (world px): labels wrap to short lines so
+    // pills stay compact and near their edge; ~0.6em per char at the 10px
+    // screen-constant font plus padding; matches the CSS pill
+    const dims = (l: string) => {
+        const s = shortRel(l);
+        const words = s.split(' ');
+        const lines: string[] = [];
+        let cur = '';
+        for (const w of words) {
+            if (cur && cur.length + 1 + w.length > 16) { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+        }
+        if (cur) lines.push(cur);
+        const maxLen = Math.max(...lines.map((x) => x.length), 1);
+        return { s, lines, hw: (maxLen * 6.0 + 12) / 2 / z, hh: (lines.length * 11 + 6) / 2 / z };
+    };
     // Stable map: node positions are world-fixed. Routing NEVER moves a node
     // (the old badge-room push re-laid the map per zoom and could clamp
     // several nodes into one grid cell); badges place along the route below.
@@ -421,6 +453,14 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
                         while (b > a + 1 && others.some((n) => segHitsNode(pts[a], pts[b], n, 3 / z))) b--;
                         pulled.push(pts[b]); a = b;
                     }
+                    // re-anchor endpoints toward the FINAL neighbours: the
+                    // first anchors aimed at grid waypoints the pull may have
+                    // removed, leaving segments that cut through the endpoint
+                    // boxes themselves
+                    if (pulled.length >= 2) {
+                        pulled[0] = border(na, pulled[1].x - na.x, pulled[1].y - na.y);
+                        pulled[pulled.length - 1] = border(nb, pulled[pulled.length - 2].x - nb.x, pulled[pulled.length - 2].y - nb.y);
+                    }
                     pts = pulled;
                     routed = true;
                 }
@@ -444,9 +484,9 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
         const t = Math.max(0, Math.min(1, ((x - p.x) * vx + (y - p.y) * vy) / L2));
         return Math.hypot(x - (p.x + vx * t), y - (p.y + vy * t));
     };
-    // pass 2: badges - candidates along the route by arc length, avoiding
-    // boxes, other badges, and every OTHER edge's path
-    const placed: Pos[] = [];
+    // pass 2: labels - candidates along the route by arc length, avoiding
+    // boxes, other labels, and every OTHER edge's path
+    const placed: { x: number; y: number; hw: number; hh: number }[] = [];
     const geoms = routed.map(({ rel, na, nb, pts }, i) => {
         const seglens: number[] = [];
         let total = 0;
@@ -467,37 +507,85 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
             return { x: pts[0].x, y: pts[0].y, ux: 1, uy: 0 };
         };
         const side = rel.side ?? (i % 2 === 0 ? 1 : -1);
+        const d = textLabels ? dims(rel.label) : null;
+        const hw = d ? d.hw : RB, hh = d ? d.hh : RB;
+        const rr = Math.max(hw, hh);
+        // pill-aware clearance: the rect's half-extent along the direction
+        // toward the thing being avoided, not the worst-case circle
+        const hitsNode = (x: number, y: number) =>
+            [...nodes, ...avoid].some((n) => {
+                // measured frame-label rects (pseudo-nodes): never cover them
+                if (n.g.id.startsWith('lab-'))
+                    return Math.abs(x - n.x) < n.hw + hw + 2 / z && Math.abs(y - n.y) < n.hh + hh + 2 / z;
+                // people/external boxes render TALLER than their layout slot
+                // (icon + wrapped label + kind chip) - avoid the rendered box
+                if (n.g.kind === 'person' || n.g.kind === 'external') {
+                    const nhh = n.g.kind === 'person' ? Math.max(n.hh, 170) : Math.max(n.hh, 130);
+                    return Math.abs(x - n.x) < n.hw + hw + 8 / z && Math.abs(y - n.y) < nhh + hh + 2 / z;
+                }
+                // container frames are mostly empty territory at this band:
+                // a pill may sit over the open interior but never over the
+                // frame's label strip (approx; the measured rect is exact)
+                if (n.g.kind === 'container' || n.g.kind === 'support') {
+                    const sx1 = Math.min(n.x - n.hw + 818, n.x + n.hw);
+                    return x + hw > n.x - n.hw && x - hw < sx1 && y - hh < n.y - n.hh + 216 && y + hh > n.y - n.hh;
+                }
+                return false;
+            });
+        const segRectDist = (p: Pos, q: Pos, x: number, y: number) => {
+            let m = Infinity;
+            for (let s = 0; s <= 10; s++) {
+                const px = p.x + (q.x - p.x) * s / 10, py = p.y + (q.y - p.y) * s / 10;
+                const dx = Math.max(Math.abs(px - x) - hw, 0), dy = Math.max(Math.abs(py - y) - hh, 0);
+                m = Math.min(m, Math.hypot(dx, dy));
+            }
+            return m;
+        };
+        const inBounds = (x: number, y: number) =>
+            !(x - hw < rect.x + 6 / z || x + hw > rect.x + rect.w - 6 / z || y - hh < rect.y + 6 / z || y + hh > rect.y + rect.h - 6 / z);
         const badgeHits = (x: number, y: number) =>
-            nodes.some((n) => inBox(x, y, n, RB + 2 / z)) ||
-            placed.some((b) => Math.hypot(x - b.x, y - b.y) < 2 * RB + 4 / z) ||
-            routed.some((r2, j) => j !== i && r2.pts.some((p2, si) => si < r2.pts.length - 1 && segDist(x, y, p2, r2.pts[si + 1]) < 2 * RB + 2 / z)) ||
-            x - RB < rect.x + 6 / z || x + RB > rect.x + rect.w - 6 / z ||
-            y - RB < rect.y + 6 / z || y + RB > rect.y + rect.h - 6 / z;
+            hitsNode(x, y) ||
+            placed.some((b) => Math.abs(x - b.x) < hw + b.hw + 4 / z && Math.abs(y - b.y) < hh + b.hh + 4 / z) ||
+            routed.some((r2, j) => j !== i && r2.pts.some((p2, si) => si < r2.pts.length - 1 && segRectDist(p2, r2.pts[si + 1], x, y) < 2 / z)) ||
+            !inBounds(x, y);
         const mid0 = arcAt(0.5);
         let bx = mid0.x, by = mid0.y;
         const cands: [number, number][] = [];
         for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78, 0.15, 0.85, 0.08, 0.92]) {
             const a = arcAt(t);
-            cands.push([a.x - a.uy * side * (RB + 4 / z), a.y + a.ux * side * (RB + 4 / z)]);
-            cands.push([a.x + a.uy * side * (RB + 4 / z), a.y - a.ux * side * (RB + 4 / z)]);
+            const off = Math.abs(a.uy) * hw + Math.abs(a.ux) * hh + 4 / z;
+            cands.push([a.x - a.uy * side * off, a.y + a.ux * side * off]);
+            cands.push([a.x + a.uy * side * off, a.y - a.ux * side * off]);
         }
         cands.push([mid0.x, mid0.y]);
         let free = false;
         for (const [cx, cy] of cands) if (!badgeHits(cx, cy)) { bx = cx; by = cy; free = true; break; }
+        let crowded = false;
         if (!free) {
             // crowded corner: take the candidate with the most clearance
             let bestScore = -Infinity;
             for (const [cx, cy] of cands) {
                 let score = Infinity;
-                for (const n of nodes) {
-                    const gx = Math.max(Math.abs(cx - n.x) - n.hw, 0), gy = Math.max(Math.abs(cy - n.y) - n.hh, 0);
+                for (const n of [...nodes, ...avoid]) {
+                    if (n.g.kind === 'container' || n.g.kind === 'support') continue; // open interior is fair pill territory; labels avoided via lab- rects
+                    if (n.g.kind === 'system' && !n.g.id.startsWith('lab-')) continue; // boundary interior likewise
+                    const nhh = n.g.kind === 'person' ? Math.max(n.hh, 170) : n.g.kind === 'external' ? Math.max(n.hh, 130) : n.hh;
+                    // clearance between the pill BOX and the avoided box
+                    const gx = Math.max(Math.abs(cx - n.x) - n.hw - hw, 0), gy = Math.max(Math.abs(cy - n.y) - nhh - hh, 0);
                     score = Math.min(score, Math.hypot(gx, gy));
                 }
                 for (const b of placed) score = Math.min(score, Math.hypot(cx - b.x, cy - b.y));
                 if (score > bestScore) { bestScore = score; bx = cx; by = cy; }
             }
+            // Compact map: in narrow notches between neighbour boxes
+            // even the best candidate touches a frame header. Hide the label
+            // then, like the declutter pass below does for label piles:
+            // the edge line stays and the relation stays in the docked key.
+            if (bestScore < 2 / z) crowded = true;
         }
-        placed.push({ x: bx, y: by });
+        // a pill must never stick out of the territory rect
+        if (!inBounds(bx, by)) crowded = true;
+        placed.push({ x: bx, y: by, hw, hh });
         const tuck = (n: GroupNode, at: number, from: number) => {
             const ux = n.x - pts[from].x, uy = n.y - pts[from].y;
             const L = Math.hypot(ux, uy) || 1;
@@ -505,15 +593,16 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
         };
         tuck(na, 0, 1);
         tuck(nb, pts.length - 1, pts.length - 2);
-        return { key: `${rel.a}-${rel.b}`, pts, bx, by, r: RB, dashed: rel.dashed };
+        return { key: `${rel.a}-${rel.b}`, pts, bx, by, r: rr, label: d ? d.s : undefined, lines: d ? d.lines : undefined, hw, hh, dashed: rel.dashed, hidden: crowded };
     });
-    // Maps-style decluttering (owner feedback 14 Nov): a badge that would
-    // overlap an already-kept badge on screen is hidden rather than piled
-    // up - the edge line stays, and the number remains in the docked key.
+    // Maps-style decluttering: a label that would
+    // overlap an already-kept label on screen is hidden rather than piled
+    // up - the edge line stays, and the relation remains in the docked key.
     // Greedy in relationship order: deterministic at every zoom.
     const kept: RelGeom[] = [];
     for (const g of geoms) {
-        if (kept.every((k) => Math.hypot(g.bx - k.bx, g.by - k.by) >= 2 * g.r + 8 / z)) kept.push(g);
+        const gw = g.hw ?? g.r, gh = g.hh ?? g.r;
+        if (kept.every((k) => Math.abs(g.bx - k.bx) >= gw + (k.hw ?? k.r) + 8 / z || Math.abs(g.by - k.by) >= gh + (k.hh ?? k.r) + 8 / z)) kept.push(g);
         else g.hidden = true;
     }
     return geoms;
@@ -544,8 +633,11 @@ const clampCam = (c: Cam): Cam => c;
 function CardShell({ id, tag, purpose, title, mark, centerCard, onFocus, children }: {
     id: string; tag: string; purpose?: string; title: string; mark?: Mark; centerCard?: boolean; onFocus: (id: string) => void; children: React.ReactNode;
 }) {
+    // Nothing inside the map is clickable - the card
+    // head shows title/marks only; reading + review controls live in the
+    // reading sheet, opened from the dock menu outside the territory.
     return <div className={`rc-card${centerCard ? ' rc-center' : ''}`} data-card={id}>
-        <div className="rc-cardhead" onClick={() => onFocus(id)} title="Focus this section">
+        <div className="rc-cardhead">
             <div className="rc-headtext">
                 <span className="rc-icon" aria-hidden="true">{ICONS[id]}</span>
                 <div>
@@ -554,7 +646,6 @@ function CardShell({ id, tag, purpose, title, mark, centerCard, onFocus, childre
                     <h3>{title}</h3>
                 </div>
             </div>
-            <button type="button" className="rc-focus" onClick={() => onFocus(id)}>Focus</button>
         </div>
         {mark === 'reviewed' && <span className="rc-badge rc-badge-done">Reviewed</span>}
         {mark === 'flag' && <span className="rc-badge rc-badge-flag">Another look</span>}
@@ -606,13 +697,17 @@ function SectionCard({ s, mark, expanded, finding, onToggleExpand, onMark, onFin
 
 function Canvas() {
     const [saved, setSaved, savedMeta] = useLocalState<Saved | null>('review-canvas.v1', null);
-    const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: 1104, y: 2140, z: 0.17 });
+    const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: 1600, y: 1600, z: 0.17 });
     const [pos, setPos] = useState<Record<string, Pos>>(sanePositions(saved?.pos ?? {}));
     const [focusedId, setFocusedId] = useState<string | null>(null);
     const [sheetGroup, setSheetGroup] = useState<string | null>(null);
     const [dock, setDock] = useState<'none' | 'menu' | 'legend'>('none');
     const [view, setView] = useState<'structure' | 'flow' | 'flowfeed' | 'deploy'>('structure');
     const [measuredNodes, setMeasuredNodes] = useState<Record<string, { w: number; h: number }>>({});
+    // Rendered frame-label world rects (measured from the DOM): label pills
+    // must never cover a frame label - the est frame box does not match the
+    // rendered frame, so avoidance uses the real label rect.
+    const [labelRects, setLabelRects] = useState<Record<string, Rect>>({});
     // Frame-label fit: at the card-visible bands the absolute header must
     // never overlap the first card. Measured per frame against the actual
     // card strip; the label font steps down (and row2 drops at high steps)
@@ -711,23 +806,26 @@ function Canvas() {
         const dockEl = el ? el.querySelector('.rc-dockbar') as HTMLElement | null : null;
         const dockH = dockEl && dockEl.offsetParent ? dockEl.getBoundingClientRect().height + 14 : 64;
         const fw = w, fh = Math.max(120, h - dockH);
-        let c: Cam = { x: 1104, y: 2140, z: clampZ(Math.min(fw / 2260, fh / 4420) * 0.98) };
+        let c: Cam = { x: 1120, y: 1500, z: clampZ(Math.min(fw / 2380, fh / 2900) * 0.98) };
         const fitZ = (uw: number, uh: number) => clampZ(Math.min(fw / (uw + 80), fh / (uh + 80)) * 0.98);
         if (view !== 'structure') {
             const set = VIEW_SETS[view as 'flow' | 'flowfeed' | 'deploy'];
             let z = cam.z, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (let it = 0; it < 10; it++) {
                 const ns = diagramLayout(set.nodes as C4Node[], layRect, z, measuredNodes);
-                const rs = routeRels(set.rels as C4Rel[], ns, z, layRect);
+                const rs = routeRels(set.rels as C4Rel[], ns, z, layRect, true);
                 x0 = Infinity; y0 = Infinity; x1 = -Infinity; y1 = -Infinity;
                 ns.forEach((n) => { x0 = Math.min(x0, n.x - n.hw); y0 = Math.min(y0, n.y - n.hh); x1 = Math.max(x1, n.x + n.hw); y1 = Math.max(y1, n.y + n.hh); });
                 rs.forEach((r) => {
+                    if (r.hidden) return; // decluttered badges are not rendered - they must not inflate the fit
                     r.pts.forEach((pt) => { x0 = Math.min(x0, pt.x); y0 = Math.min(y0, pt.y); x1 = Math.max(x1, pt.x); y1 = Math.max(y1, pt.y); });
                     x0 = Math.min(x0, r.bx - r.r); y0 = Math.min(y0, r.by - r.r); x1 = Math.max(x1, r.bx + r.r); y1 = Math.max(y1, r.by + r.r);
                 });
                 if (!isFinite(x0) || x1 - x0 < 1 || y1 - y0 < 1) break;
                 const nz = fitZ(x1 - x0, y1 - y0);
-                if (Math.abs(nz - z) < 0.002) { z = nz; break; }
+                // strictly shrink: smaller z only declutters more, so the
+                // union measured at the final z is the one that must fit
+                if (nz >= z || it === 9) break;
                 z = nz;
             }
             // center the union in the visible rect (0..fw, 0..fh): the cam is
@@ -747,13 +845,20 @@ function Canvas() {
             const fitHH = (n: GroupNode) => (n.g.kind === 'person' ? 170 : n.g.kind === 'external' ? 130 : n.hh);
             let z = cam.z, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (let it = 0; it < 10; it++) {
-                const rs = [...routeRels(C4_RELS, groupLayout, z, layRect), ...routeRels(SYS_RELS, sysLayout, z, layRect)];
+                // badge-size extents, not pill extents: label pills are
+                // constrained inside the territory rect by placement, so the
+                // territory-spanning union already covers them at any band
+                const rs = [...routeRels(C4_RELS, groupLayout, z, layRect), ...routeRels(GRP_EXTRA_RELS, sysLayout, z, layRect), ...routeRels(SYS_RELS, sysLayout, z, layRect)];
                 x0 = Infinity; y0 = Infinity; x1 = -Infinity; y1 = -Infinity;
                 [...groupLayout, ...sysLayout].forEach((n) => {
                     const hh = fitHH(n);
                     x0 = Math.min(x0, n.x - n.hw - 8); y0 = Math.min(y0, n.y - hh - 8);
                     x1 = Math.max(x1, n.x + n.hw + 8); y1 = Math.max(y1, n.y + hh + 8);
                 });
+                // the territory itself is part of the union: label pills are
+                // constrained inside it, so fitting the territory fits them
+                x0 = Math.min(x0, layRect.x); y0 = Math.min(y0, layRect.y);
+                x1 = Math.max(x1, layRect.x + layRect.w); y1 = Math.max(y1, layRect.y + layRect.h);
                 rs.forEach((r) => {
                     r.pts.forEach((pt) => { x0 = Math.min(x0, pt.x - 10); y0 = Math.min(y0, pt.y - 10); x1 = Math.max(x1, pt.x + 10); y1 = Math.max(y1, pt.y + 10); });
                     // badge circle plus stroke/halo: inflate past r.r
@@ -761,7 +866,9 @@ function Canvas() {
                 });
                 if (!isFinite(x0) || x1 - x0 < 1 || y1 - y0 < 1) break;
                 const nz = fitZ(x1 - x0, y1 - y0);
-                if (Math.abs(nz - z) < 0.002) { z = nz; break; }
+                // strictly shrink, same as the view branch: the union measured
+                // at the final z is the one that must fit
+                if (nz >= z || it === 9) break;
                 z = nz;
             }
             if (isFinite(x0) && x1 > x0 && y1 > y0) c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + (h - fh) / (2 * z), z };
@@ -826,7 +933,9 @@ function Canvas() {
 
     // On phones Focus opens a full-screen readable overlay (scrollable, real
     // text size) instead of zooming the canvas. Lock page scroll while open.
-    const overlayId = focusedId && evp.w < 560 ? focusedId : null;
+    // the reading sheet is the ONLY card reader now (no in-map clickables),
+    // so it opens at every viewport width, not just phones
+    const overlayId = focusedId;
     const sheetOpen = sheetGroup !== null && evp.w < 560;
     useEffect(() => {
         if (!overlayId && !sheetOpen) return;
@@ -924,7 +1033,7 @@ function Canvas() {
             g.current.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), z0: cam.z, cam0: cam, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
             return;
         }
-        // cards are fixed in place per owner request: dragging anywhere pans
+        // cards are fixed in place: dragging anywhere pans
         // the canvas; card positions only change through code, never by hand.
         // Node boxes (rc-grpnode) are diagram surface, not controls: at phone
         // zoom they cover most of the screen, so a drag starting on one must
@@ -992,7 +1101,7 @@ function Canvas() {
 
     // wheel zoom toward the cursor, endless-paper style: trackpad pinch
     // arrives as ctrl+wheel, plain wheel zooms too; zoom is continuous
-    // instead of hidden behind buttons, per the owner's reference
+    // instead of hidden behind buttons
     const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
         viewTouched.current = true;
         const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.008 : 0.0015));
@@ -1053,8 +1162,27 @@ function Canvas() {
         if (changed) setMeasuredNodes(next);
     }, [band, view, measuredNodes]);
 
+    useEffect(() => {
+        const next: Record<string, Rect> = {};
+        document.querySelectorAll('.rc-frame-label').forEach((el) => {
+            const id = (el.closest('.rc-frame') as HTMLElement | null)?.dataset.frame;
+            if (!id) return;
+            const r = el.getBoundingClientRect();
+            if (r.width < 2 || r.height < 2) return;
+            next[id] = { x: cam.x - evp.w / 2 / cam.z + r.left / cam.z, y: cam.y - evp.h / 2 / cam.z + r.top / cam.z, w: r.width / cam.z, h: r.height / cam.z };
+        });
+        setLabelRects((old) => {
+            const keys = new Set([...Object.keys(old), ...Object.keys(next)]);
+            for (const k of keys) {
+                const a = old[k], b = next[k];
+                if (!a || !b || Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1 || Math.abs(a.w - b.w) > 1 || Math.abs(a.h - b.h) > 1) return next;
+            }
+            return old;
+        });
+    });
+
     const visRect: Rect = { x: cam.x - evp.w / 2 / cam.z, y: cam.y - evp.h / 2 / cam.z, w: evp.w / cam.z, h: evp.h / cam.z };
-    // Owner feedback (14 Nov): laid out against exactly the visible screen,
+    // Laid out against exactly the visible screen,
     // the diagrams squeezed into one screen and the long edges crisscrossed
     // the middle. Lay the C4 bands out over MORE canvas than one screen and
     // let pan/zoom do its job. The spread rect shares the visible center, so
@@ -1064,12 +1192,12 @@ function Canvas() {
     // Phones spread less: their first landing must still show whole nodes.
     const SPREAD_X = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.35;
     const SPREAD_Y = view !== 'structure' ? 1.1 : evp.w < 560 ? 1.15 : 1.3;
-    // One fixed world-anchored layout for every band and view (owner
-    // direction 14 Nov): a single continuous map. Bands change only how much
+    // One fixed world-anchored layout for every band and view:
+    // a single continuous map. Bands change only how much
     // detail renders inside each frame, never where anything sits; zoom and
     // pan never re-lay.
     const layRect: Rect = { x: 40, y: 40, w: WORLD.w - 80, h: WORLD.h - 80 };
-    // One stable world map (owner direction 14 Nov): at the container and
+    // One stable world map: at the container and
     // container/system bands each container renders as its SAME frame with
     // its FULL detail bounds reserved at every zoom; deeper zooms reveal
     // chips, then full cards, inside those same bounds. Edge endpoints use
@@ -1083,27 +1211,68 @@ function Canvas() {
             const f = NEST_EST.frames[gid];
             return { g, x: f.x + f.w / 2, y: f.y + f.h / 2, hw: f.w / 2, hh: f.h / 2 };
         }));
-    const extNode = (id: string, defs: C4Node[], cx: number, cy: number): GroupNode =>
-        ({ g: defs.find((x) => x.id === id)!, x: cx, y: cy, hw: 160, hh: 90 });
-    // Full frame bounds stack to y=3588 with the balanced columns (c-app
-    // bottom 2240, c-devsupport bottom 3416 in the left column; c-feedtool
-    // bottom 3588 in the right); externals sit below them. Nodes shared by
-    // the container and system layouts keep identical world coordinates.
+    const extNode = (id: string, defs: C4Node[], cx: number, cy: number, hw = 160, hh = 90): GroupNode =>
+        ({ g: defs.find((x) => x.id === id)!, x: cx, y: cy, hw, hh });
+    // Externals flank the frame complex on all four sides (v4 city spread);
+    // nodes shared by the container and system layouts keep identical world
+    // coordinates.
+    // Externals keep their SYSTEM-band positions AND size at the container
+    // band: the same city spread around the boundary at every zoom (LOD
+    // changes visibility only, never territory). People and GitHub Actions
+    // stay visible at the container band too.
     const groupLayout: GroupNode[] = [
         ...frameNodes,
-        extNode('x-files', CONTAINER_NODES, 300, 3800), extNode('x-github', CONTAINER_NODES, 1800, 3800),
-        extNode('x-dc', CONTAINER_NODES, 1300, 3800), extNode('p-dev', CONTAINER_NODES, 800, 3800),
+        extNode('p-owner', SYS_NODES, 1050, 280, 240, 150), extNode('p-members', SYS_NODES, 2150, 280, 240, 150),
+        extNode('p-dev', SYS_NODES, 380, 900, 240, 150),
+        extNode('x-gha', SYS_NODES, 2820, 900, 240, 150), extNode('x-files', SYS_NODES, 380, 1400, 240, 150),
+        extNode('x-github', SYS_NODES, 2820, 1400, 240, 150), extNode('x-dc', SYS_NODES, 1600, 2240, 240, 150),
     ];
+    // System band (c4model.com sample as reference):
+    // ONE fixed system footprint at every zoom - the boundary rect below is
+    // the same world rect at the system, container and section bands; only
+    // what is visible inside it changes with zoom (LOD), never geometry.
+    // v4 city spread: the boundary sits centered in a wider world with the
+    // seven externals spread on all four sides by relationship, each edge
+    // leaving the nearest side, like the C4 System Context sample.
     const sysLayout: GroupNode[] = [
-        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1094, y: 1840, hw: 1074, hh: 1820 },
-        extNode('p-owner', SYS_NODES, 500, 4160), extNode('p-members', SYS_NODES, 1050, 4160),
-        extNode('p-dev', SYS_NODES, 800, 3800),
-        extNode('x-gha', SYS_NODES, 1600, 4160), extNode('x-files', SYS_NODES, 300, 3800),
-        extNode('x-github', SYS_NODES, 1800, 3800), extNode('x-dc', SYS_NODES, 1300, 3800),
+        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1600, y: 1220, hw: 868, hh: 720 },
+        extNode('p-owner', SYS_NODES, 1050, 280, 240, 150), extNode('p-members', SYS_NODES, 2150, 280, 240, 150),
+        extNode('p-dev', SYS_NODES, 380, 900, 240, 150),
+        extNode('x-gha', SYS_NODES, 2820, 900, 240, 150), extNode('x-files', SYS_NODES, 380, 1400, 240, 150),
+        extNode('x-github', SYS_NODES, 2820, 1400, 240, 150), extNode('x-dc', SYS_NODES, 1600, 2240, 240, 150),
     ];
-    const grpRels = routeRels(C4_RELS, groupLayout, cam.z, layRect);
-    const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, layRect);
-    // System band stays sparse (owner feedback 14 Nov): external/person
+    // Container band edges: the frame-level relationships plus the
+    // system-level edges that do not duplicate a frame edge (people using
+    // the system, and the manual publish chain), routed against the same
+    // fixed boundary/externals territory.
+    const GRP_EXTRA_RELS = SYS_RELS.filter((r) =>
+        r.a === 'p-owner' || r.a === 'p-members' || (r.a === 'p-dev' && r.b === 'x-gha') || r.a === 'x-gha' || (r.a === 'p-dev' && r.b === 'x-files'));
+    // Authored container-band composition: every relationship has an
+    // explicit port-to-port route through dedicated gutters/lanes, and its
+    // label is a fixed world-size pill sitting on its own connector (labels
+    // instead of numbers; full wording stays in the docked key). No badge is
+    // ever suppressed or re-placed by collision heuristics at this band.
+    const AUTH_GRP: Record<string, { pts: [number, number][]; pill: [number, number]; lines: string[] }> = {
+        'c-app-x-files': { pts: [[1240, 1200], [690, 1200], [690, 1400], [620, 1400]], pill: [1000, 1200], lines: ['feed (HTTPS)'] },
+        'c-app-x-github': { pts: [[1300, 560], [1300, 510], [3120, 510], [3120, 1400], [3060, 1400]], pill: [2750, 510], lines: ['update check', '+ APK download'] },
+        'c-app-x-dc': { pts: [[1130, 1350], [1574, 1350], [1600, 1350], [1600, 2090]], pill: [1250, 1350], lines: ['bot bridge', '+ webxdc (RPC)'] },
+        'c-xdc-x-dc': { pts: [[2090, 890], [2452, 890], [2560, 890], [2560, 2240], [1840, 2240]], pill: [2200, 890], lines: ['webxdc updates'] },
+        'c-web-x-github': { pts: [[2090, 1350], [2452, 1350], [2520, 1350], [2520, 1400], [2580, 1400]], pill: [2200, 1350], lines: ['links at', 'pinned commit'] },
+        'c-app-c-xdc': { pts: [[1180, 980], [1574, 980], [1600, 980], [1600, 700], [1630, 700]], pill: [1350, 980], lines: ['same merge algo,', 'no runtime link'] },
+        'p-dev-c-app': { pts: [[620, 880], [680, 880], [680, 920], [1180, 920]], pill: [900, 920], lines: ['builds + tests', '(Gradle)'] },
+        'p-dev-c-feedtool': { pts: [[300, 1070], [300, 1110], [650, 1110], [650, 1990], [1700, 1990], [1700, 1820]], pill: [1100, 1980], lines: ['feed JSON in,', 'IFW1 payload out'] },
+        'p-owner-s-intodo': { pts: [[1050, 420], [1050, 500]], pill: [1050, 462], lines: ['uses + reviews'] },
+        'p-members-s-intodo': { pts: [[2150, 420], [2150, 500]], pill: [2150, 462], lines: ['edit shared list'] },
+        'p-dev-x-gha': { pts: [[620, 1000], [716, 1000], [716, 2050], [3080, 2050], [3080, 940], [3060, 940]], pill: [2300, 2075], lines: ['triggers release +', 'render-check (manual)'] },
+        'x-gha-x-github': { pts: [[2820, 1050], [2820, 1270]], pill: [2820, 1160], lines: ['signs + publishes', 'APK (manual)'] },
+        'p-dev-x-files': { pts: [[380, 1070], [380, 1270]], pill: [300, 1200], lines: ['encrypts feed,', 'publishes by hand'] },
+    };
+    const grpRels: RelGeom[] = [...C4_RELS, ...GRP_EXTRA_RELS].map((rel) => {
+        const a = AUTH_GRP[`${rel.a}-${rel.b}`];
+        return { key: `${rel.a}-${rel.b}`, pts: a.pts.map(([x, y]) => ({ x, y })), bx: a.pill[0], by: a.pill[1], r: 220, label: a.lines.join(' '), lines: a.lines, hw: 220, hh: a.lines.length > 1 ? 55 : 38, dashed: rel.dashed, hidden: false, auth: true };
+    });
+    const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, layRect, false, [...groupLayout, ...Object.entries(labelRects).map(([id, r]) => ({ g: { id: `lab-${id}`, label: '', sub: '', kind: 'system' as const, frac: { fx: 0, fy: 0 } }, x: r.x + r.w / 2, y: r.y + r.h / 2, hw: r.w / 2, hh: r.h / 2 }))]);
+    // System band stays sparse: external/person
     // nodes render as kind-shaped markers only - the marker cluster is too
     // tight for clean name chips at that scale, so naming returns at the
     // container band and badges hide at this band (CSS); every relation
@@ -1112,8 +1281,12 @@ function Canvas() {
     // layout + routing pipeline; their edges are numbered steps/routes in
     // the docked key, same as the structure bands.
     const viewLayout: GroupNode[] = view !== 'structure' ? diagramLayout(VIEW_SETS[view].nodes as C4Node[], layRect, cam.z, measuredNodes) : [];
-    const viewRelRoutes = view !== 'structure' ? routeRels(VIEW_SETS[view].rels as C4Rel[], viewLayout, cam.z, layRect) : [];
-    const dockRels: C4Rel[] | null = view !== 'structure' ? VIEW_SETS[view].rels : band === 'grp' ? C4_RELS : band === 'sys' ? SYS_RELS : null;
+    const viewRelRoutes = view !== 'structure' ? routeRels(VIEW_SETS[view].rels as C4Rel[], viewLayout, cam.z, layRect, true) : [];
+    // Dock key lists exactly the numbered set shown on the map at this band:
+    // container band numbers C4_RELS then the extra system edges (same order
+    // grpRels routes them); the system band shows unnumbered arrows, so its
+    // key entries render without numbers below.
+    const dockRels: C4Rel[] | null = view !== 'structure' ? VIEW_SETS[view].rels : band === 'grp' ? [...C4_RELS, ...GRP_EXTRA_RELS] : band === 'sys' ? SYS_RELS : null;
 
     const cards: Record<string, React.ReactNode> = {
         progress: <CardShell id="progress" tag="Center" purpose="Do the task - how-to" title="Review progress" centerCard onFocus={focusCard}>
@@ -1157,7 +1330,7 @@ function Canvas() {
         <div className="rc-page">
         <div
             ref={vpRef}
-            className={`rc-viewport${dragging ? ' rc-dragging' : ''}${panning ? ' rc-panning' : ''}${band === 'sys' ? ' rc-sys' : band === 'grp' ? ' rc-grp' : band === 'lo' ? ' rc-lo' : ''}`}
+            className={`rc-viewport${dragging ? ' rc-dragging' : ''}${panning ? ' rc-panning' : ''} rc-band-${band}${band === 'sys' ? ' rc-sys' : band === 'grp' ? ' rc-grp' : band === 'lo' ? ' rc-lo' : ''}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endPointer}
@@ -1174,31 +1347,17 @@ function Canvas() {
                 }}
             >
                 {view === 'structure' && (<>
-                {/* container level: C4 relationships with labels; solid =
-                    observed flow or evidenced manual step, dashed = designed
-                    but not active / no deployed runtime link. rc-grp only */}
-                <svg className="rc-gedges" width={WORLD.w} height={WORLD.h}>
-                    <defs>
-                        <marker id="rc-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
-                        </marker>
-                        <marker id="rc-arr-dash" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-ink-2)" />
-                        </marker>
-                    </defs>
-                    {grpRels.map((g) => (
-                        <polyline key={g.key} points={g.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none"
-                            className={g.dashed ? 'rc-rel-dash' : undefined}
-                            markerEnd={`url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'})`} />
-                    ))}
-                </svg>
                 <div className="rc-groups">
                     {/* containers render as their (collapsed) frames, so only
                         externals/people appear as nodes here */}
                     {groupLayout.filter((n) => n.g.kind === 'external' || n.g.kind === 'person').map((n) => {
                         const g = n.g;
+                        // box matches the routed node rect (same size as the
+                        // system band) and the label font is capped so its
+                        // longest word always fits inside the box
+                        const nftmax = Math.floor((n.hw * 2 - 52) / (Math.max(...g.label.split(/\s+/).map((w) => w.length)) * 0.64));
                         return (
-                            <div key={g.id} data-nid={g.id} className={`rc-grpnode rc-node-${g.kind}`} style={{ left: n.x, top: n.y }}>
+                            <div key={g.id} data-nid={g.id} className={`rc-grpnode rc-node-${g.kind}`} style={{ left: n.x, top: n.y, width: n.hw * 2, ['--nftmax' as string]: nftmax + 'px' }}>
                                 {g.kind === 'person' ? C4_PERSON_ICON : null}
                                 <span className="rc-grplabel">{g.label}</span>
                                 <span className="rc-grpcount">{g.sub}</span>
@@ -1207,16 +1366,7 @@ function Canvas() {
                         );
                     })}
                 </div>
-                {/* relationship labels sit above the nodes so long labels stay
-                    readable where lines pass under neighbouring nodes */}
-                <svg className="rc-glabels" width={WORLD.w} height={WORLD.h}>
-                    {grpRels.map((g, i) => (g.hidden ? null : (
-                        <g key={g.key} className={`rc-rel-badge${g.dashed ? ' rc-rel-badge-dash' : ''}`}>
-                            <circle cx={g.bx} cy={g.by} r={g.r} />
-                            <text x={g.bx} y={g.by}>{i + 1}</text>
-                        </g>
-                    )))}
-                </svg>
+
                 {/* system context level: people + the intodo system + external
                     systems, furthest zoomed out. Tapping the system drops
                     into the container level. */}
@@ -1224,11 +1374,16 @@ function Canvas() {
                     {/* markers must live in THIS svg: url(#...) into the
                         display:none container-band svg does not paint */}
                     <defs>
-                        <marker id="rc-arr-sys" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
+                        {/* System band keeps arrowheads proportional to the
+                            11px-screen markers (the
+                            default 7-stroke-wide heads pile over the tight
+                            far-zoom node cluster). ~4.2 stroke widths reads
+                            as a direction cue, not a second node. */}
+                        <marker id="rc-arr-sys" markerWidth="4.2" markerHeight="4.2" refX="3.6" refY="2.1" orient="auto">
+                            <path d="M0,0 L4.2,2.1 L0,4.2 z" fill="var(--ds-teal)" />
                         </marker>
-                        <marker id="rc-arr-dash-sys" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-ink-2)" />
+                        <marker id="rc-arr-dash-sys" markerWidth="4.2" markerHeight="4.2" refX="3.6" refY="2.1" orient="auto">
+                            <path d="M0,0 L4.2,2.1 L0,4.2 z" fill="var(--ds-ink-2)" />
                         </marker>
                     </defs>
                     {sysRels.map((g) => (
@@ -1238,15 +1393,20 @@ function Canvas() {
                     ))}
                 </svg>
                 <div className="rc-sysnodes">
-                    {/* system band: external/person nodes render as compact
-                        kind-shaped markers at their exact world positions
-                        (Maps-style far zoom) at their exact world position;
-                        naming waits for the container band. */}
+                    {/* system band: people/external systems render as real
+                        labeled boxes of comparable weight to the system box
+                        (C4 System Context style);
+                        detail still arrives with zoom, not with dots. */}
                     {sysLayout.map((n) => {
                         const g = n.g;
                         if (g.kind !== 'system') {
                             return (
-                                <div key={g.id} data-nid={g.id} className={`rc-sysmark rc-sysmark-${g.kind}`} style={{ left: n.x, top: n.y }} />
+                                <div key={g.id} data-nid={g.id} className={`rc-grpnode rc-node-${g.kind}`} style={{ left: n.x, top: n.y, width: n.hw * 2 }}>
+                                    {g.kind === 'person' ? C4_PERSON_ICON : null}
+                                    <span className="rc-grplabel">{g.label}</span>
+                                    <span className="rc-grpcount">{g.sub}</span>
+                                    <span className={`rc-kindtag rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span>
+                                </div>
                             );
                         }
                         const inner = <>
@@ -1254,12 +1414,10 @@ function Canvas() {
                             <span className="rc-grpcount">{g.sub}</span>
                             <span className={`rc-kindtag rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span>
                         </>;
+                        // not a control: the boundary is territory, tapping it
+                        // must not zoom (no clickables in the map)
                         return (
-                            <button key={g.id} data-nid={g.id} type="button" className={`rc-grpnode rc-node-${g.kind} rc-node-boundary`} style={{ left: n.x, top: n.y, width: n.hw * 2, height: n.hh * 2 }} onClick={() => {
-                                viewTouched.current = true;
-                                const c = clampCam({ x: 1084, y: 1854, z: 0.168 });
-                                setCam(c); persist(c, pos, reviews);
-                            }}>{inner}</button>
+                            <div key={g.id} data-nid={g.id} className={`rc-grpnode rc-node-${g.kind} rc-node-boundary`} style={{ left: n.x, top: n.y, width: n.hw * 2, height: n.hh * 2 }}>{inner}</div>
                         );
                     })}
                 </div>
@@ -1272,7 +1430,7 @@ function Canvas() {
                     )))}
                 </svg>
                 </>)}
-                {/* supporting views (owner-approved): dynamic flow and
+                {/* supporting views: dynamic flow and
                     deployment, rendered with the same nodes/edges/badges
                     machinery at any zoom; no section cards in these views */}
                 {view !== 'structure' && (<>
@@ -1298,10 +1456,12 @@ function Canvas() {
                     ))}
                 </div>
                 <svg className="rc-viewlabels" width={WORLD.w} height={WORLD.h}>
-                    {viewRelRoutes.map((g, i) => (g.hidden ? null : (
-                        <g key={g.key} className="rc-rel-badge">
-                            <circle cx={g.bx} cy={g.by} r={g.r} />
-                            <text x={g.bx} y={g.by}>{i + 1}</text>
+                    {viewRelRoutes.map((g) => (g.hidden ? null : (
+                        <g key={g.key} className={`rc-rel-badge${g.dashed ? ' rc-rel-badge-dash' : ''}`}>
+                            <rect x={g.bx - (g.hw ?? g.r)} y={g.by - (g.hh ?? g.r)} width={(g.hw ?? g.r) * 2} height={(g.hh ?? g.r) * 2} rx={Math.min(g.hh ?? g.r, 8 / cam.z)} />
+                            {(g.lines ?? []).map((ln, li) => (
+                                <text key={li} x={g.bx} y={g.by + (li - ((g.lines ?? []).length - 1) / 2) * 11 / cam.z}>{ln}</text>
+                            ))}
                         </g>
                     )))}
                 </svg>
@@ -1312,27 +1472,25 @@ function Canvas() {
                     in the section band chips flow under their container label
                     in reading order (LO_LAYOUT). */}
                 {view === 'structure' && NEST_COLUMNS.map((col, ci) => (
-                    <div key={ci} className="rc-nest-col" style={{ left: NEST_COL_X[ci], top: 120 }}>
+                    <div key={ci} className="rc-nest-col" style={{ left: NEST_COL_X[ci], top: 560 }}>
                         {col.map((gid) => {
                             const g = C4_CONTAINERS.find((c) => c.id === gid)!;
                             // Per-frame title cap (world px): the label must
-                            // never overflow its frame at any band - the longest
-                            // word has to fit the frame's inner text width
-                            // (frame width minus label inset 36 and the worst-case
-                            // horizontal padding 2x60) at ~0.64em per glyph.
-                            const longestWord = Math.max(...g.label.split(/\s+/).map((w) => w.length));
-                            const ftmax = Math.floor((NEST_FRAME_W(gid) - 36 - 120) / (longestWord * 0.64));
+                            // never overflow its frame at any band, so the font
+                            // shrinks until the FULL title fits the frame's
+                            // inner text width (frame width minus label inset
+                            // 36 and the worst-case horizontal padding 2x60)
+                            // at ~0.62em per glyph - no ellipsis truncation.
+                            const ftmax = Math.floor((NEST_FRAME_W(gid) - 36 - 120) / (g.label.length * 0.62));
                             return (
                                 <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid), height: NEST_EST.frames[gid].h, ['--ftmax' as string]: ftmax + 'px' }}
-                                    onClick={band === 'grp' ? () => focusGroup(gid) : undefined}>
-                                    <div ref={(el) => { frameLabelRefs.current[gid] = el; }} className={`rc-frame-label${(band === 'lo' || band === 'detail') && (labelFit[gid] ?? 0) >= 3 ? ' rc-frame-tight' : ''}`} style={{ ['--lfscale' as string]: (band === 'lo' || band === 'detail') ? Math.pow(0.78, labelFit[gid] ?? 0) : 1 }}><span className="rc-frame-row1"><span className="rc-frame-title">{g.label}</span>{evp.w < 560 ? (
-                                        <button type="button" className="rc-frame-list" onClick={(e) => { e.stopPropagation(); setSheetGroup(gid); }}>List</button>
-                                    ) : null}</span><span className="rc-frame-row2"><span className="rc-frame-sub">{g.sub}</span><span className={`rc-frame-kind rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span><span className="rc-frame-count">{(() => { const n = (g.members?.length ?? 0) + (g.attached?.length ?? 0); return `${n} ${n === 1 ? 'item' : 'items'}`; })()}</span></span></div>
+                                    >
+                                    <div ref={(el) => { frameLabelRefs.current[gid] = el; }} className={`rc-frame-label${(band === 'lo' || band === 'detail') && (labelFit[gid] ?? 0) >= 3 ? ' rc-frame-tight' : ''}`} style={{ ['--lfscale' as string]: (band === 'lo' || band === 'detail') ? Math.pow(0.78, labelFit[gid] ?? 0) : 1 }}><span className="rc-frame-row1"><span className="rc-frame-title">{g.label}</span></span><span className="rc-frame-row2"><span className="rc-frame-sub">{g.sub}</span><span className={`rc-frame-kind rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span><span className="rc-frame-count">{(() => { const n = (g.members?.length ?? 0) + (g.attached?.length ?? 0); return `${n} ${n === 1 ? 'item' : 'items'}`; })()}</span></span></div>
                                     <div className="rc-frame-cards">
                                         {/* legacy saved positions (draggable era) migrate into the frame
                                             as reading order - top to bottom, then left to right - instead
                                             of being dropped; cards without a saved position keep their
-                                            curated order. Cards stay fixed per the owner request. */}
+                                            curated order. Cards stay fixed. */}
                                         {[...(g.members ?? []), ...(g.attached ?? [])]
                                             .map((m, i) => ({ m, i, p: pos[m] }))
                                             .sort((a, b) => (a.p && b.p ? (a.p.y - b.p.y) || (a.p.x - b.p.x) : a.p ? -1 : b.p ? 1 : a.i - b.i))
@@ -1345,9 +1503,41 @@ function Canvas() {
                         })}
                     </div>
                 ))}
+                {/* container-band edges + authored label pills render last so
+                    they paint above the collapsed frames: each pill must stay
+                    fully visible on its own connector (interior stubs cross
+                    frame fill/header edges by design). Both svgs are
+                    pointer-events:none, so frame taps still land. rc-grp only. */}
+                {view === 'structure' && (<>
+                <svg className="rc-gedges" width={WORLD.w} height={WORLD.h}>
+                    <defs>
+                        <marker id="rc-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
+                        </marker>
+                        <marker id="rc-arr-dash" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-ink-2)" />
+                        </marker>
+                    </defs>
+                    {grpRels.map((g) => (
+                        <polyline key={g.key} points={g.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none"
+                            className={g.dashed ? 'rc-rel-dash' : undefined}
+                            markerEnd={`url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'})`} />
+                    ))}
+                </svg>
+                <svg className="rc-glabels" width={WORLD.w} height={WORLD.h}>
+                    {grpRels.map((g) => (g.hidden ? null : (
+                        <g key={g.key} className={`rc-rel-badge${g.dashed ? ' rc-rel-badge-dash' : ''}${g.auth ? ' rc-rel-badge-auth' : ''}`}>
+                            <rect x={g.bx - (g.hw ?? g.r)} y={g.by - (g.hh ?? g.r)} width={(g.hw ?? g.r) * 2} height={(g.hh ?? g.r) * 2} rx={g.auth ? 26 : Math.min(g.hh ?? g.r, 8 / cam.z)} />
+                            {(g.lines ?? []).map((ln, li) => (
+                                <text key={li} x={g.bx} y={g.by + (li - ((g.lines ?? []).length - 1) / 2) * (g.auth ? 46 : 11 / cam.z)}>{ln}</text>
+                            ))}
+                        </g>
+                    )))}
+                </svg>
+                </>)}
             </div>
             {/* navigation chrome (zoom buttons, Fit, minimap) intentionally
-                removed per owner request - pan and pinch remain; controls come
+                removed - pan and pinch remain; controls come
                 back in a later iteration. */}
             {/* storage honesty without permanent chrome: the notice only
                 appears when saving actually fails */}
@@ -1359,16 +1549,17 @@ function Canvas() {
         {/* Bottom navigation: a compact dock bar that never covers the
             canvas; the key and the menu open as docked panels above the
             bar, shrinking the viewport instead of overlaying the diagram.
-            Badges on the edges are numbered into the key; dashed = designed
-            but not active (draft workflows) or no deployed runtime link */}
+            Structure edges carry short text labels on the map; the key lists
+            each full relation with its endpoints; dashed = designed
+            but not active (manual run) or no deployed runtime link */}
         {dock === 'legend' && dockRels ? (
             <div className="rc-legend">
                 {view === 'flow' || view === 'flowfeed' ? <span className="rc-legend-item rc-legend-key">Numbered steps, in order:</span> : null}
                 {dockRels.map((r, i) => (
-                    <span className="rc-legend-item" key={r.label}><span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>{r.label}</span>
+                    <span className="rc-legend-item" key={r.label}>{view === 'structure' ? <span className="rc-legend-endpoints">{`${REL_NODE_LABEL(r.a)} \u2192 ${REL_NODE_LABEL(r.b)}: `}</span> : <span className={`rc-legend-num${r.dashed ? ' rc-legend-num-dash' : ''}`}>{i + 1}</span>}{r.label}</span>
                 ))}
                 {view === 'structure' ? (
-                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>{band === 'grp' ? 'designed, not active / no runtime link' : 'designed, not active (draft workflows)'}</span>
+                    <span className="rc-legend-item rc-legend-key"><span className="rc-legend-line"></span>observed flow or manual step (repo-evidenced) · <span className="rc-legend-line rc-legend-dash"></span>{band === 'grp' ? 'no runtime link / manual run, not automatic' : 'manual run, not automatic (workflow_dispatch in repo)'}</span>
                 ) : null}
                 {view === 'structure' ? (
                     <span className="rc-legend-item rc-legend-key rc-legend-shapes">Shapes: <span className="rc-kindchip rc-kindchip-person">{C4_PERSON_ICON}person</span> <span className="rc-kindchip rc-kindchip-system">software system</span> <span className="rc-kindchip rc-kindchip-container">container</span> <span className="rc-kindchip rc-kindchip-external">external system</span> <span className="rc-kindchip rc-kindchip-support">supporting</span></span>
@@ -1390,6 +1581,12 @@ function Canvas() {
                         <div className="rc-menu-row">
                             {C4_CONTAINERS.map((g) => (
                                 <button key={g.id} type="button" className="rc-menu-btn" onClick={() => { setDock('none'); focusGroup(g.id); }}>{g.label}</button>
+                            ))}
+                        </div>
+                        <span className="rc-menu-head">Review a section</span>
+                        <div className="rc-menu-row">
+                            {C4_CONTAINERS.map((g) => (
+                                <button key={'s' + g.id} type="button" className="rc-menu-btn" onClick={() => { setDock('none'); setSheetGroup(g.id); }}>{g.label}</button>
                             ))}
                         </div>
                     </>
