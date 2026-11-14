@@ -1,0 +1,4 @@
+[
+ {"ref": "bill", "kind": "monthly", "day": 5},
+ {"ref": "dentist", "kind": "once", "date": "2026-01-12"}
+]

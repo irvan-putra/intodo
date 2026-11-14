@@ -1,0 +1,4 @@
+[
+ {"ref": "bill", "item": "r1", "title_pattern": "(?i)bill"},
+ {"ref": "dentist", "item": "r2", "title_pattern": null}
+]

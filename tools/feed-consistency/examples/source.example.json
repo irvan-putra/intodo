@@ -1,0 +1,5 @@
+[
+ {"id": "s1", "title": "Water the plants", "status": "active"},
+ {"id": "s2", "title": "Read a chapter", "status": "active"},
+ {"id": "s3", "title": "Old task", "status": "completed"}
+]
