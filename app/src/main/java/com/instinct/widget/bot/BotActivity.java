@@ -32,6 +32,7 @@ public class BotActivity extends Activity {
     private TextView logsHeader;
     private LinearLayout setupBox;
     private ScrollView logScroll;
+    private float lastLogY;
     private final Handler handler = new Handler();
     private String lastStateJson = null;
     private BotImport importer;
@@ -259,16 +260,43 @@ public class BotActivity extends Activity {
         root.addView(logsHeader);
         logView = new TextView(this);
         logView.setPadding(pad, 0, pad, 0);
+        logView.setTextIsSelectable(true);  // allow copying log lines
         logScroll = new ScrollView(this);
         logScroll.addView(logView);
         int logH = (int) (getResources().getDisplayMetrics().heightPixels * 0.6);
         logScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, logH));
         logScroll.setVisibility(android.view.View.GONE);
+        // Nested inside the outer page ScrollView: while the page can still
+        // scroll it intercepts every vertical drag, so the log box never
+        // receives the gesture. Keep the gesture only while the log can
+        // actually scroll that way.
+        logScroll.setOnTouchListener((v, ev) -> {
+            switch (ev.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    lastLogY = ev.getY();
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    break;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    float y = ev.getY();
+                    float dy = y - lastLogY;   // per-event delta: handles direction reversal
+                    lastLogY = y;
+                    boolean innerCan = (dy > 0 && v.canScrollVertically(-1)) || (dy < 0 && v.canScrollVertically(1));
+                    v.getParent().requestDisallowInterceptTouchEvent(innerCan);
+                    break;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    break;
+            }
+            return false;
+        });
         root.addView(logScroll);
         logsHeader.setOnClickListener(v -> {
             boolean show = logScroll.getVisibility() == android.view.View.GONE;
             toggle(logsHeader, logScroll, "Logs");
-            if (show) logScroll.post(() -> logScroll.scrollTo(0, 0));
+            // open at the tail: the freshest lines (start errors, stops) are
+            // at the END, so opening at the top can look like nothing changed
+            if (show) logScroll.post(() -> logScroll.scrollTo(0, logView.getHeight()));
         });
 
         ScrollView outer = new ScrollView(this);
