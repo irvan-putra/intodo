@@ -17,7 +17,7 @@ const ZMIN = 0.07, ZMAX = 2.5;
 //                under their C4 container labels, no per-file detail;
 //                tap a card to focus it
 //   otherwise    detail level: the full review cards, unchanged
-const SYS_Z = 0.11;
+const SYS_Z = 0.09;
 //   otherwise    detail level: the full review cards, unchanged
 const GROUP_Z = 0.28;
 const LO_Z = 0.6;
@@ -139,7 +139,7 @@ const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNA
 // NEST_LABEL_H must clear the frame label at the detail band's lowest zoom:
 // the label is inverse-scaled (constant screen size), so its world height
 // grows as zoom falls; 78 world px clears it down to z ~ 0.55.
-const NEST_PAD = 28, NEST_LABEL_H = 78, NEST_GAP = 22, NEST_COL_W = 392, NEST_FRAME_GAP = 60;
+const NEST_PAD = 28, NEST_LABEL_H = 78, NEST_GAP = 22, NEST_COL_W = 392, NEST_FRAME_GAP = 360;
 const NEST_COLS: Record<string, number> = { 'c-app': 2, 'c-xdc': 2, 'c-web': 2, 'c-feedtool': 1, 'c-devsupport': 2 };
 // Two frame columns, height-balanced so the whole map fits a phone screen
 // at a meaningfully higher zoom (better spread):
@@ -185,14 +185,14 @@ const NEST_EST: { frames: Record<string, { x: number; y: number; w: number; h: n
     });
     return { frames, pos };
 })();
-type C4Rel = { a: string; b: string; label: string; dashed?: boolean; side?: 1 | -1 };
+type C4Rel = { a: string; b: string; label: string; dashed?: boolean; side?: 1 | -1; plain?: boolean };
 const C4_RELS: C4Rel[] = [
     { a: 'c-app', b: 'x-files', label: 'encrypted feed (HTTPS)' },                      // app/.../SyncEngine.java
     { a: 'c-app', b: 'x-github', label: 'update check + APK download' },                // app/.../UpdateCheck.java
     { a: 'c-app', b: 'x-dc', label: 'bot bridge + webxdc (RPC)' },                      // app/src/main/python/bot.py, bot_runtime.py, delivery_bot.py
     { a: 'c-xdc', b: 'x-dc', label: 'webxdc updates' },                                 // webxdc/js/app.js
     { a: 'c-web', b: 'x-github', label: 'links at pinned commit' },                     // itdweb/src/sections.ts
-    { a: 'c-app', b: 'c-xdc', label: 'same merge algorithm, no runtime link', dashed: true }, // app/.../merge/MergeDoc.java vs webxdc/js/mergedoc.js
+    { a: 'c-app', b: 'c-xdc', label: 'same merge algorithm, no runtime link', dashed: true, plain: true }, // app/.../merge/MergeDoc.java vs webxdc/js/mergedoc.js
     { a: 'p-dev', b: 'c-app', label: 'builds + tests (Gradle)' },              // gradlew, app/build.gradle, app/src/test
     { a: 'p-dev', b: 'c-feedtool', label: 'feed JSON in, IFW1 payload out' },  // tools/encrypt_feed.py (stdin -> stdout, print-only)
 ];
@@ -331,7 +331,7 @@ function diagramLayout(defs: C4Node[], rect: Rect, z: number, measured: Record<s
 // crosses an unrelated box, insert a perpendicular detour waypoint beyond
 // that box and re-check. Badge goes on the longest unobstructed segment,
 // beside the line, flipping sides if it would sit on a box.
-type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; label?: string; lines?: string[]; hw?: number; hh?: number; dashed?: boolean; hidden?: boolean; auth?: boolean };
+type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; label?: string; lines?: string[]; hw?: number; hh?: number; dashed?: boolean; hidden?: boolean; auth?: boolean; plain?: boolean };
 // short on-map edge text: provenance after " · " and ";" detail stay in the
 // docked key, and a trailing parenthetical is dropped (the dashed style +
 // legend already say "manual run"); the key always lists the full relation
@@ -798,6 +798,10 @@ function Canvas() {
     const [dock, setDock] = useState<'none' | 'menu' | 'legend'>('none');
     const [view, setView] = useState<'structure' | 'flow' | 'flowfeed' | 'deploy'>('structure');
     const [measuredNodes, setMeasuredNodes] = useState<Record<string, { w: number; h: number }>>({});
+    // Live container-band external/person node boxes (world units): their
+    // content is counter-scaled (screen-constant label text), so rendered
+    // borders drift with zoom; route endpoints snap to these (snapEnds).
+    const [extRects, setExtRects] = useState<Record<string, { w: number; h: number }>>({});
     // Rendered frame-label world rects (measured from the DOM): label pills
     // must never cover a frame label - the est frame box does not match the
     // rendered frame, so avoidance uses the real label rect.
@@ -937,7 +941,9 @@ function Canvas() {
         // use. Iterate z because edge routes and badges depend on it.
         {
             const fitHH = (n: GroupNode) => (n.g.kind === 'person' ? 170 : n.g.kind === 'external' ? 130 : n.hh);
-            let z = cam.z, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            // seed mid-band, not the current camera: a Fit pressed while
+            // zoomed must fit the same full union as a cold load
+            let z = 0.18, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (let it = 0; it < 10; it++) {
                 // badge-size extents, not pill extents: label pills are
                 // constrained inside the territory rect by placement, so the
@@ -957,6 +963,15 @@ function Canvas() {
                     r.pts.forEach((pt) => { x0 = Math.min(x0, pt.x - 10); y0 = Math.min(y0, pt.y - 10); x1 = Math.max(x1, pt.x + 10); y1 = Math.max(y1, pt.y + 10); });
                     // badge circle plus stroke/halo: inflate past r.r
                     x0 = Math.min(x0, r.bx - r.r - 10); y0 = Math.min(y0, r.by - r.r - 10); x1 = Math.max(x1, r.bx + r.r + 10); y1 = Math.max(y1, r.by + r.r + 10);
+                });
+                // the AUTHORED container-band routes and label pills render at
+                // this band - they are what Fit must contain (the auto-routed
+                // estimates above never reach the authored outer endpoints)
+                Object.values(AUTH_GRP).forEach((a) => {
+                    a.pts.forEach(([px, py]) => { x0 = Math.min(x0, px - 10); y0 = Math.min(y0, py - 10); x1 = Math.max(x1, px + 10); y1 = Math.max(y1, py + 10); });
+                    const phw = a.hw ?? 220, phh = a.hh ?? (a.lines.length > 1 ? 55 : 38);
+                    x0 = Math.min(x0, a.pill[0] - phw - 10); y0 = Math.min(y0, a.pill[1] - phh - 10);
+                    x1 = Math.max(x1, a.pill[0] + phw + 10); y1 = Math.max(y1, a.pill[1] + phh + 10);
                 });
                 if (!isFinite(x0) || x1 - x0 < 1 || y1 - y0 < 1) break;
                 const nz = fitZ(x1 - x0, y1 - y0);
@@ -1256,6 +1271,23 @@ function Canvas() {
         if (changed) setMeasuredNodes(next);
     }, [band, view, measuredNodes]);
 
+    // Re-measure on band entry and zoom buckets (not every pinch frame):
+    // within a 4% zoom bucket the border moves <2 world px, invisible.
+    const zBucket = Math.round(cam.z * 25) / 25;
+    useEffect(() => {
+        if (view !== 'structure' || band !== 'grp') return;
+        const next: Record<string, { w: number; h: number }> = {};
+        document.querySelectorAll('.rc-groups .rc-grpnode[data-nid]').forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (r.width > 2) next[(el as HTMLElement).dataset.nid!] = { w: r.width / cam.z, h: r.height / cam.z };
+        });
+        setExtRects((prev) => {
+            const ks = Object.keys(next);
+            return ks.length === Object.keys(prev).length && ks.every((k) => prev[k] && Math.abs(prev[k].w - next[k].w) < 1 && Math.abs(prev[k].h - next[k].h) < 1) ? prev : next;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [view, band, zBucket]);
+
     useEffect(() => {
         const next: Record<string, Rect> = {};
         document.querySelectorAll('.rc-frame-label').forEach((el) => {
@@ -1317,9 +1349,9 @@ function Canvas() {
     const groupLayout: GroupNode[] = [
         ...frameNodes,
         extNode('p-owner', SYS_NODES, 1050, 280, 240, 150), extNode('p-members', SYS_NODES, 2150, 280, 240, 150),
-        extNode('p-dev', SYS_NODES, 380, 900, 240, 150),
-        extNode('x-gha', SYS_NODES, 2820, 900, 240, 150), extNode('x-files', SYS_NODES, 380, 1400, 240, 150),
-        extNode('x-github', SYS_NODES, 2820, 1400, 240, 150), extNode('x-dc', SYS_NODES, 1600, 2240, 240, 150),
+        extNode('p-dev', SYS_NODES, 180, 900, 240, 150),
+        extNode('x-gha', SYS_NODES, 3300, 900, 240, 150), extNode('x-files', SYS_NODES, 180, 1400, 240, 150),
+        extNode('x-github', SYS_NODES, 3300, 1400, 240, 150), extNode('x-dc', SYS_NODES, 1600, 2340, 240, 150),
     ];
     // System band (c4model.com sample as reference):
     // ONE fixed system footprint at every zoom - the boundary rect below is
@@ -1329,11 +1361,11 @@ function Canvas() {
     // seven externals spread on all four sides by relationship, each edge
     // leaving the nearest side, like the C4 System Context sample.
     const sysLayout: GroupNode[] = [
-        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1600, y: 1220, hw: 868, hh: 720 },
+        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1750, y: 1220, hw: 1018, hh: 720 },
         extNode('p-owner', SYS_NODES, 1050, 280, 240, 150), extNode('p-members', SYS_NODES, 2150, 280, 240, 150),
-        extNode('p-dev', SYS_NODES, 380, 900, 240, 150),
-        extNode('x-gha', SYS_NODES, 2820, 900, 240, 150), extNode('x-files', SYS_NODES, 380, 1400, 240, 150),
-        extNode('x-github', SYS_NODES, 2820, 1400, 240, 150), extNode('x-dc', SYS_NODES, 1600, 2240, 240, 150),
+        extNode('p-dev', SYS_NODES, 180, 900, 240, 150),
+        extNode('x-gha', SYS_NODES, 3300, 900, 240, 150), extNode('x-files', SYS_NODES, 180, 1400, 240, 150),
+        extNode('x-github', SYS_NODES, 3300, 1400, 240, 150), extNode('x-dc', SYS_NODES, 1600, 2340, 240, 150),
     ];
     // Container band edges: the frame-level relationships plus the
     // system-level edges that do not duplicate a frame edge (people using
@@ -1343,27 +1375,52 @@ function Canvas() {
         r.a === 'p-owner' || r.a === 'p-members' || (r.a === 'p-dev' && r.b === 'x-gha') || r.a === 'x-gha' || (r.a === 'p-dev' && r.b === 'x-files'));
     // Authored container-band composition: every relationship has an
     // explicit port-to-port route through dedicated gutters/lanes, and its
-    // label is a fixed world-size pill sitting on its own connector (labels
-    // instead of numbers; full wording stays in the docked key). No badge is
+    // label is a fixed world-size pill placed next to its own connector
+    // (labels instead of numbers; full wording stays in the docked key). No badge is
     // ever suppressed or re-placed by collision heuristics at this band.
-    const AUTH_GRP: Record<string, { pts: [number, number][]; pill: [number, number]; lines: string[] }> = {
-        'c-app-x-files': { pts: [[1240, 1200], [690, 1200], [690, 1400], [620, 1400]], pill: [1000, 1200], lines: ['feed (HTTPS)'] },
-        'c-app-x-github': { pts: [[1300, 560], [1300, 510], [3120, 510], [3120, 1400], [3060, 1400]], pill: [2750, 510], lines: ['update check', '+ APK download'] },
-        'c-app-x-dc': { pts: [[1130, 1350], [1574, 1350], [1600, 1350], [1600, 2090]], pill: [1250, 1350], lines: ['bot bridge', '+ webxdc (RPC)'] },
-        'c-xdc-x-dc': { pts: [[2090, 890], [2452, 890], [2560, 890], [2560, 2240], [1840, 2240]], pill: [2200, 890], lines: ['webxdc updates'] },
-        'c-web-x-github': { pts: [[2090, 1350], [2452, 1350], [2520, 1350], [2520, 1400], [2580, 1400]], pill: [2200, 1350], lines: ['links at', 'pinned commit'] },
-        'c-app-c-xdc': { pts: [[1180, 980], [1574, 980], [1600, 980], [1600, 700], [1630, 700]], pill: [1350, 980], lines: ['same merge algo,', 'no runtime link'] },
-        'p-dev-c-app': { pts: [[620, 880], [680, 880], [680, 920], [1180, 920]], pill: [900, 920], lines: ['builds + tests', '(Gradle)'] },
-        'p-dev-c-feedtool': { pts: [[300, 1070], [300, 1110], [650, 1110], [650, 1990], [1700, 1990], [1700, 1820]], pill: [1100, 1980], lines: ['feed JSON in,', 'IFW1 payload out'] },
-        'p-owner-s-intodo': { pts: [[1050, 420], [1050, 500]], pill: [1050, 462], lines: ['uses + reviews'] },
-        'p-members-s-intodo': { pts: [[2150, 420], [2150, 500]], pill: [2150, 462], lines: ['edit shared list'] },
-        'p-dev-x-gha': { pts: [[620, 1000], [716, 1000], [716, 2050], [3080, 2050], [3080, 940], [3060, 940]], pill: [2300, 2075], lines: ['triggers release +', 'render-check (manual)'] },
-        'x-gha-x-github': { pts: [[2820, 1050], [2820, 1270]], pill: [2820, 1160], lines: ['signs + publishes', 'APK (manual)'] },
-        'p-dev-x-files': { pts: [[380, 1070], [380, 1270]], pill: [300, 1200], lines: ['encrypts feed,', 'publishes by hand'] },
+    const AUTH_GRP: Record<string, { pts: [number, number][]; pill: [number, number]; lines: string[]; hw?: number; hh?: number }> = {
+        'c-app-x-files': { pts: [[752, 1414], [420, 1414]], pill: [560, 1350], lines: ['feed (HTTPS)'], hw: 135 },
+        'c-app-x-github': { pts: [[1574, 1300], [1900, 1300], [1900, 2520], [3660, 2520], [3660, 1400], [3540, 1400]], pill: [2800, 2445], lines: ['update check', '+ APK download'], hw: 170 },
+        'c-app-x-dc': { pts: [[1574, 1414], [1750, 1414], [1750, 2283]], pill: [1480, 2130], lines: ['bot bridge', '+ webxdc (RPC)'], hw: 200 },
+        'c-xdc-x-dc': { pts: [[2300, 940], [2300, 975], [2900, 975], [2900, 2340], [1840, 2340]], pill: [2400, 2430], lines: ['webxdc updates'] },
+        'c-web-x-github': { pts: [[2752, 1400], [3060, 1400]], pill: [3080, 1575], lines: ['links at', 'pinned commit'], hw: 165 },
+        'c-app-c-xdc': { pts: [[1574, 914], [1930, 914]], pill: [1750, 1000], lines: ['same merge', 'algo, no', 'runtime link'], hw: 152, hh: 78 },
+        'p-dev-c-app': { pts: [[420, 914], [752, 914]], pill: [581, 830], lines: ['builds + tests', '(Gradle)'], hw: 146 },
+        'p-dev-c-feedtool': { pts: [[220, 995], [220, 1070], [700, 1070], [700, 1990], [2100, 1990], [2100, 1820]], pill: [410, 1620], lines: ['feed JSON in,', 'IFW1 payload out'], hw: 200 },
+        'p-owner-s-intodo': { pts: [[1050, 375], [1050, 500]], pill: [1310, 455], lines: ['uses + reviews'] },
+        'p-members-s-intodo': { pts: [[2150, 375], [2150, 500]], pill: [1910, 505], lines: ['edit shared list'] },
+        'p-dev-x-gha': { pts: [[-60, 880], [-100, 880], [-100, 2050], [3620, 2050], [3620, 900], [3540, 900]], pill: [2300, 2130], lines: ['triggers release +', 'render-check (manual)'], hw: 240 },
+        'x-gha-x-github': { pts: [[3300, 957], [3300, 1343]], pill: [3100, 1130], lines: ['signs + publishes', 'APK (manual)'], hw: 185 },
+        'p-dev-x-files': { pts: [[140, 995], [140, 1343]], pill: [410, 1180], lines: ['encrypts feed,', 'publishes by hand'], hw: 200 },
+    };
+    // Endpoint snap: external/person node boxes are content-sized with
+    // counter-scaled (screen-constant) label text, so their top/bottom
+    // borders drift with zoom. First/last route points snap to the live
+    // measured border along the segment axis; middle segments and pill
+    // anchors stay on the authored lanes. Authored points stay within the
+    // snap guard (130 world px) of the true border at every zoom.
+    const snapEnds = (pts: Pos[], aId: string, bId: string): Pos[] => {
+        const na = extRects[aId] ? sysLayout.find((n) => n.g.id === aId) : null;
+        const nb = extRects[bId] ? sysLayout.find((n) => n.g.id === bId) : null;
+        if (!na && !nb) return pts;
+        const out = pts.slice();
+        if (na) {
+            const r = extRects[aId], p0 = pts[0], p1 = pts[1];
+            const dx = p1.x - p0.x, dy = p1.y - p0.y;
+            const s = Math.abs(dx) > Math.abs(dy) ? { x: na.x + Math.sign(dx) * r.w / 2, y: p0.y } : { x: p0.x, y: na.y + Math.sign(dy) * r.h / 2 };
+            if (Math.hypot(s.x - p0.x, s.y - p0.y) <= 130) out[0] = s;
+        }
+        if (nb) {
+            const r = extRects[bId], pl = pts[pts.length - 1], pp = pts[pts.length - 2];
+            const dx = pl.x - pp.x, dy = pl.y - pp.y;
+            const s = Math.abs(dx) > Math.abs(dy) ? { x: nb.x - Math.sign(dx) * r.w / 2, y: pl.y } : { x: pl.x, y: nb.y - Math.sign(dy) * r.h / 2 };
+            if (Math.hypot(s.x - pl.x, s.y - pl.y) <= 130) out[out.length - 1] = s;
+        }
+        return out;
     };
     const grpRels: RelGeom[] = [...C4_RELS, ...GRP_EXTRA_RELS].map((rel) => {
         const a = AUTH_GRP[`${rel.a}-${rel.b}`];
-        return { key: `${rel.a}-${rel.b}`, pts: a.pts.map(([x, y]) => ({ x, y })), bx: a.pill[0], by: a.pill[1], r: 220, label: a.lines.join(' '), lines: a.lines, hw: 220, hh: a.lines.length > 1 ? 55 : 38, dashed: rel.dashed, hidden: false, auth: true };
+        return { key: `${rel.a}-${rel.b}`, pts: snapEnds(a.pts.map(([x, y]) => ({ x, y })), rel.a, rel.b), bx: a.pill[0], by: a.pill[1], r: 220, label: a.lines.join(' '), lines: a.lines, hw: a.hw ?? 220, hh: a.hh ?? (a.lines.length > 1 ? 55 : 38), dashed: rel.dashed, hidden: false, auth: true, plain: (rel as C4Rel).plain };
     });
     // Flyover crossings: where two authored routes cross, the later-drawn
     // edge arcs over the earlier one (circuit-diagram flyover). Crossings
@@ -1645,7 +1702,7 @@ function Canvas() {
                             <path key={g.key} d={edgePathD(g.pts, grpHops.get(g.key) ?? [], cam.z)} fill="none"
                                 data-pts={g.pts.map((p) => `${p.x},${p.y}`).join(' ')}
                                 className={g.dashed ? 'rc-rel-dash' : undefined}
-                                markerEnd={`url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'}${sm ? '-sm' : ''})`} />
+                                markerEnd={g.plain ? undefined : `url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'}${sm ? '-sm' : ''})`} />
                         );
                     })}
                 </svg>
