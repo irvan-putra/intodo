@@ -157,11 +157,26 @@ a, .rc-card a { color: var(--ds-ink); }
     display: flex; flex-direction: column; row-gap: 0.12em;
     font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
     color: var(--ds-ink);
-    font-size: min(calc(15px / var(--camz)), 72px);
+    font-size: calc(min(calc(15px / var(--camz)), 72px) * var(--lfscale, 1));
     background: var(--c4-container-tint);
     padding: min(calc(5px / var(--camz)), 26px) min(calc(14px / var(--camz)), 60px);
     border-radius: min(calc(10px / var(--camz)), 44px);
+    box-sizing: border-box;
 }
+/* Containment at the section/container bands: the header block wraps
+   inside its frame (max-width + wrapping rows + per-frame font cap from
+   the renderer) instead of overflowing narrow frames. */
+.rc-grp .rc-frame-label, .rc-lo .rc-frame-label {
+    white-space: normal; max-width: calc(100% - 36px);
+}
+.rc-lo .rc-frame-label { font-size: calc(min(calc(15px / var(--camz)), 72px, var(--ftmax, 999px)) * var(--lfscale, 1)); }
+/* Header-fit (writer review 14 Nov): the absolute header must clear the
+   first card row at the card-visible bands; the renderer steps --lfscale
+   down until it does, and drops the sub/kind row if more room is needed. */
+.rc-frame-tight .rc-frame-row2 { display: none; }
+.rc-frame-tight .rc-frame-list { display: none; }
+.rc-grp .rc-frame-row1, .rc-grp .rc-frame-row2,
+.rc-lo .rc-frame-row1, .rc-lo .rc-frame-row2 { flex-wrap: wrap; }
 .rc-frame-support .rc-frame-label { background: #f4f3f1; }
 /* Header rows keep label + List and sub + kind chip side by side, so the
    header block stays inside the frame's reserved top strip at every zoom. */
@@ -204,7 +219,9 @@ a, .rc-card a { color: var(--ds-ink); }
 .rc-groups .rc-grpnode, .rc-sysnodes .rc-grpnode { pointer-events: auto; }
 .rc-glabels, .rc-syslabels { display: none; }
 .rc-grp .rc-glabels { display: block; }
-.rc-sys .rc-syslabels { display: block; }
+/* System band stays sparse (owner feedback 14 Nov): no numbered badges
+   there - stub edges converge on the marker cluster and badges pile up;
+   numbering returns at the container band, the key lists every relation. */
 .rc-grp .rc-gedges polyline {
     stroke: var(--ds-teal);
     stroke-width: calc(2.5px / var(--camz));
@@ -488,25 +505,77 @@ a, .rc-card a { color: var(--ds-ink); }
 .rc-lo .rc-card { max-height: 72px; overflow: hidden; }
 /* Stable-map nodes: at the container/system bands node boxes and labels are
    WORLD-sized, so the map zooms like a map - positions and sizes fixed in
-   the world, readable when you zoom in, complete when you zoom out. */
+   the world, readable when you zoom in, complete when you zoom out.
+   Owner feedback 14 Nov (Maps-style legibility): labels get a minimum
+   on-screen size floor (max of world size and inverse-zoom floor), and
+   details too small to read at the band - sub text, kind chips, List
+   buttons - are hidden instead of rendering as noise. Placement and shape
+   never change: the same world boxes, only visibility is zoom-aware. */
 .rc-grp .rc-grpnode, .rc-sys .rc-grpnode {
     width: 300px; padding: 22px 26px; gap: 8px;
     border-width: 3px; border-radius: 28px;
 }
-.rc-grp .rc-grplabel, .rc-sys .rc-grplabel { font-size: 34px; }
+.rc-grp .rc-grplabel { font-size: max(34px, calc(10px / var(--camz))); }
 .rc-grp .rc-grpcount, .rc-sys .rc-grpcount { font-size: 24px; }
 /* kind cue scales with the band's world-fixed text, not against it */
 .rc-grp .rc-kindtag, .rc-sys .rc-kindtag {
     font-size: 20px; padding: 5px 13px; border-radius: 8px;
 }
+/* Sub text and kind chips are illegible at both far bands: hide them there.
+   Kinds stay cued by color/border/shape and the docked key's shape legend. */
+.rc-grp .rc-grpcount, .rc-grp .rc-kindtag, .rc-sys .rc-kindtag { display: none; }
 .rc-grp .rc-kindtag-support, .rc-sys .rc-kindtag-support { border-width: 2.5px; }
 .rc-grp .rc-personicon, .rc-sys .rc-personicon { width: 52px; height: 67px; }
 .rc-grp .rc-node-external, .rc-sys .rc-node-external,
 .rc-grp .rc-node-ext, .rc-sys .rc-node-ext { border-radius: 9px; }
-.rc-grp .rc-frame-label, .rc-sys .rc-frame-label {
-    font-size: 40px; padding: 12px 26px; border-radius: 18px;
+/* Container band: frame titles are the primary labels - floored at a
+   readable on-screen size, capped per frame (--ftmax, set by the renderer
+   from the frame width and the title's longest word) so a wrapped title
+   can never overflow its frame; sub line, kind chip and List button hide
+   as too small; the item count stays as the far-zoom fullness cue. */
+.rc-grp .rc-frame-label {
+    font-size: calc(max(40px, min(calc(13px / var(--camz)), var(--ftmax, 999px))) * var(--lfscale, 1));
+    padding: 12px 26px; border-radius: 18px;
+    line-height: 1.15;
 }
-.rc-grp .rc-frame-sub, .rc-sys .rc-frame-sub { font-size: 26px; }
+/* System band: frames are pure outlines (sparse map) - no titles, counts
+   or chips; names return at the container band, fullness via zoom. They
+   are also tap-through there: a collapsed outline must not intercept the
+   pan/zoom gesture over the boundary's middle (writer review 14 Nov). */
+.rc-sys .rc-frame-label { display: none; }
+/* Collapsed-band hit-through: the nest column is a pure layout strip, so
+   it must never swallow taps itself - at the system band the whole column
+   (frames included) falls through to the boundary button beneath, so
+   tapping anywhere inside the outline enters the system (writer review
+   14 Nov); at other bands frames/cards stay interactive. */
+.rc-nest-col { pointer-events: none; }
+.rc-frame { pointer-events: auto; }
+.rc-sys .rc-frame { pointer-events: none; }
+.rc-grp .rc-frame-sub, .rc-sys .rc-frame-sub,
+.rc-grp .rc-frame-kind, .rc-sys .rc-frame-kind,
+.rc-grp .rc-frame-list, .rc-sys .rc-frame-list { display: none; }
+/* The system boundary's own label is the one node label shown at the
+   system band (externals/people render as markers there): floor it like
+   the container-band labels; its sub line is too small to keep. */
+.rc-sys .rc-node-boundary .rc-grplabel { font-size: max(34px, min(calc(12px / var(--camz)), 110px)); background: transparent; padding: 0; }
+.rc-sys .rc-node-boundary .rc-grpcount { display: none; }
+/* System-band markers (Maps-style far zoom): a compact kind-shaped dot at
+   the node's exact world position and nothing else - the cluster is too
+   tight for clean name chips at that scale, so naming waits for the
+   container band (dots keep kind shape/color: person = filled circle,
+   external = sharp square). */
+.rc-sysmark {
+    position: absolute; transform: translate(-50%, -50%);
+    width: calc(11px / var(--camz)); height: calc(11px / var(--camz));
+    border-radius: 50%;
+    background: var(--c4-person); border: calc(2px / var(--camz)) solid var(--ds-page);
+    box-shadow: 0 0 0 calc(1.5px / var(--camz)) var(--c4-person);
+}
+.rc-sysmark-external {
+    border-radius: calc(2px / var(--camz));
+    background: var(--c4-external);
+    box-shadow: 0 0 0 calc(1.5px / var(--camz)) var(--c4-external);
+}
 .rc-node-boundary { border-style: dashed; border-color: var(--c4-system); background: transparent; }
 /* The system boundary box's label sits in the top strip, clear of the frames. */
 .rc-node-boundary { justify-content: flex-start; align-items: flex-start; padding: 24px 32px; }
@@ -518,4 +587,4 @@ a, .rc-card a { color: var(--ds-ink); }
    frame reads as a full container, not an empty box. Hidden at near bands;
    world-sized at far bands like the rest of the label block. */
 .rc-frame-count { display: none; }
-.rc-grp .rc-frame-count, .rc-sys .rc-frame-count { display: block; font-size: 24px; font-weight: 400; color: var(--ds-ink-2); margin-top: 6px; }
+.rc-grp .rc-frame-count { display: block; font-size: max(24px, calc(9px / var(--camz))); font-weight: 400; color: var(--ds-ink-2); margin-top: 6px; }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TextLink, useLocalState } from './files-shim';
 import { COMMIT, COMMIT_SHORT, SECTIONS, Section } from '../src/sections';
 
@@ -135,10 +135,14 @@ const CONTAINER_NODES: C4Node[] = [...C4_CONTAINERS, ...C4_PEOPLE, ...C4_EXTERNA
 // grows as zoom falls; 78 world px clears it down to z ~ 0.55.
 const NEST_PAD = 28, NEST_LABEL_H = 78, NEST_GAP = 22, NEST_COL_W = 392, NEST_FRAME_GAP = 60;
 const NEST_COLS: Record<string, number> = { 'c-app': 3, 'c-xdc': 2, 'c-web': 2, 'c-feedtool': 1, 'c-devsupport': 2 };
-// Two frame columns: the app container (tallest) on the left, the rest
-// stacked on the right. Frames size themselves by DOM flow (real card
-// heights, no estimates), stacked inside absolute-positioned columns.
-const NEST_COLUMNS: string[][] = [['c-app'], ['c-xdc', 'c-web', 'c-feedtool', 'c-devsupport']];
+// Two frame columns, height-balanced so the whole map fits a phone screen
+// at a meaningfully higher zoom (owner feedback 14 Nov: better spread):
+// the tall app frame pairs with the supporting frame on the left, the other
+// three stack on the right (~3300 vs ~3470 world px, was ~2120 vs ~4330).
+// Frames size themselves by DOM flow (real card heights, no estimates),
+// stacked inside absolute-positioned columns. Positions are world-fixed:
+// nothing re-lays with the camera.
+const NEST_COLUMNS: string[][] = [['c-app', 'c-devsupport'], ['c-xdc', 'c-web', 'c-feedtool']];
 const NEST_FRAME_W = (gid: string) => (NEST_COLS[gid] ?? 2) * NEST_COL_W - NEST_GAP + 2 * NEST_PAD;
 const NEST_COL_X = [40, 40 + NEST_FRAME_W('c-app') + NEST_FRAME_GAP];
 // Estimated frame/card bounds, used only to zoom toward a container or card
@@ -314,7 +318,7 @@ function diagramLayout(defs: C4Node[], rect: Rect, z: number, measured: Record<s
 // crosses an unrelated box, insert a perpendicular detour waypoint beyond
 // that box and re-check. Badge goes on the longest unobstructed segment,
 // beside the line, flipping sides if it would sit on a box.
-type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; dashed?: boolean };
+type RelGeom = { key: string; pts: Pos[]; bx: number; by: number; r: number; dashed?: boolean; hidden?: boolean };
 function segHitsNode(p: Pos, q: Pos, n: GroupNode, m: number): boolean {
     const x0 = n.x - n.hw - m, x1 = n.x + n.hw + m, y0 = n.y - n.hh - m, y1 = n.y + n.hh + m;
     // Liang-Barsky segment vs AABB
@@ -443,7 +447,7 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
     // pass 2: badges - candidates along the route by arc length, avoiding
     // boxes, other badges, and every OTHER edge's path
     const placed: Pos[] = [];
-    return routed.map(({ rel, na, nb, pts }, i) => {
+    const geoms = routed.map(({ rel, na, nb, pts }, i) => {
         const seglens: number[] = [];
         let total = 0;
         for (let si = 0; si < pts.length - 1; si++) {
@@ -503,6 +507,16 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect): Re
         tuck(nb, pts.length - 1, pts.length - 2);
         return { key: `${rel.a}-${rel.b}`, pts, bx, by, r: RB, dashed: rel.dashed };
     });
+    // Maps-style decluttering (owner feedback 14 Nov): a badge that would
+    // overlap an already-kept badge on screen is hidden rather than piled
+    // up - the edge line stays, and the number remains in the docked key.
+    // Greedy in relationship order: deterministic at every zoom.
+    const kept: RelGeom[] = [];
+    for (const g of geoms) {
+        if (kept.every((k) => Math.hypot(g.bx - k.bx, g.by - k.by) >= 2 * g.r + 8 / z)) kept.push(g);
+        else g.hidden = true;
+    }
+    return geoms;
 }
 // keep a saved position only if it lands clear of every other card's slot;
 // positions saved against an older card set would otherwise overlap the grid
@@ -592,13 +606,20 @@ function SectionCard({ s, mark, expanded, finding, onToggleExpand, onMark, onFin
 
 function Canvas() {
     const [saved, setSaved, savedMeta] = useLocalState<Saved | null>('review-canvas.v1', null);
-    const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: 1086, y: 2420, z: 0.168 });
+    const [cam, setCam] = useState<Cam>(saved?.cam ?? { x: 1104, y: 2140, z: 0.17 });
     const [pos, setPos] = useState<Record<string, Pos>>(sanePositions(saved?.pos ?? {}));
     const [focusedId, setFocusedId] = useState<string | null>(null);
     const [sheetGroup, setSheetGroup] = useState<string | null>(null);
     const [dock, setDock] = useState<'none' | 'menu' | 'legend'>('none');
     const [view, setView] = useState<'structure' | 'flow' | 'flowfeed' | 'deploy'>('structure');
     const [measuredNodes, setMeasuredNodes] = useState<Record<string, { w: number; h: number }>>({});
+    // Frame-label fit: at the card-visible bands the absolute header must
+    // never overlap the first card. Measured per frame against the actual
+    // card strip; the label font steps down (and row2 drops at high steps)
+    // until it clears. Deterministic per (frame, zoom), world-fixed
+    // geometry untouched - only the header's own size yields.
+    const [labelFit, setLabelFit] = useState<Record<string, number>>({});
+    const frameLabelRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const [reviews, setReviews] = useState<Record<string, Mark>>(saved?.reviews ?? {});
     const [findings, setFindings] = useState<Record<string, string>>(saved?.findings ?? {});
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -690,7 +711,7 @@ function Canvas() {
         const dockEl = el ? el.querySelector('.rc-dockbar') as HTMLElement | null : null;
         const dockH = dockEl && dockEl.offsetParent ? dockEl.getBoundingClientRect().height + 14 : 64;
         const fw = w, fh = Math.max(120, h - dockH);
-        let c: Cam = { x: 1086, y: 2420, z: clampZ(Math.min(fw / 2252, fh / 4920) * 0.98) };
+        let c: Cam = { x: 1104, y: 2140, z: clampZ(Math.min(fw / 2260, fh / 4420) * 0.98) };
         const fitZ = (uw: number, uh: number) => clampZ(Math.min(fw / (uw + 80), fh / (uh + 80)) * 0.98);
         if (view !== 'structure') {
             const set = VIEW_SETS[view as 'flow' | 'flowfeed' | 'deploy'];
@@ -815,6 +836,41 @@ function Canvas() {
     }, [overlayId, sheetOpen]);
 
     const band = cam.z < SYS_Z ? 'sys' : cam.z < GROUP_Z ? 'grp' : cam.z < LO_Z ? 'lo' : 'detail';
+    // Fit each frame header into the reserved strip above its cards: at the
+    // card-visible bands the absolute label must clear the first card row.
+    // Step the label's font scale down until it fits (row2 drops from step
+    // 3); relax one step when there is comfortable room again. Hysteresis
+    // avoids oscillation; only bands with visible cards are measured.
+    const labelFitBand = useRef<string>('');
+    useLayoutEffect(() => {
+        if (band !== 'lo' && band !== 'detail') return;
+        // fresh evaluation on every band entry: start from the full header
+        if (labelFitBand.current !== band) {
+            labelFitBand.current = band;
+            setLabelFit({});
+            return;
+        }
+        // grow-only within a band visit (monotone -> no oscillation): the
+        // header steps smaller until it clears the first card row.
+        setLabelFit((cur) => {
+            let changed = false;
+            const next = { ...cur };
+            for (const gid of Object.keys(frameLabelRefs.current)) {
+                const el = frameLabelRefs.current[gid];
+                const cards = el?.parentElement?.querySelector('.rc-frame-cards') as HTMLElement | null;
+                if (!el || !cards || cards.offsetParent === null) continue;
+                // real strip = where the first visible card actually starts
+                // (the cards div spans the frame; its padding reserves the strip)
+                const firstCard = ([...cards.children] as HTMLElement[]).find((c) => c.offsetParent !== null);
+                const stripTop = firstCard ? firstCard.offsetTop : cards.offsetTop + (parseFloat(getComputedStyle(cards).paddingTop) || 0);
+                const reserve = stripTop - el.offsetTop;
+                const need = el.offsetHeight;
+                const lvl = cur[gid] ?? 0;
+                if (need > reserve + 1 && lvl < 8) { next[gid] = lvl + 1; changed = true; }
+            }
+            return changed ? next : cur;
+        });
+    });
     // Detail-band landing correction. The C4 bands re-lay around wherever
     // the camera is, but nested content lives at fixed world coordinates,
     // so wheel-zooming through the container band can surface empty canvas.
@@ -1028,24 +1084,30 @@ function Canvas() {
             return { g, x: f.x + f.w / 2, y: f.y + f.h / 2, hw: f.w / 2, hh: f.h / 2 };
         }));
     const extNode = (id: string, defs: C4Node[], cx: number, cy: number): GroupNode =>
-        ({ g: defs.find((x) => x.id === id)!, x: cx, y: cy, hw: 150, hh: 60 });
-    // Full frame bounds stack to y=4330 (measured from NEST_EST: c-app bottom
-    // 2244, c-devsupport bottom 4330); externals sit below them. Nodes shared
-    // by the container and system layouts keep identical world coordinates.
+        ({ g: defs.find((x) => x.id === id)!, x: cx, y: cy, hw: 160, hh: 90 });
+    // Full frame bounds stack to y=3588 with the balanced columns (c-app
+    // bottom 2240, c-devsupport bottom 3416 in the left column; c-feedtool
+    // bottom 3588 in the right); externals sit below them. Nodes shared by
+    // the container and system layouts keep identical world coordinates.
     const groupLayout: GroupNode[] = [
         ...frameNodes,
-        extNode('x-files', CONTAINER_NODES, 300, 4480), extNode('x-github', CONTAINER_NODES, 1800, 4480),
-        extNode('x-dc', CONTAINER_NODES, 1300, 4480), extNode('p-dev', CONTAINER_NODES, 800, 4480),
+        extNode('x-files', CONTAINER_NODES, 300, 3800), extNode('x-github', CONTAINER_NODES, 1800, 3800),
+        extNode('x-dc', CONTAINER_NODES, 1300, 3800), extNode('p-dev', CONTAINER_NODES, 800, 3800),
     ];
     const sysLayout: GroupNode[] = [
-        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1086, y: 2190, hw: 1066, hh: 2170 },
-        extNode('p-owner', SYS_NODES, 500, 4760), extNode('p-members', SYS_NODES, 1050, 4760),
-        extNode('p-dev', SYS_NODES, 800, 4480),
-        extNode('x-gha', SYS_NODES, 1600, 4760), extNode('x-files', SYS_NODES, 300, 4480),
-        extNode('x-github', SYS_NODES, 1800, 4480), extNode('x-dc', SYS_NODES, 1300, 4480),
+        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1094, y: 1840, hw: 1074, hh: 1820 },
+        extNode('p-owner', SYS_NODES, 500, 4160), extNode('p-members', SYS_NODES, 1050, 4160),
+        extNode('p-dev', SYS_NODES, 800, 3800),
+        extNode('x-gha', SYS_NODES, 1600, 4160), extNode('x-files', SYS_NODES, 300, 3800),
+        extNode('x-github', SYS_NODES, 1800, 3800), extNode('x-dc', SYS_NODES, 1300, 3800),
     ];
     const grpRels = routeRels(C4_RELS, groupLayout, cam.z, layRect);
     const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, layRect);
+    // System band stays sparse (owner feedback 14 Nov): external/person
+    // nodes render as kind-shaped markers only - the marker cluster is too
+    // tight for clean name chips at that scale, so naming returns at the
+    // container band and badges hide at this band (CSS); every relation
+    // stays listed in the docked key.
     // Supporting views (dynamic flow / deployment) reuse the same
     // layout + routing pipeline; their edges are numbered steps/routes in
     // the docked key, same as the structure bands.
@@ -1148,12 +1210,12 @@ function Canvas() {
                 {/* relationship labels sit above the nodes so long labels stay
                     readable where lines pass under neighbouring nodes */}
                 <svg className="rc-glabels" width={WORLD.w} height={WORLD.h}>
-                    {grpRels.map((g, i) => (
+                    {grpRels.map((g, i) => (g.hidden ? null : (
                         <g key={g.key} className={`rc-rel-badge${g.dashed ? ' rc-rel-badge-dash' : ''}`}>
                             <circle cx={g.bx} cy={g.by} r={g.r} />
                             <text x={g.bx} y={g.by}>{i + 1}</text>
                         </g>
-                    ))}
+                    )))}
                 </svg>
                 {/* system context level: people + the intodo system + external
                     systems, furthest zoomed out. Tapping the system drops
@@ -1176,33 +1238,38 @@ function Canvas() {
                     ))}
                 </svg>
                 <div className="rc-sysnodes">
+                    {/* system band: external/person nodes render as compact
+                        kind-shaped markers at their exact world positions
+                        (Maps-style far zoom) at their exact world position;
+                        naming waits for the container band. */}
                     {sysLayout.map((n) => {
                         const g = n.g;
-                        const cls = `rc-grpnode rc-node-${g.kind}`;
+                        if (g.kind !== 'system') {
+                            return (
+                                <div key={g.id} data-nid={g.id} className={`rc-sysmark rc-sysmark-${g.kind}`} style={{ left: n.x, top: n.y }} />
+                            );
+                        }
                         const inner = <>
-                            {g.kind === 'person' ? C4_PERSON_ICON : null}
                             <span className="rc-grplabel">{g.label}</span>
                             <span className="rc-grpcount">{g.sub}</span>
                             <span className={`rc-kindtag rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span>
                         </>;
-                        return g.kind === 'system' ? (
-                            <button key={g.id} data-nid={g.id} type="button" className={`${cls} rc-node-boundary`} style={{ left: n.x, top: n.y, width: n.hw * 2, height: n.hh * 2 }} onClick={() => {
+                        return (
+                            <button key={g.id} data-nid={g.id} type="button" className={`rc-grpnode rc-node-${g.kind} rc-node-boundary`} style={{ left: n.x, top: n.y, width: n.hw * 2, height: n.hh * 2 }} onClick={() => {
                                 viewTouched.current = true;
-                                const c = clampCam({ x: 1086, y: 2420, z: 0.168 });
+                                const c = clampCam({ x: 1084, y: 1854, z: 0.168 });
                                 setCam(c); persist(c, pos, reviews);
                             }}>{inner}</button>
-                        ) : (
-                            <div key={g.id} data-nid={g.id} className={cls} style={{ left: n.x, top: n.y }}>{inner}</div>
                         );
                     })}
                 </div>
                 <svg className="rc-syslabels" width={WORLD.w} height={WORLD.h}>
-                    {sysRels.map((g, i) => (
+                    {sysRels.map((g, i) => (g.hidden ? null : (
                         <g key={g.key} className="rc-rel-badge">
                             <circle cx={g.bx} cy={g.by} r={g.r} />
                             <text x={g.bx} y={g.by}>{i + 1}</text>
                         </g>
-                    ))}
+                    )))}
                 </svg>
                 </>)}
                 {/* supporting views (owner-approved): dynamic flow and
@@ -1231,12 +1298,12 @@ function Canvas() {
                     ))}
                 </div>
                 <svg className="rc-viewlabels" width={WORLD.w} height={WORLD.h}>
-                    {viewRelRoutes.map((g, i) => (
+                    {viewRelRoutes.map((g, i) => (g.hidden ? null : (
                         <g key={g.key} className="rc-rel-badge">
                             <circle cx={g.bx} cy={g.by} r={g.r} />
                             <text x={g.bx} y={g.by}>{i + 1}</text>
                         </g>
-                    ))}
+                    )))}
                 </svg>
                 </>)}
                 {/* section level: every card belongs to a C4 container. In
@@ -1248,10 +1315,17 @@ function Canvas() {
                     <div key={ci} className="rc-nest-col" style={{ left: NEST_COL_X[ci], top: 120 }}>
                         {col.map((gid) => {
                             const g = C4_CONTAINERS.find((c) => c.id === gid)!;
+                            // Per-frame title cap (world px): the label must
+                            // never overflow its frame at any band - the longest
+                            // word has to fit the frame's inner text width
+                            // (frame width minus label inset 36 and the worst-case
+                            // horizontal padding 2x60) at ~0.64em per glyph.
+                            const longestWord = Math.max(...g.label.split(/\s+/).map((w) => w.length));
+                            const ftmax = Math.floor((NEST_FRAME_W(gid) - 36 - 120) / (longestWord * 0.64));
                             return (
-                                <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid), height: NEST_EST.frames[gid].h }}
+                                <div key={gid} data-frame={gid} className={`rc-frame${g.kind === 'support' ? ' rc-frame-support' : ''}`} style={{ width: NEST_FRAME_W(gid), height: NEST_EST.frames[gid].h, ['--ftmax' as string]: ftmax + 'px' }}
                                     onClick={band === 'grp' ? () => focusGroup(gid) : undefined}>
-                                    <div className="rc-frame-label"><span className="rc-frame-row1"><span className="rc-frame-title">{g.label}</span>{evp.w < 560 ? (
+                                    <div ref={(el) => { frameLabelRefs.current[gid] = el; }} className={`rc-frame-label${(band === 'lo' || band === 'detail') && (labelFit[gid] ?? 0) >= 3 ? ' rc-frame-tight' : ''}`} style={{ ['--lfscale' as string]: (band === 'lo' || band === 'detail') ? Math.pow(0.78, labelFit[gid] ?? 0) : 1 }}><span className="rc-frame-row1"><span className="rc-frame-title">{g.label}</span>{evp.w < 560 ? (
                                         <button type="button" className="rc-frame-list" onClick={(e) => { e.stopPropagation(); setSheetGroup(gid); }}>List</button>
                                     ) : null}</span><span className="rc-frame-row2"><span className="rc-frame-sub">{g.sub}</span><span className={`rc-frame-kind rc-kindtag-${g.kind}`}>{KIND_TAG[g.kind]}</span><span className="rc-frame-count">{(() => { const n = (g.members?.length ?? 0) + (g.attached?.length ?? 0); return `${n} ${n === 1 ? 'item' : 'items'}`; })()}</span></span></div>
                                     <div className="rc-frame-cards">
