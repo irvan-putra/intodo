@@ -123,10 +123,12 @@ a, .rc-card a { color: var(--ds-ink); }
 .rc-lo .rc-focus { display: none; }
 .rc-lo .rc-cardhead { cursor: pointer; }
 .rc-lo .rc-card h3 {
-    font-size: min(calc(13px / var(--camz)), 72px);
+    font-size: min(calc(13px / var(--camz)), 37px);
     line-height: 1.15;
 }
-.rc-lo .rc-icon { font-size: min(calc(18px / var(--camz)), 84px); }
+/* icon row drops out at the section level: its world height would push the
+   title past the reserved card slot at small zooms - same trade as the tag */
+.rc-lo .rc-icon { display: none; }
 /* tag drops out at the section level: at this distance it only collided
    with neighbouring titles; the grouping it named is the context level */
 .rc-lo .rc-tag { display: none; }
@@ -224,12 +226,12 @@ a, .rc-card a { color: var(--ds-ink); }
 /* System band stays sparse: no numbered badges
    there - stub edges converge on the marker cluster and badges pile up;
    numbering returns at the container band, the key lists every relation. */
-.rc-grp .rc-gedges polyline {
+.rc-grp .rc-gedges > path {
     stroke: var(--ds-teal);
     stroke-width: calc(1.8px / var(--camz));
     opacity: 0.55;
 }
-.rc-gedges polyline.rc-rel-dash {
+.rc-gedges > path.rc-rel-dash {
     stroke: var(--ds-ink-2);
     stroke-dasharray: calc(10px / var(--camz)) calc(6px / var(--camz));
     opacity: 0.65;
@@ -509,7 +511,17 @@ a, .rc-card a { color: var(--ds-ink); }
    taller than its estimate spills into the frame gap instead of shifting the
    map. */
 .rc-frame { overflow: visible; }
-.rc-lo .rc-card { max-height: 72px; overflow: hidden; }
+/* Look-up band cards keep the approved compact shape - the title only,
+   summaries stay in the card sheet. The slot is a fixed world box (frames
+   reserve their detail bounds at every zoom), so the cap is world-constant
+   and the title font caps at 37 world px: a three-line title then fits the
+   deepest slots and two-line cards fit the shallow ones, with the clamp
+   guaranteeing nothing ever cuts mid-line. */
+.rc-lo .rc-card { max-height: 128px; overflow: hidden; }
+.rc-lo .rc-card h3 {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
 /* Stable-map nodes: at the container/system bands node boxes and labels are
    WORLD-sized, so the map zooms like a map - positions and sizes fixed in
    the world, readable when you zoom in, complete when you zoom out.
@@ -617,9 +629,11 @@ a, .rc-card a { color: var(--ds-ink); }
    appears under the head, clamped; the full text and all controls stay in
    the reading sheet. At the deepest band the head compacts to one line so
    the summary gets up to four readable lines inside the fixed card. */
-.rc-lo .rc-world .rc-card > p:first-of-type, .rc-band-detail .rc-world .rc-card > p:first-of-type {
+.rc-band-detail .rc-world .rc-card > p:first-of-type {
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden; margin: 2px 10px 0; font-size: min(calc(11px / var(--camz)), 40px);
+    /* em-based: the fixed 24px card line-height clipped the counter-scaled font */
+    line-height: 1.25;
 }
 .rc-band-detail .rc-world .rc-card > p:first-of-type { -webkit-line-clamp: 4; }
 .rc-band-detail .rc-card .rc-tag, .rc-band-detail .rc-card .rc-purpose { display: none; }

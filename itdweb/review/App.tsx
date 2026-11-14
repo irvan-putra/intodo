@@ -607,6 +607,100 @@ function routeRels(rels: C4Rel[], nodes: GroupNode[], z: number, rect: Rect, tex
     }
     return geoms;
 }
+// segment-segment crossing (proper interior crossings only; grazing or
+// shared-port touches are connections, not crossings)
+function segX(p1: Pos, p2: Pos, p3: Pos, p4: Pos): Pos | null {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+    const l1 = Math.hypot(p2.x - p1.x, p2.y - p1.y), l2 = Math.hypot(p4.x - p3.x, p4.y - p3.y);
+    if (Math.abs(d) < 0.2 * l1 * l2) return null;
+    const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+    const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+    if (t <= 0.001 || t >= 0.999 || u <= 0.001 || u >= 0.999) return null;
+    const x = p1.x + t * (p2.x - p1.x), y = p1.y + t * (p2.y - p1.y);
+    const near = (a: Pos, b: Pos) => Math.hypot(a.x - b.x, a.y - b.y) < 6;
+    if (near({ x, y }, p1) || near({ x, y }, p2) || near({ x, y }, p3) || near({ x, y }, p4)) return null;
+    return { x, y };
+}
+// Smooth an authored route for rendering: rounded corners plus flyover hops
+// where this (later-drawn) edge crosses another. The route skeleton (pts)
+// never changes - corners round toward the corner point and hops arc over
+// the crossing, so territory geometry and pill anchors stay exact. Radii
+// counter-scale with zoom so joins read at phone size and shrink away at Fit.
+function edgePathD(pts: Pos[], hops: Pos[], z: number): string {
+    const P: Pos[] = [];
+    for (const p of pts) {
+        const q = P[P.length - 1];
+        if (q && Math.hypot(p.x - q.x, p.y - q.y) < 0.01) continue;
+        P.push({ x: p.x, y: p.y });
+    }
+    for (let i = P.length - 2; i > 0; i--) {
+        const a = P[i - 1], b = P[i], c = P[i + 1];
+        const ux = b.x - a.x, uy = b.y - a.y, vx = c.x - b.x, vy = c.y - b.y;
+        if (Math.abs(ux * vy - uy * vx) <= 0.001 * (Math.hypot(ux, uy) * Math.hypot(vx, vy))) P.splice(i, 1);
+    }
+    if (P.length < 2) return '';
+    const segs: { a: Pos; ux: number; uy: number; len: number }[] = [];
+    for (let i = 0; i + 1 < P.length; i++) {
+        const dx = P[i + 1].x - P[i].x, dy = P[i + 1].y - P[i].y;
+        const len = Math.hypot(dx, dy) || 1e-6;
+        segs.push({ a: P[i], ux: dx / len, uy: dy / len, len });
+    }
+    // hops win space over corner rounding: place them first, then corners
+    // shrink to whatever room remains
+    const segHops: { t: number; r: number }[][] = segs.map(() => []);
+    for (const h of hops) {
+        for (let si = 0; si < segs.length; si++) {
+            const s = segs[si];
+            const t = (h.x - s.a.x) * s.ux + (h.y - s.a.y) * s.uy;
+            if (t < 0.5 || t > s.len - 0.5) continue;
+            const px = s.a.x + s.ux * t, py = s.a.y + s.uy * t;
+            if (Math.hypot(h.x - px, h.y - py) > 2) continue;
+            const r = Math.min(6 / z, t - 0.5, s.len - t - 0.5);
+            if (r < 1.6) continue; // at the port itself: reads as a connection
+            segHops[si].push({ t, r });
+            break;
+        }
+    }
+    const cornerR = (ci: number): number => {
+        let rc = Math.min(9 / z, segs[ci - 1].len * 0.4, segs[ci].len * 0.4);
+        for (const h of segHops[ci - 1]) rc = Math.min(rc, segs[ci - 1].len - h.t - h.r - 0.5);
+        for (const h of segHops[ci]) rc = Math.min(rc, h.t - h.r - 0.5);
+        return Math.max(0, rc);
+    };
+    for (const hs of segHops) {
+        hs.sort((a, b) => a.t - b.t);
+        for (let k = 0; k + 1 < hs.length; k++) {
+            const gap = hs[k + 1].t - hs[k].t;
+            const want = hs[k].r + hs[k + 1].r + 0.5;
+            if (gap < want) {
+                const r = (gap - 0.5) / 2;
+                if (r < 1.6) { hs[k].r = 0; hs[k + 1].r = 0; }
+                else { hs[k].r = Math.min(hs[k].r, r); hs[k + 1].r = Math.min(hs[k + 1].r, r); }
+            }
+        }
+    }
+    let d = `M${P[0].x} ${P[0].y}`;
+    for (let i = 0; i < segs.length; i++) {
+        const s = segs[i];
+        const isLast = i === segs.length - 1;
+        const rc = isLast ? 0 : cornerR(i + 1);
+        const hs = segHops[i].filter((h) => h.r >= 1.6);
+        let curT = i === 0 ? 0 : cornerR(i);
+        const lineTo = (t: number) => { d += ` L${(s.a.x + s.ux * t).toFixed(2)} ${(s.a.y + s.uy * t).toFixed(2)}`; };
+        for (const h of hs) {
+            if (h.t - h.r > curT) lineTo(h.t - h.r);
+            d += ` A${h.r.toFixed(2)} ${h.r.toFixed(2)} 0 0 1 ${(s.a.x + s.ux * (h.t + h.r)).toFixed(2)} ${(s.a.y + s.uy * (h.t + h.r)).toFixed(2)}`;
+            curT = Math.max(curT, h.t + h.r);
+        }
+        if (isLast) lineTo(s.len);
+        else {
+            const W = P[i + 1], ns = segs[i + 1];
+            lineTo(s.len - rc);
+            d += ` Q${W.x} ${W.y} ${(W.x + ns.ux * rc).toFixed(2)} ${(W.y + ns.uy * rc).toFixed(2)}`;
+        }
+    }
+    return d;
+}
 // keep a saved position only if it lands clear of every other card's slot;
 // positions saved against an older card set would otherwise overlap the grid
 function sanePositions(savedPos: Record<string, Pos>): Record<string, Pos> {
@@ -1271,6 +1365,23 @@ function Canvas() {
         const a = AUTH_GRP[`${rel.a}-${rel.b}`];
         return { key: `${rel.a}-${rel.b}`, pts: a.pts.map(([x, y]) => ({ x, y })), bx: a.pill[0], by: a.pill[1], r: 220, label: a.lines.join(' '), lines: a.lines, hw: 220, hh: a.lines.length > 1 ? 55 : 38, dashed: rel.dashed, hidden: false, auth: true };
     });
+    // Flyover crossings: where two authored routes cross, the later-drawn
+    // edge arcs over the earlier one (circuit-diagram flyover). Crossings
+    // hidden under a visible label pill need no hop - the pill covers them.
+    const grpHops = new Map<string, Pos[]>();
+    {
+        const pillRs = grpRels.filter((g) => !g.hidden).map((g) => ({ x: g.bx - (g.hw ?? g.r), y: g.by - (g.hh ?? g.r), w: (g.hw ?? g.r) * 2, h: (g.hh ?? g.r) * 2 }));
+        for (let i = 0; i < grpRels.length; i++) for (let j = i + 1; j < grpRels.length; j++) {
+            const A = grpRels[i], B = grpRels[j];
+            for (let a = 0; a + 1 < A.pts.length; a++) for (let b = 0; b + 1 < B.pts.length; b++) {
+                const x = segX(A.pts[a], A.pts[a + 1], B.pts[b], B.pts[b + 1]);
+                if (!x) continue;
+                if (pillRs.some((r) => x.x > r.x && x.x < r.x + r.w && x.y > r.y && x.y < r.y + r.h)) continue;
+                if (!grpHops.has(B.key)) grpHops.set(B.key, []);
+                grpHops.get(B.key)!.push(x);
+            }
+        }
+    }
     const sysRels = routeRels(SYS_RELS, sysLayout, cam.z, layRect, false, [...groupLayout, ...Object.entries(labelRects).map(([id, r]) => ({ g: { id: `lab-${id}`, label: '', sub: '', kind: 'system' as const, frac: { fx: 0, fy: 0 } }, x: r.x + r.w / 2, y: r.y + r.h / 2, hw: r.w / 2, hh: r.h / 2 }))]);
     // System band stays sparse: external/person
     // nodes render as kind-shaped markers only - the marker cluster is too
@@ -1511,18 +1622,32 @@ function Canvas() {
                 {view === 'structure' && (<>
                 <svg className="rc-gedges" width={WORLD.w} height={WORLD.h}>
                     <defs>
-                        <marker id="rc-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-teal)" />
+                        {/* arrowheads stay smaller than the shaft they tip:
+                            standard ~9px screen, short-final-segment routes
+                            get the small head so the line reads as a line */}
+                        <marker id="rc-arr" markerWidth="5" markerHeight="5" refX="4.4" refY="2.5" orient="auto">
+                            <path d="M0,0 L5,2.5 L0,5 z" fill="var(--ds-teal)" />
                         </marker>
-                        <marker id="rc-arr-dash" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ds-ink-2)" />
+                        <marker id="rc-arr-dash" markerWidth="5" markerHeight="5" refX="4.4" refY="2.5" orient="auto">
+                            <path d="M0,0 L5,2.5 L0,5 z" fill="var(--ds-ink-2)" />
+                        </marker>
+                        <marker id="rc-arr-sm" markerWidth="3.2" markerHeight="3.2" refX="2.7" refY="1.6" orient="auto">
+                            <path d="M0,0 L3.2,1.6 L0,3.2 z" fill="var(--ds-teal)" />
+                        </marker>
+                        <marker id="rc-arr-dash-sm" markerWidth="3.2" markerHeight="3.2" refX="2.7" refY="1.6" orient="auto">
+                            <path d="M0,0 L3.2,1.6 L0,3.2 z" fill="var(--ds-ink-2)" />
                         </marker>
                     </defs>
-                    {grpRels.map((g) => (
-                        <polyline key={g.key} points={g.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none"
-                            className={g.dashed ? 'rc-rel-dash' : undefined}
-                            markerEnd={`url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'})`} />
-                    ))}
+                    {grpRels.map((g) => {
+                        const lp = g.pts[g.pts.length - 1], pp = g.pts[g.pts.length - 2];
+                        const sm = Math.hypot(lp.x - pp.x, lp.y - pp.y) * cam.z < 26;
+                        return (
+                            <path key={g.key} d={edgePathD(g.pts, grpHops.get(g.key) ?? [], cam.z)} fill="none"
+                                data-pts={g.pts.map((p) => `${p.x},${p.y}`).join(' ')}
+                                className={g.dashed ? 'rc-rel-dash' : undefined}
+                                markerEnd={`url(#${g.dashed ? 'rc-arr-dash' : 'rc-arr'}${sm ? '-sm' : ''})`} />
+                        );
+                    })}
                 </svg>
                 <svg className="rc-glabels" width={WORLD.w} height={WORLD.h}>
                     {grpRels.map((g) => (g.hidden ? null : (
