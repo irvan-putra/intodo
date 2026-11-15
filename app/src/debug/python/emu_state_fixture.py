@@ -33,34 +33,53 @@ def _join(outcomes, last):
 
 
 def _bounded_gzip_expand(tar_gz):
-    """Return bounded plain tar bytes or None for invalid/oversized gzip."""
+    """Return (plain_tar, None), (None, bounds) or (None, gzip)."""
     try:
         with gzip.GzipFile(fileobj=io.BytesIO(tar_gz), mode="rb") as source:
             out = bytearray()
             while True:
                 chunk = source.read(min(8192, _EXPANDED_CAP - len(out) + 1))
                 if not chunk:
-                    return bytes(out)
+                    return bytes(out), None
                 out.extend(chunk)
                 if len(out) > _EXPANDED_CAP:
-                    return None
+                    return None, "bounds"
     except Exception:
-        return None
+        return None, "gzip"
 
 
 def validate_state_archive(tar_gz, state_marker, ops_marker):
     """Validate the decrypted gzip-compressed state archive using bounded
     gzip expansion and streaming tar iteration. Returns ASCII bytes with
     fixed outcome ids in order, ending at first failure or final success."""
-    if not isinstance(tar_gz, (bytes, bytearray)) or len(tar_gz) > _COMPRESSED_CAP:
-        return b"state_archive_error"
-    expanded_tar = _bounded_gzip_expand(tar_gz)
-    if expanded_tar is None:
-        return b"state_archive_error"
+    # Chaquopy Java byte[] arrives as a jarray implementing the buffer
+    # protocol, not necessarily as bytes/bytearray. Inspect the buffer
+    # before copying: bytes(integer) allocates zero bytes and arbitrary
+    # iterables can also allocate unboundedly, so bytes(obj) alone is not
+    # a safe input-normalization contract.
+    try:
+        view = memoryview(tar_gz)
+    except (TypeError, ValueError):
+        return b"state_archive_input_error"
+    try:
+        if not view.contiguous:
+            return b"state_archive_input_error"
+        if view.nbytes > _COMPRESSED_CAP:
+            return b"state_archive_bounds_error"
+        tar_gz = view.tobytes()
+    except (TypeError, ValueError, BufferError):
+        return b"state_archive_input_error"
+    finally:
+        view.release()
+    expanded_tar, gzip_error = _bounded_gzip_expand(tar_gz)
+    if gzip_error == "bounds":
+        return b"state_archive_bounds_error"
+    if gzip_error == "gzip":
+        return b"state_archive_gzip_error"
     try:
         tf = tarfile.open(None, "r|", io.BytesIO(expanded_tar))
     except Exception:
-        return b"state_archive_error"
+        return b"state_archive_tar_error"
     outcomes = ["state_archive_ok"]
     names = []
     seen = set()
@@ -82,23 +101,23 @@ def validate_state_archive(tar_gz, state_marker, ops_marker):
                 seen.add(name)
                 names.append(name)
                 if member.size < 0 or member.size > _MEMBER_CAP:
-                    return _join(outcomes, "state_archive_error")
+                    return _join(outcomes, "state_archive_bounds_error")
                 expanded += member.size
                 if expanded > _EXPANDED_CAP:
-                    return _join(outcomes, "state_archive_error")
+                    return _join(outcomes, "state_archive_bounds_error")
                 try:
                     source = tf.extractfile(member)
                     if source is None:
-                        return _join(outcomes, "state_archive_error")
+                        return _join(outcomes, "state_archive_read_error")
                     data = source.read(_MEMBER_CAP + 1)
                 except Exception:
-                    return _join(outcomes, "state_archive_error")
+                    return _join(outcomes, "state_archive_read_error")
                 if len(data) != member.size or len(data) > _MEMBER_CAP:
-                    return _join(outcomes, "state_archive_error")
+                    return _join(outcomes, "state_archive_read_error")
                 contents[name] = data.decode("latin-1")
     except Exception:
         # Parser/runtime errors are terminal, never an empty valid archive.
-        return _join(outcomes, "state_archive_error")
+        return _join(outcomes, "state_archive_tar_error")
     outcomes.extend(("state_logs_clean", "state_members_ok"))
     if "bot_state.json" not in contents:
         return _join(outcomes, "state_member_state_missing")

@@ -257,7 +257,7 @@ require(all(p in validator.EMU_PHASES for p in
              "confirm_shown", "confirm_wait_error", "confirm_button_missing",
              "confirm_button_wait_error", "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 65
+require(len(validator.EMU_PHASES) == 69
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
 require(all(p in validator.EMU_PHASES for p in (
@@ -267,7 +267,10 @@ require(all(p in validator.EMU_PHASES for p in (
              "raw_leak_priv", "raw_priv_clean",
              "bundle_parsed", "bundle_parse_error",
              "state_decrypted", "state_decrypt_error",
-             "state_archive_ok", "state_archive_error", "state_helper_error",
+             "state_archive_ok", "state_helper_error",
+             "state_archive_input_error", "state_archive_bounds_error",
+             "state_archive_gzip_error", "state_archive_tar_error",
+             "state_archive_read_error",
              "state_members_ok", "state_members_unexpected",
              "state_member_state_missing", "state_member_ops_missing",
              "state_mark_state_ok", "state_mark_state_fail",
@@ -339,7 +342,16 @@ require('GZIPInputStream' not in runner_test
         "the compressed-byte scan and JVM-side gunzip are gone")
 fixture_helper = open(os.path.join(
     HERE, "../app/src/debug/python/emu_state_fixture.py"), encoding="utf-8").read()
-require('tarfile.open(None, "r|"' in fixture_helper
+require('memoryview(tar_gz)' in fixture_helper
+        and 'view.nbytes > _COMPRESSED_CAP' in fixture_helper
+        and 'view.tobytes()' in fixture_helper
+        and 'bytes(tar_gz)' not in fixture_helper
+        and 'state_archive_input_error' in fixture_helper
+        and 'state_archive_gzip_error' in fixture_helper
+        and 'state_archive_tar_error' in fixture_helper
+        and 'state_archive_bounds_error' in fixture_helper
+        and 'state_archive_read_error' in fixture_helper
+        and 'tarfile.open(None, "r|"' in fixture_helper
         and 'gzip.GzipFile' in fixture_helper
         and 'range' not in fixture_helper
         and '"secret-bot.log"' in fixture_helper

@@ -307,7 +307,10 @@ class MigrationEmuExportTest {
                     .callAttr("validate_state_archive", stateTar, MARK_STATE, MARK_OPS)
                     .toJava(ByteArray::class.java)
                 val allowedOutcomes = setOf(
-                    "state_archive_ok", "state_archive_error", "state_logs_clean",
+                    "state_archive_ok",
+                    "state_archive_input_error", "state_archive_bounds_error",
+                    "state_archive_gzip_error", "state_archive_tar_error",
+                    "state_archive_read_error", "state_logs_clean",
                     "state_logs_leak", "state_members_ok", "state_members_unexpected",
                     "state_member_state_missing", "state_member_ops_missing",
                     "state_mark_state_ok", "state_mark_state_fail",
@@ -319,14 +322,16 @@ class MigrationEmuExportTest {
                 }
                 val decoded = String(resultBytes, Charsets.US_ASCII).split(",")
                 val nextOutcomes = mapOf(
-                    "START" to setOf("state_archive_error", "state_archive_ok"),
-                    "state_archive_ok" to setOf("state_archive_error", "state_logs_clean",
-                        "state_logs_leak", "state_members_unexpected"),
-                    "state_logs_clean" to setOf("state_archive_error", "state_members_ok",
-                        "state_members_unexpected"),
-                    "state_members_ok" to setOf("state_archive_error",
-                        "state_member_state_missing", "state_mark_state_fail",
-                        "state_mark_state_ok"),
+                    "START" to setOf("state_archive_ok",
+                        "state_archive_input_error", "state_archive_bounds_error",
+                        "state_archive_gzip_error", "state_archive_tar_error"),
+                    "state_archive_ok" to setOf("state_logs_clean",
+                        "state_logs_leak", "state_members_unexpected",
+                        "state_archive_bounds_error", "state_archive_tar_error",
+                        "state_archive_read_error"),
+                    "state_logs_clean" to setOf("state_members_ok"),
+                    "state_members_ok" to setOf("state_member_state_missing",
+                        "state_mark_state_fail", "state_mark_state_ok"),
                     "state_mark_state_ok" to setOf("state_member_ops_missing",
                         "state_mark_ops_fail", "state_mark_ops_ok"))
                 if (decoded.size > 7 || decoded.any { it !in allowedOutcomes } ||
@@ -339,7 +344,10 @@ class MigrationEmuExportTest {
                         throw IllegalStateException("invalid state-helper outcome order")
                     }
                     val terminal = outcome in setOf(
-                        "state_archive_error", "state_logs_leak", "state_members_unexpected",
+                        "state_archive_input_error",
+                        "state_archive_bounds_error", "state_archive_gzip_error",
+                        "state_archive_tar_error", "state_archive_read_error",
+                        "state_logs_leak", "state_members_unexpected",
                         "state_member_state_missing", "state_mark_state_fail",
                         "state_member_ops_missing", "state_mark_ops_fail", "state_mark_ops_ok")
                     if (terminal && index != decoded.lastIndex) {
@@ -347,7 +355,10 @@ class MigrationEmuExportTest {
                     }
                     previous = outcome
                 }
-                if (decoded.last() !in setOf("state_archive_error", "state_logs_leak",
+                if (decoded.last() !in setOf(
+                        "state_archive_input_error", "state_archive_bounds_error",
+                        "state_archive_gzip_error", "state_archive_tar_error",
+                        "state_archive_read_error", "state_logs_leak",
                         "state_members_unexpected", "state_member_state_missing",
                         "state_mark_state_fail", "state_member_ops_missing",
                         "state_mark_ops_fail", "state_mark_ops_ok")) {
@@ -362,7 +373,11 @@ class MigrationEmuExportTest {
             for (outcome in stateOutcomes) {
                 diagnosticPhase(outcome)
                 stateFailure = when (outcome) {
-                    "state_archive_error" -> "state archive validation failed"
+                    "state_archive_input_error" -> "state archive input not bytes-like"
+                    "state_archive_bounds_error" -> "state archive over byte or member bounds"
+                    "state_archive_gzip_error" -> "state archive gzip layer invalid or over bounds"
+                    "state_archive_tar_error" -> "state archive tar structure unreadable"
+                    "state_archive_read_error" -> "state archive member read failed"
                     "state_logs_leak" -> "state archive includes log artifact"
                     "state_members_unexpected" -> "unexpected member in state archive"
                     "state_member_state_missing" -> "state archive missing bot_state.json"

@@ -38,20 +38,27 @@ def require(cond, message):
         raise AssertionError(message)
 
 
+NARROW_ERRORS = {"state_archive_input_error", "state_archive_bounds_error",
+                 "state_archive_gzip_error", "state_archive_tar_error",
+                 "state_archive_read_error"}
 OUTCOME_NEXT = {
-    "START": {"state_archive_error", "state_archive_ok"},
-    "state_archive_ok": {"state_archive_error", "state_logs_clean",
-                          "state_logs_leak", "state_members_unexpected"},
-    "state_logs_clean": {"state_archive_error", "state_members_ok",
-                          "state_members_unexpected"},
-    "state_members_ok": {"state_archive_error", "state_member_state_missing",
-                         "state_mark_state_fail", "state_mark_state_ok"},
+    "START": {"state_archive_ok", "state_archive_input_error",
+              "state_archive_bounds_error", "state_archive_gzip_error",
+              "state_archive_tar_error"},
+    "state_archive_ok": {"state_logs_clean",
+                          "state_logs_leak", "state_members_unexpected",
+                          "state_archive_bounds_error", "state_archive_tar_error",
+                          "state_archive_read_error"},
+    "state_logs_clean": {"state_members_ok"},
+    "state_members_ok": {"state_member_state_missing", "state_mark_state_fail",
+                         "state_mark_state_ok"},
     "state_mark_state_ok": {"state_member_ops_missing", "state_mark_ops_fail",
                              "state_mark_ops_ok"},
 }
-TERMINAL = {"state_archive_error", "state_logs_leak", "state_members_unexpected",
+TERMINAL = {"state_logs_leak", "state_members_unexpected",
             "state_member_state_missing", "state_mark_state_fail",
-            "state_member_ops_missing", "state_mark_ops_fail", "state_mark_ops_ok"}
+            "state_member_ops_missing", "state_mark_ops_fail",
+            "state_mark_ops_ok"} | NARROW_ERRORS
 
 
 def valid_sequence(items):
@@ -99,8 +106,8 @@ def make_archive(members):
 # Empty, unknown, duplicate, unordered, and nonterminal streams all fail
 # the same protocol enforced around the bridge in the instrumentation test.
 for malformed in ([], ["unknown"], ["state_archive_ok"],
-                  ["state_archive_ok", "state_logs_clean", "state_archive_error",
-                   "state_mark_ops_ok"],
+                  ["state_archive_ok", "state_logs_clean", "state_mark_ops_ok",
+                   "state_mark_ops_fail"],
                   ["state_archive_ok", "state_archive_ok"]):
     require(not valid_sequence(malformed), "malformed outcome sequence accepted")
 
@@ -142,14 +149,37 @@ require(outcomes(make_archive({
 }))[-1] == "state_member_state_missing", "missing bot_state.json")
 
 # 6. corrupt / non-gzip input
-require(outcomes(b"not a gzip stream") == ["state_archive_error"],
+require(outcomes(b"not a gzip stream") == ["state_archive_gzip_error"],
         "corrupt archive")
 
 # 7. compressed and expanded inputs are bounded before tar iteration
-require(outcomes(b"x" * (16 * 1024 * 1024 + 1)) == ["state_archive_error"],
+require(outcomes(b"x" * (16 * 1024 * 1024 + 1)) == ["state_archive_bounds_error"],
         "oversized compressed input")
 require(outcomes(gzip.compress(b"x" * (16 * 1024 * 1024 + 1)))
-        == ["state_archive_error"], "expanded gzip input cap")
+        == ["state_archive_bounds_error"], "expanded gzip input cap")
+require(outcomes(gzip.compress(b"not a tar archive"))
+        == ["state_archive_tar_error"], "invalid tar structure")
+
+# 7b. input contract: Chaquopy passes a Java byte[] as a jarray (buffer
+# protocol), NOT a bytes object - the helper must normalize via bytes().
+# array.array is the local buffer-protocol non-bytes stand-in.
+import array
+expected_good = [
+    "state_archive_ok", "state_logs_clean", "state_members_ok",
+    "state_mark_state_ok", "state_mark_ops_ok"]
+require(outcomes(array.array("B", GOOD)) == expected_good,
+        "unsigned buffer-protocol input")
+signed_bytes = [value if value < 128 else value - 256 for value in GOOD]
+require(outcomes(array.array("b", signed_bytes)) == expected_good,
+        "signed buffer-protocol bytes preserve exact bit pattern")
+class NotBuffer:
+    pass
+for invalid in (NotBuffer(), 10, 10**100, list(GOOD)):
+    require(fx.validate_state_archive(invalid, MARK_STATE, MARK_OPS)
+            == b"state_archive_input_error", "reject non-buffer input")
+require(fx.validate_state_archive(memoryview(b"x" * (16 * 1024 * 1024 + 1)),
+                                  MARK_STATE, MARK_OPS)
+        == b"state_archive_bounds_error", "reject oversized buffer before copy")
 
 # 8. unexpected member names include traversal and separator forms
 require(outcomes(make_archive({
@@ -216,6 +246,6 @@ require(outcomes(make_archive({
 require(outcomes(make_archive({
     "bot_state.json": MARK_STATE,
     "ops-5.db": MARK_OPS + "x" * (4 * 1024 * 1024),
-}))[-1] == "state_archive_error", "oversized member")
+}))[-1] == "state_archive_bounds_error", "oversized member")
 
 print("stage-6 state archive fixtures: PASS")
