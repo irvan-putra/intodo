@@ -85,23 +85,9 @@ jobs:
           arch: ${{ inputs.arch || 'x86_64' }}
           profile: Nexus 6
           emulator-boot-timeout: 900
-          script: |
-            abis=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r')
-            echo "cpu abilist: $abis"
-            case "$abis" in
-              *arm64-v8a*) echo "arm64-v8a supported (native or translated)";;
-              *) echo "FATAL: no arm64-v8a on this image (no ARM translation) - re-dispatch with arch=arm64-v8a"; exit 2;;
-            esac
-            set +e
-            ./gradlew :app:connectedDebugAndroidTest --no-daemon \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.vanipy.migtest.EmuSmokeTest
-            status=$?
-            adb logcat -d > smoke-logcat.txt 2>/dev/null
-            adb exec-out run-as com.instinct.widget tar cf - -C files emu-out > smoke-out.tar 2>/dev/null
-            tar xf smoke-out.tar 2>/dev/null
-            ls -laR emu-out 2>/dev/null
-            exit $status
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+          script: bash ci/emu_runner.sh smoke-export
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: emu-export-smoke
           path: |
@@ -138,23 +124,9 @@ jobs:
           arch: ${{ inputs.arch || 'x86_64' }}
           profile: Nexus 6
           emulator-boot-timeout: 900
-          script: |
-            abis=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r')
-            echo "cpu abilist: $abis"
-            case "$abis" in
-              *arm64-v8a*) :;;
-              *) echo "FATAL: no arm64-v8a on this image - re-dispatch with arch=arm64-v8a"; exit 2;;
-            esac
-            set +e
-            ./gradlew :app:connectedDebugAndroidTest --no-daemon \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.vanipy.migtest.MigrationEmuExportTest
-            status=$?
-            adb logcat -d > emu-logcat.txt 2>/dev/null
-            adb exec-out run-as com.instinct.widget tar cf - -C files emu-out > emu-out.tar 2>/dev/null
-            tar xf emu-out.tar 2>/dev/null
-            ls -laR emu-out 2>/dev/null
-            exit $status
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+          script: bash ci/emu_runner.sh export
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: emu-export
           path: |
