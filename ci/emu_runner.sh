@@ -44,6 +44,7 @@ esac
 
 OLD_PKG=com.instinct.widget
 NEW_PKG=com.vanipy.intodo
+PRETEST=emu-rt-pretest.txt
 
 # Guest network isolation is STRUCTURAL: the workflow launches the
 # emulator with QEMU `-nic none` (via the Android emulator's `-qemu`
@@ -67,61 +68,88 @@ NEW_PKG=com.vanipy.intodo
 # must NOT pass), any non-loopback address, any default route, or a
 # successful egress attempt aborts the run - offline is NEVER asserted
 # from an unverified setup.
+#
+# The evidence file is created FIRST and grown INCREMENTALLY: every
+# probe appends its command status and (nonsecret) content BEFORE any
+# gate can abort, so a failing probe can never erase which probe
+# failed (v1 of this function collected into variables under `set -e`
+# first - one nonzero adb exit and the run died with NO evidence).
+# Probe content is nonsecret by construction: guest interface/route
+# listings and canned unreachable errors. CR bytes from adb are
+# stripped into the checked copies; scratch is wiped in the trap.
 verify_guest_offline() {
-  local links ifs routes
-  links=$(adb shell ip -o link show 2>&1)
-  ifs=$(adb shell ip -o addr show 2>&1)
-  routes=$(adb shell 'ip route show; ip -6 route show' 2>&1)
-  {
-    echo 'isolation=structural (emulator launched with -qemu -nic none; no guest NIC)'
-    echo '== guest link devices (ip -o link show) =='
-    printf '%s\n' "$links"
-    echo '== guest addresses (ip -o addr show) =='
-    printf '%s\n' "$ifs"
-    echo '== guest routes (ip route show; ip -6 route show) =='
-    printf '%s\n' "$routes"
-  } > emu-rt-isolation.txt
-  if [ -z "$links" ]; then
-    echo 'FATAL: guest link listing is empty - cannot verify isolation, aborting' >&2
-    exit 1
+  : > emu-rt-isolation.txt
+  echo 'isolation=structural (emulator launched with -qemu -nic none; no guest NIC)' >> emu-rt-isolation.txt
+
+  rt_probe() {  # $1=label, $2=remote command (single string)
+    local st
+    if adb shell "$2" > ".rt-probe-$1.raw" 2>&1; then st=0; else st=$?; fi
+    tr -d '\r' < ".rt-probe-$1.raw" > ".rt-probe-$1.txt"
+    printf '== probe %s: adb shell %s (status %s) ==\n' "$1" "$2" "$st" >> emu-rt-isolation.txt
+    cat ".rt-probe-$1.txt" >> emu-rt-isolation.txt
+    printf '\n' >> emu-rt-isolation.txt
+    return "$st"
+  }
+
+  # Corroborating enumeration via sysfs: no ip binary involved.
+  rt_probe sysfs_net 'ls /sys/class/net' \
+    || { echo 'FATAL: sysfs net listing failed - cannot verify isolation, aborting' >&2; return 1; }
+  if [ "$(cat .rt-probe-sysfs_net.txt)" != "lo" ]; then
+    echo 'FATAL: /sys/class/net is not exactly {lo} - NOT isolated, aborting' >&2
+    return 1
   fi
-  if printf '%s\n%s\n' "$links" "$ifs" | grep -Eiq 'error:|not found|permission denied'; then
-    echo 'FATAL: adb could not read guest interfaces - cannot verify isolation, aborting' >&2
-    exit 1
+
+  rt_probe link 'ip -o link show' \
+    || { echo 'FATAL: link listing command failed - cannot verify isolation, aborting' >&2; return 1; }
+  rt_probe addr 'ip -o addr show' \
+    || { echo 'FATAL: address listing command failed - cannot verify isolation, aborting' >&2; return 1; }
+  rt_probe route4 'ip route show' \
+    || { echo 'FATAL: ipv4 route query failed - cannot verify isolation, aborting' >&2; return 1; }
+  rt_probe route6 'ip -6 route show' \
+    || { echo 'FATAL: ipv6 route query failed - cannot verify isolation, aborting' >&2; return 1; }
+
+  if grep -Eiq 'error:|not found|permission denied' \
+    .rt-probe-sysfs_net.txt .rt-probe-link.txt .rt-probe-addr.txt \
+    .rt-probe-route4.txt .rt-probe-route6.txt; then
+    echo 'FATAL: probe output carried an error marker - cannot verify isolation, aborting' >&2
+    return 1
   fi
-  if printf '%s\n' "$routes" | grep -Eiq 'error:|not found|permission denied'; then
-    echo 'FATAL: guest route query failed - cannot verify isolation, aborting' >&2
-    exit 1
-  fi
-  # Link layer: lo must be the ONLY device. An unaddressed NIC has no
-  # inet line, so the address check alone would let it pass - it must
-  # not. (If a stock image ships an inert kernel-virtual device here,
-  # this aborts honestly and the listing says exactly what was seen.)
-  if ! printf '%s\n' "$links" | awk '$2 == "lo:" { lo++ } END { exit (lo == 1 ? 0 : 1) }'; then
+  # Link layer: lo must be the ONLY device (exactly one). An
+  # unaddressed NIC has no inet line, so the address check alone would
+  # let it pass - it must not. (If a stock image ships an inert
+  # kernel-virtual device here, this aborts honestly and the listing
+  # above says exactly what was seen.)
+  if ! awk '$2 == "lo:" { lo++ } END { exit (lo == 1 ? 0 : 1) }' .rt-probe-link.txt; then
     echo 'FATAL: guest link listing does not contain exactly one loopback device - cannot verify isolation, aborting' >&2
-    exit 1
+    return 1
   fi
-  if printf '%s\n' "$links" | awk '{ if ($2 != "lo:") bad=1 } END { exit (bad ? 0 : 1) }'; then
+  if awk '{ if ($2 != "lo:") bad=1 } END { exit (bad ? 0 : 1) }' .rt-probe-link.txt; then
     echo 'FATAL: guest has a non-loopback link device - NOT isolated, aborting' >&2
-    exit 1
+    return 1
   fi
-  if printf '%s\n' "$ifs" | awk '$3 == "inet" || $3 == "inet6" { if ($2 != "lo") bad=1 } END { exit (bad ? 0 : 1) }'; then
+  # Positive proof loopback is addressed (an empty addr listing or a
+  # silently broken ip must not pass), then no non-loopback address.
+  if ! awk '$2 == "lo" && $3 == "inet" { ok=1 } END { exit (ok ? 0 : 1) }' .rt-probe-addr.txt; then
+    echo 'FATAL: loopback inet address missing - cannot verify isolation, aborting' >&2
+    return 1
+  fi
+  if awk '$3 == "inet" || $3 == "inet6" { if ($2 != "lo") bad=1 } END { exit (bad ? 0 : 1) }' .rt-probe-addr.txt; then
     echo 'FATAL: guest has a non-loopback interface with an address - NOT isolated, aborting' >&2
-    exit 1
+    return 1
   fi
-  if printf '%s\n' "$routes" | grep -q '^default'; then
+  if grep -q '^default' .rt-probe-route4.txt .rt-probe-route6.txt; then
     echo 'FATAL: guest has a default route - NOT isolated, aborting' >&2
-    exit 1
+    return 1
   fi
   # Sanity demonstration (the listings above are the proof): with no
   # NIC there is no route for any protocol, so any egress attempt fails
   # at route lookup. If one ever succeeds the setup is not what we
-  # think.
-  if adb shell ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1; then
+  # think. The canned unreachable error is nonsecret and recorded.
+  if rt_probe egress 'ping -c 1 -W 2 8.8.8.8'; then
     echo 'FATAL: guest egress SUCCEEDED despite -qemu -nic none - setup not understood, aborting' >&2
-    exit 1
+    return 1
   fi
-  echo 'egress_probe=icmp 8.8.8.8 failed as required (no route)' >> emu-rt-isolation.txt
+  echo 'isolation_verified=yes (sysfs + link + addr + routes + egress, fail-closed)' >> emu-rt-isolation.txt
 }
 
 check_instrumentation() {
@@ -224,16 +252,37 @@ capture_roundtrip_outputs() {
   printf 'test_status=%s\n' "$original_status" >> emu-rt-meta.txt
 
   # Allowlisted app outputs ONLY: self-authored JSON + listings.
+  # adb exec-out does NOT propagate the remote exit status (a failed
+  # cat still exits 0 and its error text lands in the file), so the
+  # remote file's existence is probed FIRST (absent vs malformed are
+  # distinct statuses) and every pulled file must pass ci/
+  # emu_rt_validate.py's per-filename FIELD allowlist (exact top-level
+  # dict, per-key types, bounded expected values) or it is dropped,
+  # never uploaded - content never influences the verdict text.
   for pkg in "$OLD_PKG" "$NEW_PKG"; do
     mkdir -p "capture/$pkg"
     for name in smoke-ok.json export-done.json import-done.json import-assertions.json; do
+      adb shell "run-as $pkg test -f files/emu-out/$name" > /dev/null 2>&1
+      if [ "$?" -ne 0 ]; then
+        printf '%s %s remote=absent\n' "$pkg" "$name" >> emu-rt-meta.txt
+        rm -f "capture/$pkg/$name"
+        continue
+      fi
       adb exec-out run-as "$pkg" cat "files/emu-out/$name" > "capture/$pkg/$name" 2>/dev/null
       printf '%s %s pull_status=%s\n' "$pkg" "$name" "$?" >> emu-rt-meta.txt
-      [ -s "capture/$pkg/$name" ] || rm -f "capture/$pkg/$name"
+      if [ -s "capture/$pkg/$name" ] && python3 ci/emu_rt_validate.py json "$name" "capture/$pkg/$name"; then
+        printf '%s %s schema=ok\n' "$pkg" "$name" >> emu-rt-meta.txt
+      else
+        printf '%s %s schema=malformed (dropped)\n' "$pkg" "$name" >> emu-rt-meta.txt
+        rm -f "capture/$pkg/$name"
+      fi
     done
-    adb shell run-as "$pkg" sh -c 'ls -laR files/emu-out' \
-      > "capture/$pkg/emu-out-listing.txt" 2>/dev/null
-    printf '%s listing_status=%s\n' "$pkg" "$?" >> emu-rt-meta.txt
+    # One double-quoted remote string: adb joins argv with bare spaces,
+    # so a locally single-quoted sh -c would lose its grouping.
+    adb shell "run-as $pkg ls -laR files/emu-out" > "capture/$pkg/emu-out-listing.txt" 2>/dev/null
+    local lst_st=$?
+    printf '%s listing_status=%s\n' "$pkg" "$lst_st" >> emu-rt-meta.txt
+    if [ "$lst_st" -ne 0 ]; then rm -f "capture/$pkg/emu-out-listing.txt"; fi
   done
 
   # Old identity untouched: BOUNDED checks on stable fixture markers and
@@ -242,22 +291,24 @@ capture_roundtrip_outputs() {
   # marker COUNTS and filenames are recorded, never file contents.
   adb shell pm path "$OLD_PKG" > old-app-pm-path.txt 2>&1
   printf 'old_app_installed_status=%s\n' "$?" >> emu-rt-meta.txt
-  adb shell run-as "$OLD_PKG" ls files > old-app-files-after.txt 2>&1
-  printf 'old_app_files_list_status=%s\n' "$?" >> emu-rt-meta.txt
+  adb shell "run-as $OLD_PKG ls files" > old-app-files-after.txt 2>/dev/null
+  local files_st=$?
+  printf 'old_app_files_list_status=%s\n' "$files_st" >> emu-rt-meta.txt
+  if [ "$files_st" -ne 0 ]; then rm -f old-app-files-after.txt; fi
   local state_hits priv_hits
-  state_hits=$(adb shell run-as "$OLD_PKG" sh -c \
-    'grep -c EMU-STATE-MARKER-5dca71 files/bot_state.json' 2>/dev/null | tr -d '\r')
-  priv_hits=$(adb shell run-as "$OLD_PKG" sh -c \
-    'grep -c fixture-priv-EMU-PRIV-MARKER-31c7aa shared_prefs/instinct_widget.xml' 2>/dev/null | tr -d '\r')
+  state_hits=$(adb shell "run-as $OLD_PKG grep -c EMU-STATE-MARKER-5dca71 files/bot_state.json" 2>/dev/null | tr -d '\r')
+  priv_hits=$(adb shell "run-as $OLD_PKG grep -c fixture-priv-EMU-PRIV-MARKER-31c7aa shared_prefs/instinct_widget.xml" 2>/dev/null | tr -d '\r')
   printf 'old_app_state_marker_hits=%s\n' "${state_hits:-capture-failed}" >> emu-rt-meta.txt
   printf 'old_app_priv_marker_hits=%s\n' "${priv_hits:-capture-failed}" >> emu-rt-meta.txt
 
-  # Secret + raw-output wipe: the runner-local handoff copy and every
-  # raw instrumentation capture. The apps' private emu-out (bundle,
-  # code, screenshots, logs) dies with the ephemeral emulator; there is
-  # no host isolation state to tear down (see verify_guest_offline).
+  # Secret + raw-output wipe: the runner-local handoff copy, every
+  # raw instrumentation capture and the probe scratch. The apps'
+  # private emu-out (bundle, code, screenshots, logs) dies with the
+  # ephemeral emulator; there is no host isolation state to tear down
+  # (see verify_guest_offline).
   rm -f rt-bundle.dcmig rt-code.txt \
-    smoke-instrumentation.txt export-instrumentation.txt import-instrumentation.txt
+    smoke-instrumentation.txt export-instrumentation.txt import-instrumentation.txt \
+    .rt-probe-*.raw .rt-probe-*.txt
 
   if [ "$original_status" -eq 0 ]; then
     if [ ! -f "capture/$OLD_PKG/export-done.json" ]; then
@@ -289,52 +340,83 @@ if [ "$mode" = roundtrip ]; then
   # none` (see verify_guest_offline): the old identity exports, the renamed
   # identity imports, the old identity's data is verified untouched
   # afterwards. There is no host firewall state - nothing to clean up.
+  #
+  # Every pre-test step and leg appends its label+status to
+  # emu-rt-pretest.txt BEFORE and AFTER running (uploaded, nonsecret):
+  # a failing step always leaves the exact step that failed instead of
+  # an unexplained exit. Command output streams as before; the statuses
+  # are the harness's own.
   trap capture_roundtrip_outputs EXIT
-  require_arm64_abi
+  : > "$PRETEST"
 
+  record_step() {  # $1=label, rest=command; output streams through
+    local label=$1; shift
+    local st
+    printf 'step_%s=running\n' "$label" >> "$PRETEST"
+    if "$@"; then st=0; else st=$?; fi
+    printf 'step_%s_status=%s\n' "$label" "$st" >> "$PRETEST"
+    if [ "$st" -ne 0 ]; then
+      echo "FATAL: pre-test step failed: $label (status $st)" >&2
+      exit "$st"
+    fi
+  }
+
+  record_step abi_check require_arm64_abi
   # Build + install BOTH identities. Gradle runs on the HOST (the
   # runner's own network, unaffected by the guest having no NIC);
   # adb install does not traverse a guest NIC either.
-  ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon
-  ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon -PemuAppId="$NEW_PKG"
+  record_step install_old_identity ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon
+  record_step install_new_identity ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon -PemuAppId="$NEW_PKG"
 
   # Fail-closed isolation verification BEFORE any app leg runs; the
   # smoke leg's loopback RPC health check then doubles as the tested
   # (not guessed) proof that guest loopback/IPC is unaffected.
-  verify_guest_offline
-  adb shell true  # ADB route alive
+  record_step isolation_verify verify_guest_offline
+  record_step adb_alive adb shell true
 
   instrument_leg() {
-    # instrument one class against one package, JUnit summary gate.
-    local pkg=$1 klass=$2 log=$3
-    set +e
-    adb shell am instrument -w -e class "$klass" "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$log" 2>&1
-    local st=$?
-    set -e
-    if [ "$st" -ne 0 ] || ! check_instrumentation "$log"; then
+    # instrument one class against one package, JUnit summary gate,
+    # status recorded incrementally.
+    local pkg=$1 klass=$2 log=$3 label=$4
+    local st
+    printf 'leg_%s=running\n' "$label" >> "$PRETEST"
+    if adb shell am instrument -w -e class "$klass" "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$log" 2>&1; then st=0; else st=$?; fi
+    local verdict=fail
+    if [ "$st" -eq 0 ] && check_instrumentation "$log"; then
+      verdict=ok
+    fi
+    printf 'leg_%s_status=%s am_exit=%s\n' "$label" "$verdict" "$st" >> "$PRETEST"
+    if [ "$verdict" != ok ]; then
       echo "FATAL: leg failed: $klass" >&2
       exit 1
     fi
   }
 
   # 1. short gate on the old identity: python + core + fixture seed.
-  instrument_leg "$OLD_PKG" com.vanipy.migtest.EmuSmokeTest smoke-instrumentation.txt
+  instrument_leg "$OLD_PKG" com.vanipy.migtest.EmuSmokeTest smoke-instrumentation.txt smoke
   # 2. real export path on the old identity (UI + service mode).
-  instrument_leg "$OLD_PKG" com.vanipy.migtest.MigrationEmuExportTest export-instrumentation.txt
+  instrument_leg "$OLD_PKG" com.vanipy.migtest.MigrationEmuExportTest export-instrumentation.txt export
   # 3. handoff: pull the bundle + one-time code out of the old app's
   #    private dir. Runner-local ONLY, wiped in the capture trap, never
   #    uploaded or logged: the code is secret by design, fixture or not.
-  adb exec-out run-as "$OLD_PKG" cat files/emu-out/dcbot-migration.dcmig > rt-bundle.dcmig
-  adb exec-out run-as "$OLD_PKG" cat files/emu-out/code.txt > rt-code.txt
-  test -s rt-bundle.dcmig
-  test -s rt-code.txt
+  #    adb exec-out does NOT propagate the remote exit status, so the
+  #    pulled content is validated by SHAPE, not just size.
+  record_step pull_bundle adb exec-out run-as "$OLD_PKG" cat files/emu-out/dcbot-migration.dcmig > rt-bundle.dcmig
+  record_step pull_code adb exec-out run-as "$OLD_PKG" cat files/emu-out/code.txt > rt-code.txt
+  record_step check_bundle_nonempty test -s rt-bundle.dcmig
+  record_step check_bundle_size test "$(wc -c < rt-bundle.dcmig)" -gt 1024
+  # Exact generate_transfer_code shape (44 chars = 43 url-safe +
+  # '=' padding over 32 bytes), decoded WITHOUT printing it.
+  record_step check_code_shape python3 ci/emu_rt_validate.py code rt-code.txt
   # 4. renamed identity: push the bundle into its private dir, run the
-  #    real import core.
-  adb push rt-bundle.dcmig /data/local/tmp/dcbot-migration.dcmig
-  adb push rt-code.txt /data/local/tmp/code.txt
-  adb shell run-as "$NEW_PKG" sh -c 'mkdir -p files/emu-in && cp /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt files/emu-in/'
-  adb shell rm -f /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt
-  instrument_leg "$NEW_PKG" com.vanipy.migtest.MigrationEmuImportTest import-instrumentation.txt
+  #    real import core. The remote command is ONE double-quoted string
+  #    so the remote shell keeps the sh -c grouping (adb joins argv
+  #    with bare spaces - single quotes would be lost).
+  record_step push_bundle adb push rt-bundle.dcmig /data/local/tmp/dcbot-migration.dcmig
+  record_step push_code adb push rt-code.txt /data/local/tmp/code.txt
+  record_step stage_handoff adb shell "run-as $NEW_PKG sh -c 'mkdir -p files/emu-in && cp /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt files/emu-in/'"
+  record_step clear_tmp adb shell rm -f /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt
+  instrument_leg "$NEW_PKG" com.vanipy.migtest.MigrationEmuImportTest import-instrumentation.txt import
   exit 0
 fi
 

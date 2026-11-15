@@ -29,7 +29,10 @@
 # ignored passthrough): the guest LINK listing must show lo as the
 # only device (an unaddressed NIC must not pass), only loopback
 # addresses, no default route, and a sanity egress attempt must
-# fail, else the run aborts and no offline claim is made. Stated
+# fail, else the run aborts and no offline claim is made. Every
+# pre-test step, leg and probe appends its label+status to
+# emu-rt-pretest.txt / emu-rt-isolation.txt BEFORE running, so a
+# failing step always leaves exact evidence of which one failed. Stated
 # limit: this proves the migration core works with zero external
 # connectivity; it does not test behavior with the INTERNET
 # permission revoked (that permission gates loopback AF_INET too, so
@@ -126,12 +129,14 @@ jobs:
           name: emu-roundtrip
           # ALLOWLIST ONLY (self-authored, known nonsecret fields):
           # assertion/success JSON + listings under capture/, harness
-          # status meta, isolation evidence, bounded old-app checks.
+          # status meta, incremental pre-test step statuses, isolation
+          # evidence, bounded old-app checks.
           # No raw logs, no bundle/code/EXPORT_RESULT/bot.log/
           # screenshots, no raw archives - see the policy above.
           path: |
             capture/
             emu-rt-meta.txt
+            emu-rt-pretest.txt
             emu-rt-isolation.txt
             old-app-pm-path.txt
             old-app-files-after.txt
