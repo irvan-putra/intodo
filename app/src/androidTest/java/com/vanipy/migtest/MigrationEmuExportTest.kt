@@ -100,15 +100,46 @@ class MigrationEmuExportTest {
             files.absolutePath).toInt())
         phase("python_ready")
 
+        // Emulator-only test preparation and observations: this does not
+        // change application code or run on a user's device. Record screen
+        // and keyguard state before the test wakes/dismisses them.
+        phase(if (device.isScreenOn) "screen_on" else "screen_off")
+        val keyguard = ctx.getSystemService(android.app.KeyguardManager::class.java)
+        phase(if (keyguard?.isKeyguardLocked == true)
+            "keyguard_locked" else "keyguard_unlocked")
+        try { device.wakeUp() } catch (_: Exception) {}
+        try { device.executeShellCommand("wm dismiss-keyguard") } catch (_: Exception) {}
+
         phase("activity_launching")
-        ActivityScenario.launch(BotActivity::class.java).use {
+        val scenario = ActivityScenario.launch(BotActivity::class.java)
+        scenario.use {
             phase("activity_launched")
+            // Record focus before any test window adjustment.
+            phase("focused_" + when (device.currentPackageName) {
+                "com.instinct.widget" -> "app"
+                "com.android.systemui" -> "systemui"
+                "com.android.launcher3",
+                "com.google.android.apps.nexuslauncher" -> "launcher"
+                null -> "none"
+                else -> "other"
+            })
+            // Keep only this test activity's window awake through the long
+            // UI waits. Do not show over a locked screen or turn it on here:
+            // those could hide an app visibility defect. The disposable
+            // emulator was explicitly woken/unlocked above.
+            it.onActivity { activity ->
+                activity.window.addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
             // ---- 3. real UI: Export bot + settings -> confirm ----
             // A provisioned install starts with the setup box COLLAPSED
             // (header "Setup & account  >") - expand it first.
-            checkNotNull(device.wait(
-                Until.findObject(By.textContains("Setup & account")), 60_000))
-                { "setup header not shown" }
+            val header = device.wait(
+                Until.findObject(By.textContains("Setup & account")), 60_000)
+            if (header == null) {
+                phase("header_timeout")
+                org.junit.Assert.fail("setup header not shown")
+            }
             phase("header_seen")
             if (device.findObject(By.text("Export bot + settings")) == null) {
                 device.findObject(By.textContains("Setup & account"))?.click()

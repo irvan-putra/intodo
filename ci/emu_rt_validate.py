@@ -427,8 +427,11 @@ def drop_row_shapes(text, max_rows=8):
 # Fixed vocabulary emitted by MigrationEmuExportTest. Keep first occurrence
 # order and cap unknown count so artifact output remains bounded even if a
 # malformed runner stream repeats phase-looking lines.
-EMU_PHASES = ("seeded", "python_ready", "activity_launching",
-              "activity_launched", "header_seen", "expand_clicked",
+EMU_PHASES = ("seeded", "python_ready", "screen_on", "screen_off",
+              "keyguard_locked", "keyguard_unlocked", "activity_launching",
+              "activity_launched", "focused_app", "focused_systemui",
+              "focused_launcher", "focused_none", "focused_other",
+              "header_timeout", "header_seen", "expand_clicked",
               "setup_open", "button_clicked", "confirm_clicked",
               "result_seen", "code_dialog_seen", "bundle_validated",
               "artifacts_written")

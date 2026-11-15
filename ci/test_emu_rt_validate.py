@@ -250,7 +250,22 @@ require(validator.failure_category("FAILURES!!!\n"
 require(validator.failure_category("OK (1 test)\r\n") == "passed",
         "CR-tolerant exact JUnit summary")
 require(all(p in validator.EMU_PHASES for p in
-            ("activity_launching", "activity_launched", "header_seen",
-             "expand_clicked")), "launch-span beacons must be in the enum")
+            ("screen_on", "screen_off", "keyguard_locked", "keyguard_unlocked",
+             "activity_launching", "activity_launched", "focused_app",
+             "focused_systemui", "focused_launcher", "focused_none",
+             "focused_other", "header_timeout", "header_seen", "expand_clicked")),
+        "environment and launch-span beacons must be in the enum")
+require(len(validator.EMU_PHASES) == 23
+        and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
+        "fixed first-seen phase output must remain bounded and unique")
+runner_test = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/MigrationEmuExportTest.kt"), encoding="utf-8").read()
+require("device.wakeUp()" in runner_test
+        and 'device.executeShellCommand("wm dismiss-keyguard")' in runner_test
+        and "FLAG_KEEP_SCREEN_ON" in runner_test
+        and "FLAG_SHOW_WHEN_LOCKED" not in runner_test
+        and "FLAG_TURN_SCREEN_ON" not in runner_test,
+        "screen/keyguard preparation and window flags must stay in the fixture test")
+require('org.junit.Assert.fail("setup header not shown")' in runner_test,
+        "authored header timeout must remain an explicit JUnit failure")
 
 print("emu_rt_validate parser fixtures: PASS")
