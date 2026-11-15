@@ -52,6 +52,14 @@ class MigrationEmuExportTest {
         val files = ctx.filesDir
         val outDir = File(files, "emu-out").apply { deleteRecursively(); mkdirs() }
 
+        // Emit only fixed phase names in runner-local instrumentation output.
+        // Never include exception, result, address, code or file contents.
+        fun phase(name: String) {
+            instrumentation.sendStatus(100, android.os.Bundle().apply {
+                putString("emu_phase", name)
+            })
+        }
+
         // ---- 1. clean slate + fixture app state (fixture values only) ----
         ctx.stopService(Intent(ctx, BotService::class.java))
         listOf("RUNNING", "STOP", "EXPORT_RESULT", "EXPORT_PREFS.json",
@@ -80,6 +88,8 @@ class MigrationEmuExportTest {
                 "ops-$cid-".toByteArray() + MARK_OPS.toByteArray() + byteArrayOf(0))
         }
 
+        phase("seeded")
+
         // ---- 2. fixture account via the app's real Chaquopy runtime ----
         if (!Python.isStarted()) Python.start(AndroidPlatform(ctx))
         val py = Python.getInstance()
@@ -88,6 +98,7 @@ class MigrationEmuExportTest {
         assertEquals(1, py.getModule("emu_fixture").callAttr(
             "count_configured", ctx.applicationInfo.nativeLibraryDir,
             files.absolutePath).toInt())
+        phase("python_ready")
 
         ActivityScenario.launch(BotActivity::class.java).use {
             // ---- 3. real UI: Export bot + settings -> confirm ----
@@ -99,6 +110,7 @@ class MigrationEmuExportTest {
             if (device.findObject(By.text("Export bot + settings")) == null) {
                 device.findObject(By.textContains("Setup & account"))?.click()
             }
+            phase("setup_open")
             var exportBtn = device.wait(
                 Until.findObject(By.text("Export bot + settings")), 30_000)
             if (exportBtn == null) {
@@ -111,11 +123,13 @@ class MigrationEmuExportTest {
             }
             val btn = checkNotNull(exportBtn) { "export button not shown" }
             btn.click()
+            phase("button_clicked")
             checkNotNull(device.wait(
                 Until.findObject(By.textContains("pauses the live bot")), 15_000))
                 { "confirm dialog not shown" }
             checkNotNull(device.findObject(By.text("Export"))) {
                 "confirm Export button not found" }.click()
+            phase("confirm_clicked")
 
             // ---- 4. the service export mode runs migration.py for real ----
             val resFile = File(files, "EXPORT_RESULT")
@@ -134,11 +148,13 @@ class MigrationEmuExportTest {
             assertFalse("raw backup tar must not linger",
                 File(files, "export-out").list()
                     ?.any { it.endsWith(".tar") } == true)
+            phase("result_seen")
 
             // ---- 5. transfer-code dialog shown: visual evidence ----
             checkNotNull(device.wait(
                 Until.findObject(By.textContains("one-time transfer code")), 60_000))
                 { "transfer code dialog not shown" }
+            phase("code_dialog_seen")
             device.takeScreenshot(File(outDir, "01-export-code-dialog.png"))
 
             // ---- 6. verify the bundle through migration.py itself ----
@@ -165,6 +181,7 @@ class MigrationEmuExportTest {
             // are core's SQLCipher dump, exercised by the import side
             mig.callAttr("_decrypt", code, mig.get("WRAP_DOMAIN"),
                 parsed.callAttr("get", "backup"))
+            phase("bundle_validated")
 
             // ---- 7. handoff artifacts for the workflow ----
             File(bundle).copyTo(File(outDir, "dcbot-migration.dcmig"), true)
@@ -175,6 +192,7 @@ class MigrationEmuExportTest {
             File(outDir, "export-done.json").writeText(
                 """{"bundleBytes":${raw.size},"codeLen":${code.length},"addr":"$ADDR"}""")
             device.takeScreenshot(File(outDir, "02-export-final.png"))
+            phase("artifacts_written")
         }
     }
 }

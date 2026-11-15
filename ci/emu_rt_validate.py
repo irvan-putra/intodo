@@ -58,6 +58,10 @@ Three modes:
       third-party values. Grounds any future parser correction in the
       actual rendering instead of a guessed schema.
 
+  emu_rt_validate.py phases <path>
+      Emit only first-seen allowlisted export phase names and a bounded
+      unknown-beacon count; never prints any other instrumentation data.
+
   emu_rt_validate.py drop-delta <before> <after>
       Require numeric-only packet-count files (one nonnegative integer
       each) and a strict increase; prints nothing and exits 1 otherwise.
@@ -419,6 +423,34 @@ def drop_row_shapes(text, max_rows=8):
     return out
 
 
+# Fixed vocabulary emitted by MigrationEmuExportTest. Keep first occurrence
+# order and cap unknown count so artifact output remains bounded even if a
+# malformed runner stream repeats phase-looking lines.
+EMU_PHASES = ("seeded", "python_ready", "setup_open", "button_clicked",
+              "confirm_clicked", "result_seen", "code_dialog_seen",
+              "bundle_validated", "artifacts_written")
+_PHASE_RE = re.compile(r"^INSTRUMENTATION_STATUS: emu_phase=([a-z0-9_]+)$")
+MAX_UNKNOWN_PHASES = 100
+
+
+def extract_phases(text):
+    phases = []
+    seen = set()
+    unknown = 0
+    for line in text.splitlines():
+        match = _PHASE_RE.fullmatch(line.strip())
+        if match is None:
+            continue
+        name = match.group(1)
+        if name in EMU_PHASES:
+            if name not in seen:
+                seen.add(name)
+                phases.append(name)
+        elif unknown < MAX_UNKNOWN_PHASES:
+            unknown += 1
+    return phases, unknown
+
+
 def parse_numeric_counter(text):
     """Parse a numeric-only counter scratch file, never raw command output."""
     if not re.fullmatch(r"[0-9]+\n?", text, flags=re.ASCII):
@@ -455,6 +487,12 @@ def main():
     elif len(sys.argv) == 3 and sys.argv[1] == "row-shape":
         for line in drop_row_shapes(open(sys.argv[2]).read()):
             print(line)
+        ok = True
+    elif len(sys.argv) == 3 and sys.argv[1] == "phases":
+        phases, unknown = extract_phases(open(sys.argv[2]).read())
+        print("emu_export_phases=%s" % (",".join(phases) if phases else "none"))
+        print("emu_export_phase_unknown=%d%s" %
+              (unknown, "+" if unknown == MAX_UNKNOWN_PHASES else ""))
         ok = True
     else:
         ok = False

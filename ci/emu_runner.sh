@@ -533,6 +533,11 @@ if [ "$mode" = roundtrip ]; then
       verdict=ok
     fi
     printf 'leg_%s_status=%s am_exit=%s\n' "$label" "$verdict" "$st" >> "$PRETEST"
+    if [ "$label" = export ]; then
+      # Extract only fixed-enum phase beacons. This is diagnostic metadata;
+      # the JUnit summary gate above is unchanged and raw output stays local.
+      python3 ci/emu_rt_validate.py phases "$log" >> "$PRETEST" || true
+    fi
     if [ "$verdict" != ok ]; then
       echo "FATAL: leg failed: $klass" >&2
       exit 1

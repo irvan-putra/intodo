@@ -179,4 +179,52 @@ require("record_step probe_tool_check check_probe_tools" in runner
 require("loopback_v4" in runner and "loopback_v6" in runner,
         "post-filter positive loopback checks must cover both families")
 
+# ---------------- export phase beacons (fixed enum only) ----------------
+AM_OUTPUT = "\r\n".join([
+    "INSTRUMENTATION_STATUS: class=com.vanipy.migtest.MigrationEmuExportTest",
+    "INSTRUMENTATION_STATUS: emu_phase=seeded",
+    "INSTRUMENTATION_STATUS_CODE: 100",
+    "INSTRUMENTATION_STATUS: emu_phase=python_ready",
+    "INSTRUMENTATION_STATUS: emu_phase=seeded",
+    "INSTRUMENTATION_STATUS: stack=IllegalStateException: SECRET-PAYLOAD",
+    "INSTRUMENTATION_STATUS: emu_phase=not_a_phase",
+    "INSTRUMENTATION_STATUS: emu_phase=button_clicked extra",
+    "INSTRUMENTATION_RESULT: shortMsg=Process crashed.",
+    "INSTRUMENTATION_CODE: 0",
+    "",
+])
+phases, unknown = validator.extract_phases(AM_OUTPUT)
+require(phases == ["seeded", "python_ready"] and unknown == 1,
+        "phase parser must preserve first-seen enums, deduplicate, and count unknown")
+with tempfile.TemporaryDirectory() as d:
+    logp = os.path.join(d, "log")
+    with open(logp, "w", encoding="utf-8") as f:
+        f.write(AM_OUTPUT)
+    cli = subprocess.run(
+        [sys.executable, os.path.join(HERE, "emu_rt_validate.py"),
+         "phases", logp], check=False, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    require(cli.returncode == 0
+            and cli.stdout == ("emu_export_phases=seeded,python_ready\n"
+                               "emu_export_phase_unknown=1\n"),
+            "phases CLI must emit only bounded enum metadata")
+    require("SECRET-PAYLOAD" not in cli.stdout + cli.stderr
+            and "Process crashed" not in cli.stdout
+            and "IllegalStateException" not in cli.stdout
+            and "not_a_phase" not in cli.stdout,
+            "phase output must never carry raw instrumentation content")
+with tempfile.TemporaryDirectory() as d:
+    logp = os.path.join(d, "log")
+    with open(logp, "w", encoding="utf-8") as f:
+        f.write(("INSTRUMENTATION_STATUS: emu_phase=unknown\n" * 2000)
+                + "INSTRUMENTATION_CODE: -1\n")
+    cli = subprocess.run(
+        [sys.executable, os.path.join(HERE, "emu_rt_validate.py"),
+         "phases", logp], check=False, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    require(cli.returncode == 0
+            and cli.stdout == ("emu_export_phases=none\n"
+                               "emu_export_phase_unknown=100+\n"),
+            "phase diagnostics must have a fixed output bound")
+
 print("emu_rt_validate parser fixtures: PASS")
