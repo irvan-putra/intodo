@@ -253,9 +253,10 @@ require(all(p in validator.EMU_PHASES for p in
             ("screen_on", "screen_off", "keyguard_locked", "keyguard_unlocked",
              "activity_launching", "activity_launched", "focused_app",
              "focused_systemui", "focused_launcher", "focused_none",
-             "focused_other", "header_timeout", "header_seen", "expand_clicked")),
+             "focused_other", "header_timeout", "confirm_timeout",
+             "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 27
+require(len(validator.EMU_PHASES) == 28
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
 runner_test = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/MigrationEmuExportTest.kt"), encoding="utf-8").read()
@@ -267,11 +268,26 @@ require("device.wakeUp()" in runner_test
         "screen/keyguard preparation and window flags must stay in the fixture test")
 require('org.junit.Assert.fail("setup header not shown")' in runner_test,
         "authored header timeout must remain an explicit JUnit failure")
+require('org.junit.Assert.fail("confirm dialog not shown")' in runner_test
+        and 'device.dumpWindowHierarchy(failureDump)' in runner_test,
+        "both authored UI timeouts preserve JUnit failure and capture before teardown")
+require('failureDump.delete()' in runner_test
+        and 'record_step clear_stale_failure_dump' in runner
+        and 'files/rt-uidump-failure.xml' in runner,
+        "failure dumps are cleared before each run and removed after capture")
+require('head -c 1048577' in runner
+        and 'rm -f .rt-uidump.xml' in runner,
+        "runner-side XML copy is capped before classification and wiped")
+require('adb shell "run-as $pkg rm -f files/rt-uidump-failure.xml"' in runner
+        and 'adb shell "run-as $pkg test -f files/rt-uidump-failure.xml"' in runner,
+        "private capture is read only if present and removed from app storage")
+require('adb shell uiautomator dump' not in runner,
+        "failure capture must come from instrumentation at the timeout, not post-teardown")
 
 # ---------------- bounded window-dump classification ----------------
 uidump = (
     '<?xml version="1.0"?><hierarchy>'
-    '<node text="" package="com.android.permissioncontroller" focused="false">'
+    '<node text="" package="com.android.permissioncontroller" focused="false"/>'
     '<node text="Allow" package="com.android.permissioncontroller" focused="true"/>'
     '<node text="Don&apos;t allow" package="com.android.permissioncontroller" focused="false"/>'
     '<node text="SECRET-PAYLOAD-9f2" package="com.thirdparty.unknown" focused="false"/>'
@@ -298,6 +314,10 @@ with tempfile.TemporaryDirectory() as d:
             "window summary CLI output")
 require(validator.window_dump_summary("not XML") ==
         ("malformed", "none", [], [], 0), "malformed dump has no inferred contents")
+require(validator.window_dump_summary('<hierarchy><node text="leak"') ==
+        ("malformed", "none", [], [], 0), "truncated XML has no inferred contents")
+require(validator.window_dump_summary('<unrelated><node text="leak"/></unrelated>') ==
+        ("malformed", "none", [], [], 0), "unexpected XML roots have no inferred contents")
 require(validator.window_dump_summary("x" * (validator.WINDOW_DUMP_MAX_BYTES + 1))[0]
         == "oversize", "window XML input must be bounded")
 

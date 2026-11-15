@@ -436,7 +436,7 @@ EMU_PHASES = ("seeded", "python_ready", "screen_on", "screen_off",
               "header_timeout", "header_seen", "expand_clicked",
               "setup_open", "button_clicked", "confirm_clicked",
               "result_seen", "code_dialog_seen", "bundle_validated",
-              "artifacts_written")
+              "artifacts_written", "confirm_timeout")
 _PHASE_RE = re.compile(r"^INSTRUMENTATION_STATUS: emu_phase=([a-z0-9_]+)$")
 MAX_UNKNOWN_PHASES = 100
 
@@ -495,33 +495,32 @@ WINDOW_STRINGS = (
     ("str_start_bot", "Start bot"),
     ("str_stop_bot", "Stop bot"),
 )
-_ATTR_RE = re.compile(r"([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*([\"'])(.*?)\2", re.DOTALL)
-_NODE_RE = re.compile(r"<node\b[^>]*>", re.DOTALL)
-
-
 def window_dump_summary(text):
-    """Return only fixed enums: status, focus, package ids, string ids, count."""
-    import html
+    """Return only fixed enums: status, focus, packages, strings, node count."""
+    import xml.etree.ElementTree as ET
     if len(text.encode("utf-8", errors="replace")) > WINDOW_DUMP_MAX_BYTES:
         return "oversize", "none", [], [], 0
-    if not re.search(r"<hierarchy\b", text) or not re.search(r"</hierarchy\s*>", text):
+    try:
+        root = ET.fromstring(text)
+    except (ET.ParseError, ValueError):
         return "malformed", "none", [], [], 0
-    nodes = _NODE_RE.findall(text)
+    if root.tag != "hierarchy":
+        return "malformed", "none", [], [], 0
+    nodes = [node for node in root.iter() if node.tag == "node"]
     focused = "none"
     packages = []
     other = 0
     shown_text = []
-    for tag in nodes:
-        attrs = {m.group(1): html.unescape(m.group(3)) for m in _ATTR_RE.finditer(tag)}
-        raw = attrs.get("package", "")
+    for node in nodes:
+        raw = node.attrib.get("package", "")
         enum = WINDOW_PACKAGES.get(raw)
         if raw and enum is None:
             other += 1
         elif enum is not None and enum not in packages:
             packages.append(enum)
-        if focused == "none" and attrs.get("focused") == "true":
+        if focused == "none" and node.attrib.get("focused") == "true":
             focused = enum or "other"
-        shown_text.append(attrs.get("text", ""))
+        shown_text.append(node.attrib.get("text", ""))
     if other:
         packages.append("other(x%d%s)" % (min(other, 999), "+" if other > 999 else ""))
     all_text = "\n".join(shown_text)

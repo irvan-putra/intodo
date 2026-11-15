@@ -401,6 +401,7 @@ capture_roundtrip_outputs() {
   # dict, per-key types, bounded expected values) or it is dropped,
   # never uploaded - content never influences the verdict text.
   for pkg in "$OLD_PKG" "$NEW_PKG"; do
+    adb shell "run-as $pkg rm -f files/rt-uidump-failure.xml" >/dev/null 2>&1 || true
     mkdir -p "capture/$pkg"
     for name in smoke-ok.json export-done.json import-done.json import-assertions.json; do
       adb shell "run-as $pkg test -f files/emu-out/$name" > /dev/null 2>&1
@@ -450,7 +451,7 @@ capture_roundtrip_outputs() {
   # (see verify_guest_offline).
   rm -f rt-bundle.dcmig rt-code.txt \
     smoke-instrumentation.txt export-instrumentation.txt import-instrumentation.txt \
-    .rt-probe-*.raw .rt-probe-*.txt .rt-probe-*.status .rt-counter-*.raw .rt-counter-*.txt .rt-filter-*.raw .rt-filter-*.txt
+    .rt-uidump.xml .rt-probe-*.raw .rt-probe-*.txt .rt-probe-*.status .rt-counter-*.raw .rt-counter-*.txt .rt-filter-*.raw .rt-filter-*.txt
 
   if [ "$original_status" -eq 0 ]; then
     if [ ! -f "capture/$OLD_PKG/export-done.json" ]; then
@@ -531,6 +532,9 @@ if [ "$mode" = roundtrip ]; then
     # status recorded incrementally.
     local pkg=$1 klass=$2 log=$3 label=$4
     local st
+    if [ "$label" = export ]; then
+      record_step clear_stale_failure_dump adb shell run-as "$pkg" rm -f files/rt-uidump-failure.xml
+    fi
     printf 'leg_%s=running\n' "$label" >> "$PRETEST"
     if adb shell am instrument -w -e class "$klass" "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$log" 2>&1; then st=0; else st=$?; fi
     local verdict=fail
@@ -539,15 +543,23 @@ if [ "$mode" = roundtrip ]; then
     fi
     printf 'leg_%s_status=%s am_exit=%s\n' "$label" "$verdict" "$st" >> "$PRETEST"
     if [ "$label" = export ] && [ "$verdict" != ok ]; then
-      # Private XML is temporary runner/emulator scratch. Only fixed enums
-      # reach metadata; arbitrary UI text is never logged or uploaded.
-      adb shell uiautomator dump /data/local/tmp/rt-uidump.xml >/dev/null 2>&1 || true
-      adb pull /data/local/tmp/rt-uidump.xml .rt-uidump.xml >/dev/null 2>&1 || true
-      adb shell rm -f /data/local/tmp/rt-uidump.xml >/dev/null 2>&1 || true
-      if [ -s .rt-uidump.xml ]; then
-        python3 ci/emu_rt_validate.py window-dump .rt-uidump.xml >> "$PRETEST" || true
-        rm -f .rt-uidump.xml
+      # Read only the fresh app-private dump written before timeout failure.
+      # Cap copied bytes before classification; raw UI text stays local.
+      if adb shell "run-as $pkg test -f files/rt-uidump-failure.xml" >/dev/null 2>&1; then
+        adb exec-out run-as "$pkg" cat files/rt-uidump-failure.xml 2>/dev/null \
+          | head -c 1048577 > .rt-uidump.xml || true
+        if [ -s .rt-uidump.xml ]; then
+          python3 ci/emu_rt_validate.py window-dump .rt-uidump.xml >> "$PRETEST" || true
+        else
+          printf 'window_dump_status=unavailable\n' >> "$PRETEST"
+        fi
+      else
+        printf 'window_dump_status=unavailable\n' >> "$PRETEST"
       fi
+    fi
+    if [ "$label" = export ]; then
+      adb shell "run-as $pkg rm -f files/rt-uidump-failure.xml" >/dev/null 2>&1 || true
+      rm -f .rt-uidump.xml
     fi
     if [ "$label" = export ]; then
       # Extract only fixed-enum phase beacons. This is diagnostic metadata;

@@ -51,6 +51,9 @@ class MigrationEmuExportTest {
         val device = UiDevice.getInstance(instrumentation)
         val files = ctx.filesDir
         val outDir = File(files, "emu-out").apply { deleteRecursively(); mkdirs() }
+        val failureDump = File(files, "rt-uidump-failure.xml")
+        failureDump.delete()
+        assertFalse("stale failure UI dump must be removed before test", failureDump.exists())
 
         // Emit only fixed phase names in runner-local instrumentation output.
         // Never include exception, result, address, code or file contents.
@@ -142,6 +145,7 @@ class MigrationEmuExportTest {
                 Until.findObject(By.textContains("Setup & account")), 60_000)
             if (header == null) {
                 phase("header_timeout")
+                try { device.dumpWindowHierarchy(failureDump) } catch (_: Exception) {}
                 org.junit.Assert.fail("setup header not shown")
             }
             phase("header_seen")
@@ -163,9 +167,13 @@ class MigrationEmuExportTest {
             val btn = checkNotNull(exportBtn) { "export button not shown" }
             btn.click()
             phase("button_clicked")
-            checkNotNull(device.wait(
-                Until.findObject(By.textContains("pauses the live bot")), 15_000))
-                { "confirm dialog not shown" }
+            val confirm = device.wait(
+                Until.findObject(By.textContains("pauses the live bot")), 15_000)
+            if (confirm == null) {
+                phase("confirm_timeout")
+                try { device.dumpWindowHierarchy(failureDump) } catch (_: Exception) {}
+                org.junit.Assert.fail("confirm dialog not shown")
+            }
             checkNotNull(device.findObject(By.text("Export"))) {
                 "confirm Export button not found" }.click()
             phase("confirm_clicked")
