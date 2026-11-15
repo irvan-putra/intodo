@@ -33,7 +33,12 @@ class BotImport(
     private val activity: Activity,
     private val callback: (Result) -> Unit,
 ) {
-    data class Result(val ok: Boolean, val addr: String?, val error: String?)
+    data class Result(
+        val ok: Boolean,
+        val addr: String?,
+        val error: String?,
+        val prefsWarning: String? = null,
+    )
 
     private var bundleFile: File? = null
 
@@ -113,7 +118,7 @@ class BotImport(
                         code,
                     )
                     .toString()
-                Result(true, addr, null)
+                Result(true, addr, null, applyStagedPrefs())
             } catch (e: Exception) {
                 Result(false, null, e.message ?: e.toString())
             }
@@ -124,12 +129,46 @@ class BotImport(
         }.start()
     }
 
+    /**
+     * Applies a dcmig/2 settings snapshot staged by import_migration as
+     * IMPORT_PREFS.json through SharedPreferences (Python must not write
+     * shared_prefs XML under a running app), then deletes the staging file.
+     * Returns a warning string on failure; null when nothing needed applying
+     * or everything landed. A failure here never rolls back the import.
+     */
+    private fun applyStagedPrefs(): String? {
+        val f = File(activity.filesDir, "IMPORT_PREFS.json")
+        if (!f.exists()) return null
+        return try {
+            val root = org.json.JSONObject(f.readText())
+            for (name in root.keys()) {
+                val values = root.getJSONObject(name)
+                val ed = activity.getSharedPreferences(name, Activity.MODE_PRIVATE).edit()
+                for (k in values.keys()) {
+                    when (val v = values.get(k)) {
+                        is String -> ed.putString(k, v)
+                        is Number -> ed.putLong(k, v.toLong())
+                        else -> throw IllegalArgumentException("unexpected value type for $name/$k")
+                    }
+                }
+                // commit, not apply: a crash mid-restore must not leave
+                // half the settings written while the file is gone.
+                if (!ed.commit()) throw IllegalStateException("commit failed for $name")
+            }
+            f.delete()
+            null
+        } catch (e: Exception) {
+            e.message ?: e.toString()
+        }
+    }
+
     private fun cleanup() {
         bundleFile?.delete()
         bundleFile = null
     }
 
     companion object {
-        const val REQ_PICK_BUNDLE = 43
+        // 43 is BotActivity.REQ_PICK_XDC (publish flow); they must not collide.
+        const val REQ_PICK_BUNDLE = 44
     }
 }
