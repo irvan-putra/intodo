@@ -257,9 +257,24 @@ require(all(p in validator.EMU_PHASES for p in
              "confirm_shown", "confirm_wait_error", "confirm_button_missing",
              "confirm_button_wait_error", "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 32
+require(len(validator.EMU_PHASES) == 59
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
+require(all(p in validator.EMU_PHASES for p in (
+             "bundle_read_ok", "bundle_read_error",
+             "raw_leak_state", "raw_state_clean",
+             "raw_leak_ops", "raw_ops_clean",
+             "raw_leak_priv", "raw_priv_clean",
+             "bundle_parsed", "bundle_parse_error",
+             "state_decrypted", "state_decrypt_error",
+             "state_mark_state_ok", "state_mark_state_fail",
+             "state_mark_ops_ok", "state_mark_ops_fail",
+             "state_logs_clean", "state_logs_leak",
+             "prefs_decrypted", "prefs_decrypt_error",
+             "prefs_marker_ok", "prefs_marker_fail",
+             "wrap_decrypted", "wrap_decrypt_error", "migration_module_error",
+             "raw_text_error", "state_text_error")),
+        "stage-6 checkpoints must be fixed enum values")
 runner_test = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/MigrationEmuExportTest.kt"), encoding="utf-8").read()
 require("device.wakeUp()" in runner_test
         and 'device.executeShellCommand("wm dismiss-keyguard")' in runner_test
@@ -291,6 +306,25 @@ require('adb shell "run-as $pkg rm -f files/rt-uidump-failure.xml"' in runner
         "private capture is read only if present and removed from app storage")
 require('adb shell uiautomator dump' not in runner,
         "failure capture must come from instrumentation at the timeout, not post-teardown")
+
+require('diagnosticPhase("bundle_read_ok")' in runner_test
+        and 'diagnosticPhase("state_mark_state_fail")' in runner_test
+        and 'diagnosticPhase("prefs_decrypt_error")' in runner_test
+        and 'diagnosticPhase("wrap_decrypt_error")' in runner_test
+        and 'diagnosticPhase("bundle_validated")' in runner_test,
+        "stage-6 outcome diagnostics are authored at their checkpoints")
+require('fun diagnosticPhase' in runner_test
+        and 'try { phase(name) } catch (_: Throwable) {}' in runner_test
+        and 'throw t' in runner_test,
+        "diagnostic send failures are contained and original exceptions rethrown")
+require('String(raw, Charsets.ISO_8859_1)' in runner_test
+        and 'String(stateTar, Charsets.ISO_8859_1)' in runner_test
+        and 'Charsets.UTF_8' in runner_test
+        and 'py.getModule("migration")' in runner_test
+        and 'parsed.callAttr("get", "state_blob")' in runner_test
+        and 'parsed.callAttr("get", "prefs_blob")' in runner_test
+        and 'parsed.callAttr("get", "backup")' in runner_test,
+        "diagnostic edits preserve stage-6 byte decoding and Python decryption inputs")
 
 # ---------------- bounded window-dump classification ----------------
 uidump = (

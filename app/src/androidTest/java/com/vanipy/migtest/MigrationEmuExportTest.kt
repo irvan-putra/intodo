@@ -62,6 +62,11 @@ class MigrationEmuExportTest {
                 putString("emu_phase", name)
             })
         }
+        // Stage-6 diagnostics must never replace a test/decryption failure
+        // if the instrumentation status channel itself is unavailable.
+        fun diagnosticPhase(name: String) {
+            try { phase(name) } catch (_: Throwable) {}
+        }
 
         // ---- 1. clean slate + fixture app state (fixture values only) ----
         ctx.stopService(Intent(ctx, BotService::class.java))
@@ -232,30 +237,98 @@ class MigrationEmuExportTest {
             device.takeScreenshot(File(outDir, "01-export-code-dialog.png"))
 
             // ---- 6. verify the bundle through migration.py itself ----
-            val mig = py.getModule("migration")
-            val raw = File(bundle).readBytes()
-            val rawStr = String(raw, Charsets.ISO_8859_1)
-            assertFalse(rawStr.contains(MARK_STATE))
-            assertFalse(rawStr.contains(MARK_OPS))
-            assertFalse(rawStr.contains(MARK_PRIV))
-            val parsed = mig.callAttr("parse_bundle", bundle)
-            val stateTar = mig.callAttr("_decrypt", code,
-                mig.get("STATE_DOMAIN"), parsed.callAttr("get", "state_blob"))
-                .toJava(ByteArray::class.java)
-            val stateStr = String(stateTar, Charsets.ISO_8859_1)
-            assertTrue(stateStr.contains(MARK_STATE))
-            assertTrue(stateStr.contains(MARK_OPS))
+            // Stage-local outcome enums are best-effort; all original
+            // operations, values, conversions, and failure assertions stay.
+            val mig = try {
+                py.getModule("migration")
+            } catch (t: Throwable) {
+                diagnosticPhase("migration_module_error")
+                throw t
+            }
+            val raw = try {
+                File(bundle).readBytes()
+            } catch (t: Throwable) {
+                diagnosticPhase("bundle_read_error")
+                throw t
+            }
+            diagnosticPhase("bundle_read_ok")
+            val rawStr = try {
+                String(raw, Charsets.ISO_8859_1)
+            } catch (t: Throwable) {
+                diagnosticPhase("raw_text_error")
+                throw t
+            }
+            if (rawStr.contains(MARK_STATE)) {
+                diagnosticPhase("raw_leak_state")
+                org.junit.Assert.fail("state marker visible in raw bundle")
+            } else diagnosticPhase("raw_state_clean")
+            if (rawStr.contains(MARK_OPS)) {
+                diagnosticPhase("raw_leak_ops")
+                org.junit.Assert.fail("ops marker visible in raw bundle")
+            } else diagnosticPhase("raw_ops_clean")
+            if (rawStr.contains(MARK_PRIV)) {
+                diagnosticPhase("raw_leak_priv")
+                org.junit.Assert.fail("settings marker visible in raw bundle")
+            } else diagnosticPhase("raw_priv_clean")
+            val parsed = try {
+                mig.callAttr("parse_bundle", bundle)
+            } catch (t: Throwable) {
+                diagnosticPhase("bundle_parse_error")
+                throw t
+            }
+            diagnosticPhase("bundle_parsed")
+            val stateTar = try {
+                mig.callAttr("_decrypt", code,
+                    mig.get("STATE_DOMAIN"), parsed.callAttr("get", "state_blob"))
+                    .toJava(ByteArray::class.java)
+            } catch (t: Throwable) {
+                diagnosticPhase("state_decrypt_error")
+                throw t
+            }
+            diagnosticPhase("state_decrypted")
+            val stateStr = try {
+                String(stateTar, Charsets.ISO_8859_1)
+            } catch (t: Throwable) {
+                diagnosticPhase("state_text_error")
+                throw t
+            }
+            if (!stateStr.contains(MARK_STATE)) {
+                diagnosticPhase("state_mark_state_fail")
+                org.junit.Assert.fail("state tar missing fixture state marker")
+            } else diagnosticPhase("state_mark_state_ok")
+            if (!stateStr.contains(MARK_OPS)) {
+                diagnosticPhase("state_mark_ops_fail")
+                org.junit.Assert.fail("state tar missing fixture ops marker")
+            } else diagnosticPhase("state_mark_ops_ok")
             // excluded runtime artifacts must not travel
-            assertFalse(stateStr.contains("secret-bot.log"))
-            val prefsJson = String(mig.callAttr("_decrypt", code,
-                mig.get("PREFS_DOMAIN"), parsed.callAttr("get", "prefs_blob"))
-                .toJava(ByteArray::class.java), Charsets.UTF_8)
-            assertTrue(prefsJson.contains(MARK_PRIV))
-            // the backup blob decrypts with the code (integrity) - contents
-            // are core's SQLCipher dump, exercised by the import side
-            mig.callAttr("_decrypt", code, mig.get("WRAP_DOMAIN"),
-                parsed.callAttr("get", "backup"))
-            phase("bundle_validated")
+            if (stateStr.contains("secret-bot.log")) {
+                diagnosticPhase("state_logs_leak")
+                org.junit.Assert.fail("state tar includes log artifact")
+            } else diagnosticPhase("state_logs_clean")
+            val prefsJson = try {
+                String(mig.callAttr("_decrypt", code,
+                    mig.get("PREFS_DOMAIN"), parsed.callAttr("get", "prefs_blob"))
+                    .toJava(ByteArray::class.java), Charsets.UTF_8)
+            } catch (t: Throwable) {
+                diagnosticPhase("prefs_decrypt_error")
+                throw t
+            }
+            diagnosticPhase("prefs_decrypted")
+            if (!prefsJson.contains(MARK_PRIV)) {
+                diagnosticPhase("prefs_marker_fail")
+                org.junit.Assert.fail("prefs blob missing fixture settings marker")
+            } else diagnosticPhase("prefs_marker_ok")
+            // Backup blob decrypts with the code (integrity); SQLCipher
+            // contents remain exercised by import and are not inspected.
+            try {
+                mig.callAttr("_decrypt", code, mig.get("WRAP_DOMAIN"),
+                    parsed.callAttr("get", "backup"))
+            } catch (t: Throwable) {
+                diagnosticPhase("wrap_decrypt_error")
+                throw t
+            }
+            diagnosticPhase("wrap_decrypted")
+            diagnosticPhase("bundle_validated")
 
             // ---- 7. handoff artifacts for the workflow ----
             File(bundle).copyTo(File(outDir, "dcbot-migration.dcmig"), true)
