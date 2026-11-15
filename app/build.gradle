@@ -10,6 +10,7 @@ android {
         targetSdk 34
         versionCode 25
         versionName '0.5.10'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         // Bot runtime (DeltaChat core) is bundled for arm64-v8a only, same
         // constraint as the scratch bot builds; librpcsrv.so exists for no
         // other ABI yet.
@@ -40,6 +41,13 @@ chaquopy {
 }
 
 dependencies {
+    // Emulator qualification (androidTest) - fixture-only; see
+    // app/src/androidTest/java/com/vanipy/migtest/ and the emu-check workflows.
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
+    androidTestImplementation 'junit:junit:4.13.2'
     implementation 'androidx.work:work-runtime:2.9.1'
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
