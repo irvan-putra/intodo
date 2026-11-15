@@ -1,6 +1,8 @@
 package com.instinct.widget.bot;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -38,6 +40,13 @@ public class BotActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // Roll back (or finish) an import that a crash left halfway.
+        BotImport.recoverInterruptedImport(this);
+        // A crash can also hit AFTER a completed export wrote its result
+        // but before the UI presented the transfer code / save step. Once
+        // recovery is done, re-present that result instead of dropping a
+        // finished, recoverable export.
+        resumeFinishedExportWhenReady();
         int pad = (int) (12 * getResources().getDisplayMetrics().density);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -329,9 +338,10 @@ public class BotActivity extends Activity {
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
-        validate.setOnClickListener(v -> startMode("validate"));
-        provision.setOnClickListener(v -> startMode("provision"));
+        validate.setOnClickListener(v -> { if (recoveryPending()) return; startMode("validate"); });
+        provision.setOnClickListener(v -> { if (recoveryPending()) return; startMode("provision"); });
         live.setOnClickListener(v -> {
+            if (recoveryPending()) return;
             // Battery cost disclosure + exemption prompt before first live start.
             if (Build.VERSION.SDK_INT >= 23) {
                 android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
@@ -405,9 +415,12 @@ public class BotActivity extends Activity {
         });
         importer = new BotImport(this, result -> {
             if (result.getOk()) {
+                String settingsNote = result.getPrefsWarning() == null
+                    ? "\n\nYour settings (feed pairing, cached feed, canvas layout) came with it."
+                    : "\n\nThe bot is in, but settings transfer had a problem: " + result.getPrefsWarning();
                 new android.app.AlertDialog.Builder(this)
                     .setTitle("Bot imported")
-                    .setMessage("Imported bot: " + result.getAddr() + "\n\nCheck this is the bot account you meant to import, then start the bot service.")
+                    .setMessage("Imported bot: " + result.getAddr() + settingsNote + "\n\nCheck this is the bot account you meant to import, then start the bot service.")
                     .setPositiveButton("OK", null).show();
             } else {
                 new android.app.AlertDialog.Builder(this)
@@ -417,7 +430,11 @@ public class BotActivity extends Activity {
             }
             return kotlin.Unit.INSTANCE;
         });
-        importBtn.setOnClickListener(v -> importer.launch());
+        importBtn.setOnClickListener(v -> { if (recoveryPending()) return; importer.launch(); });
+
+        Button exportBtn = new Button(this); exportBtn.setText("Export bot + settings"); exportBtn.setAllCaps(false);
+        setupBox.addView(exportBtn);
+        exportBtn.setOnClickListener(v -> { if (recoveryPending()) return; startExportFlow(); });
         stop.setOnClickListener(v -> {
             // Clear the persisted mode first so START_STICKY / the boot
             // receiver treat this as a real stop, not a restart request.
@@ -470,6 +487,31 @@ public class BotActivity extends Activity {
             }
             return;
         }
+        if (requestCode == REQ_SAVE_BUNDLE) {
+            if (resultCode != RESULT_OK || data == null || data.getData() == null || pendingBundlePath == null) {
+                Toast.makeText(this, "Bundle not saved - export result kept, you can save again", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                InputStream in = new FileInputStream(pendingBundlePath);
+                FileOutputStream out = (FileOutputStream) getContentResolver().openOutputStream(data.getData());
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                out.close(); in.close();
+                new File(getFilesDir(), "EXPORT_RESULT").delete();
+                deleteRecursively(new File(getFilesDir(), "export-out"));
+                pendingBundlePath = null;
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("Bundle saved")
+                    .setMessage("In the new app: choose 'Import bot backup', pick this file, enter the transfer code.\n\nCarried over: the bot account, its chats, your feed pairing, the cached feed and the canvas layout. Not carried: the home-screen widget itself (Android keeps that with this app - add the widget once from the new app; it will show your feed right away).\n\nThe live bot here stays PAUSED. Only uninstall this app after the new app shows the bot running with the same address. Start bot resumes this bot if you abort the migration.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Save failed: " + e, Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (importer != null) importer.handleActivityResult(requestCode, resultCode, data);
     }
 
@@ -477,6 +519,245 @@ public class BotActivity extends Activity {
         Intent i = new Intent(this, BotService.class);
         i.putExtra("mode", mode);
         startForegroundService(i);
+    }
+
+    /** Fail-closed gate: while crash recovery is running (or has failed),
+     * no control that could race it - service start, import, export - may
+     * proceed. */
+    private boolean recoveryPending() {
+        if (BotImport.isRecoveryComplete()) return false;
+        Toast.makeText(this, "Finishing cleanup of the previous session - try again in a moment (if this stays, restart the app once)", Toast.LENGTH_LONG).show();
+        return true;
+    }
+
+    private static void deleteRecursively(File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            File[] kids = f.listFiles();
+            if (kids != null) for (File k : kids) deleteRecursively(k);
+        }
+        f.delete();
+    }
+
+    // ---- export flow (move this install's bot + settings to the new app package) ----
+    private static final int REQ_SAVE_BUNDLE = 45;
+    private String pendingBundlePath = null;
+
+    /** Snapshot of the allowlisted app settings for the migration bundle.
+     * Written just before the export service mode starts; migration.py
+     * wraps it into the bundle and deletes this plaintext copy. */
+    private void writeExportPrefsSnapshot() throws Exception {
+        android.content.SharedPreferences w = getSharedPreferences("instinct_widget", MODE_PRIVATE);
+        JSONObject iw = new JSONObject();
+        for (String k : new String[]{"priv", "pub", "feed", "feed_gen", "feed_url", "status"}) {
+            String v = w.getString(k, null);
+            if (v != null) iw.put(k, v);
+        }
+        long feedAt = w.getLong("feed_at", 0);
+        if (feedAt != 0) iw.put("feed_at", feedAt);
+        JSONObject root = new JSONObject();
+        if (iw.length() > 0) root.put("instinct_widget", iw);
+        String layout = getSharedPreferences("review_canvas", MODE_PRIVATE).getString("layout", null);
+        if (layout != null) {
+            JSONObject rc = new JSONObject();
+            rc.put("layout", layout);
+            root.put("review_canvas", rc);
+        }
+        File tmp = new File(getFilesDir(), "EXPORT_PREFS.json.tmp");
+        FileWriter fw = new FileWriter(tmp);
+        fw.write(root.toString());
+        fw.close();
+        if (!tmp.renameTo(new File(getFilesDir(), "EXPORT_PREFS.json"))) {
+            throw new IllegalStateException("could not stage settings snapshot");
+        }
+    }
+
+    private void startExportFlow() {
+        File stf = new File(getFilesDir(), "bot_state.json");
+        String js = stf.exists() ? read(stf) : "";
+        boolean prov = false;
+        try { prov = new JSONObject(js).optBoolean("provisioned", false); } catch (Exception ignored) {}
+        if (!prov) {
+            Toast.makeText(this, "Create the bot account first", Toast.LENGTH_LONG).show();
+            return;
+        }
+        // An in-flight publish cannot ride the bundle (its checkpoint files
+        // stay behind); refuse instead of silently dropping it.
+        String pendingPublish = getSharedPreferences("bot", MODE_PRIVATE)
+            .getString("pending_publish_token", null);
+        if (pendingPublish != null
+                && (new File(getFilesDir(), "PUBLISH_REQ").exists()
+                    || new File(getFilesDir(), "PUBLISH_PROG").exists())) {
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Publish still in flight")
+                .setMessage("A publish operation is still running. Let it finish (or tap Stop bot and publish again from the new app) before exporting.")
+                .setPositiveButton("OK", null)
+                .show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Export bot + settings")
+            .setMessage("This pauses the live bot and writes ONE protected bundle holding the bot's Delta Chat account, its owner/chat state AND your app settings (feed pairing keys, cached feed, canvas layout), all encrypted with a one-time transfer code shown next.\n\nKeep the bundle file and the code private: together they ARE the bot. You pick where the file goes and copy the code yourself; nothing is sent anywhere.\n\nThe live bot stays paused until the import finishes in the new app (or resume it here with Start bot).")
+            .setPositiveButton("Export", (d, w) -> runExportAfterStop())
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void runExportAfterStop() {
+        getSharedPreferences("bot", MODE_PRIVATE).edit().putString("last_mode", "").apply();
+        stopService(new Intent(this, BotService.class));
+        Toast.makeText(this, "Pausing the live bot...", Toast.LENGTH_SHORT).show();
+        final long t0 = System.currentTimeMillis();
+        final Runnable[] poll = new Runnable[1];
+        poll[0] = new Runnable() { public void run() {
+            if (!new File(getFilesDir(), "RUNNING").exists()) {
+                try {
+                    writeExportPrefsSnapshot();
+                } catch (Exception e) {
+                    Toast.makeText(BotActivity.this, "Could not snapshot settings: " + e + " - bot left stopped", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                new File(getFilesDir(), "EXPORT_RESULT").delete();
+                startMode("export");
+                pollExportResult(System.currentTimeMillis());
+            } else if (System.currentTimeMillis() - t0 < 15000) {
+                handler.postDelayed(poll[0], 500);
+            } else {
+                Toast.makeText(BotActivity.this, "Live bot did not stop in time - tap Stop bot, then retry", Toast.LENGTH_LONG).show();
+            }
+        }};
+        handler.postDelayed(poll[0], 500);
+    }
+
+    /** Re-present a finished export whose UI never ran (process death
+     * after EXPORT_RESULT landed). Waits for crash recovery to finish
+     * first so it can never race it; same handling as the live poll. */
+    private void resumeFinishedExportWhenReady() {
+        final long t0 = System.currentTimeMillis();
+        final Runnable[] wait = new Runnable[1];
+        wait[0] = new Runnable() { public void run() {
+            if (!BotImport.isRecoveryComplete()) {
+                if (System.currentTimeMillis() - t0 < 15000) {
+                    handler.postDelayed(wait[0], 300);
+                }   // else: recovery FAILED -> controls stay locked anyway
+                return;
+            }
+            File res = new File(getFilesDir(), "EXPORT_RESULT");
+            if (!res.exists() || pendingBundlePath != null) return;
+            try {
+                JSONObject r = new JSONObject(read(res));
+                String err = r.optString("error", "");
+                if (!err.isEmpty()) {
+                    res.delete();
+                    new android.app.AlertDialog.Builder(BotActivity.this)
+                        .setTitle("Export failed")
+                        .setMessage(err + "\n\nThe live bot will restart.")
+                        .setPositiveButton("OK", (d, w) -> startMode("live"))
+                        .show();
+                } else {
+                    Toast.makeText(BotActivity.this,
+                        "Resuming your finished export", Toast.LENGTH_SHORT).show();
+                    pendingBundlePath = r.getString("bundle");
+                    showTransferCode(r.getString("code"));
+                }
+            } catch (Exception e) {
+                // Unreadable result: keep it; nothing is lost silently.
+                Toast.makeText(BotActivity.this,
+                    "Export result unreadable: " + e, Toast.LENGTH_LONG).show();
+            }
+        }};
+        handler.postDelayed(wait[0], 300);
+    }
+
+    private void pollExportResult(final long t0) {
+        final Runnable[] poll = new Runnable[1];
+        poll[0] = new Runnable() { public void run() {
+            File res = new File(getFilesDir(), "EXPORT_RESULT");
+            if (res.exists()) {
+                // Export done: leave no persisted mode so a START_STICKY
+                // restart does not silently re-run the export.
+                getSharedPreferences("bot", MODE_PRIVATE).edit().putString("last_mode", "").apply();
+                try {
+                    JSONObject r = new JSONObject(read(res));
+                    String err = r.optString("error", "");
+                    if (!err.isEmpty()) {
+                        res.delete();
+                        new android.app.AlertDialog.Builder(BotActivity.this)
+                            .setTitle("Export failed")
+                            .setMessage(err + "\n\nThe live bot will restart.")
+                            .setPositiveButton("OK", (d, w) -> startMode("live"))
+                            .show();
+                    } else {
+                        pendingBundlePath = r.getString("bundle");
+                        showTransferCode(r.getString("code"));
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(BotActivity.this, "Export result unreadable: " + e, Toast.LENGTH_LONG).show();
+                }
+                return;
+            }
+            if (System.currentTimeMillis() - t0 < 120000) {
+                handler.postDelayed(poll[0], 1000);
+            } else {
+                // Leave no secret-bearing export files behind on timeout.
+                new File(getFilesDir(), "EXPORT_RESULT").delete();
+                new File(getFilesDir(), "EXPORT_PREFS.json").delete();
+                deleteRecursively(new File(getFilesDir(), "export-out"));
+                Toast.makeText(BotActivity.this, "Export timed out - resuming the live bot", Toast.LENGTH_LONG).show();
+                startMode("live");
+            }
+        }};
+        handler.postDelayed(poll[0], 1000);
+    }
+
+    private void showTransferCode(final String code) {
+        TextView tv = new TextView(this);
+        tv.setText(code);
+        tv.setTextIsSelectable(true);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        tv.setPadding(pad, pad, pad, pad);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("1/2: one-time transfer code")
+            .setMessage("Enter this code in the new app's import screen. It protects the bot's whole identity - never send it through a chat.")
+            .setView(tv)
+            .setNeutralButton("Copy code", (d, w) -> { copyCode(code); showTransferCode(code); })
+            .setPositiveButton("Next", (d, w) -> showSaveStep())
+            .setNegativeButton("Abort + resume bot", (d, w) -> abortExport())
+            .show();
+    }
+
+    private void showSaveStep() {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("2/2: save the bundle file")
+            .setMessage("Choose where the .dcmig bundle is written (Downloads is fine). You will pick this file in the new app's import screen.")
+            .setPositiveButton("Choose location", (d, w) -> {
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                i.setType("application/octet-stream");
+                i.putExtra(Intent.EXTRA_TITLE, "intodo-migration.dcmig");
+                startActivityForResult(i, REQ_SAVE_BUNDLE);
+            })
+            .setNegativeButton("Abort + resume bot", (d, w) -> abortExport())
+            .show();
+    }
+
+    private void copyCode(String code) {
+        ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("bot migration code", code);
+        if (Build.VERSION.SDK_INT >= 33) {
+            android.os.PersistableBundle b = new android.os.PersistableBundle();
+            b.putBoolean("android.content.extra.IS_SENSITIVE", true);
+            clip.getDescription().setExtras(b);
+        }
+        cm.setPrimaryClip(clip);
+        Toast.makeText(this, "Code copied (marked sensitive)", Toast.LENGTH_SHORT).show();
+    }
+
+    private void abortExport() {
+        new File(getFilesDir(), "EXPORT_RESULT").delete();
+        new File(getFilesDir(), "EXPORT_PREFS.json").delete();
+        deleteRecursively(new File(getFilesDir(), "export-out"));
+        startMode("live");
     }
 
     private void refresh() {
