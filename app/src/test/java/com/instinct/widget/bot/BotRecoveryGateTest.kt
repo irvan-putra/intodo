@@ -215,9 +215,34 @@ class BotRecoveryGateTest {
         BotImport.recoveryBodyOverride = { true }
         markPending()
         BotImport.resetRecoveryGateForTest()
-        BotImport.recoverInterruptedImport(activity)
-        assertEquals(BotImport.RecoveryState.PENDING, state())
-        awaitState(BotImport.RecoveryState.DONE)
+        // Park the worker at the outcome hook (the seam between body and
+        // publication). Without this the worker can legitimately publish
+        // DONE before the assertion below runs - publication is not
+        // ordered behind the caller's next read - making immediate-
+        // PENDING a scheduling race (the flake seen under CI load). The
+        // product contract under test is the SYNCHRONOUS reset: with
+        // publication parked, the gate must still read PENDING here.
+        val parked = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        BotImport.recoveryOutcomeHook = {
+            parked.countDown()
+            release.await(10, TimeUnit.SECONDS)
+        }
+        try {
+            BotImport.recoverInterruptedImport(activity)
+            assertTrue("worker did not reach the outcome hook",
+                parked.await(5, TimeUnit.SECONDS))
+            assertEquals(BotImport.RecoveryState.PENDING, state())
+        } finally {
+            // Never strand the worker, and don't let it publish after
+            // tearDown resets static test state if an assertion above fails.
+            release.countDown()
+            try {
+                awaitState(BotImport.RecoveryState.DONE)
+            } finally {
+                BotImport.recoveryOutcomeHook = null
+            }
+        }
 
         clearPending()
         BotImport.resetRecoveryGateForTest(BotImport.RecoveryState.PENDING)

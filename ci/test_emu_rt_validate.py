@@ -257,7 +257,7 @@ require(all(p in validator.EMU_PHASES for p in
              "confirm_shown", "confirm_wait_error", "confirm_button_missing",
              "confirm_button_wait_error", "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 59
+require(len(validator.EMU_PHASES) == 64
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
 require(all(p in validator.EMU_PHASES for p in (
@@ -267,13 +267,16 @@ require(all(p in validator.EMU_PHASES for p in (
              "raw_leak_priv", "raw_priv_clean",
              "bundle_parsed", "bundle_parse_error",
              "state_decrypted", "state_decrypt_error",
+             "state_archive_ok", "state_archive_error",
+             "state_members_ok", "state_members_unexpected",
+             "state_member_state_missing", "state_member_ops_missing",
              "state_mark_state_ok", "state_mark_state_fail",
              "state_mark_ops_ok", "state_mark_ops_fail",
              "state_logs_clean", "state_logs_leak",
              "prefs_decrypted", "prefs_decrypt_error",
              "prefs_marker_ok", "prefs_marker_fail",
              "wrap_decrypted", "wrap_decrypt_error", "migration_module_error",
-             "raw_text_error", "state_text_error")),
+             "raw_text_error")),
         "stage-6 checkpoints must be fixed enum values")
 runner_test = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/MigrationEmuExportTest.kt"), encoding="utf-8").read()
 require("device.wakeUp()" in runner_test
@@ -318,13 +321,28 @@ require('fun diagnosticPhase' in runner_test
         and 'throw t' in runner_test,
         "diagnostic send failures are contained and original exceptions rethrown")
 require('String(raw, Charsets.ISO_8859_1)' in runner_test
-        and 'String(stateTar, Charsets.ISO_8859_1)' in runner_test
         and 'Charsets.UTF_8' in runner_test
         and 'py.getModule("migration")' in runner_test
         and 'parsed.callAttr("get", "state_blob")' in runner_test
         and 'parsed.callAttr("get", "prefs_blob")' in runner_test
         and 'parsed.callAttr("get", "backup")' in runner_test,
         "diagnostic edits preserve stage-6 byte decoding and Python decryption inputs")
+require('tarfileMod.callAttr("open", null, "r|"' in runner_test
+        and 'GZIPInputStream(ByteArrayInputStream(stateTar))' in runner_test
+        and 'stateArchive.callAttr("next")' in runner_test
+        and 'stateArchive.callAttr("extractfile", member)' in runner_test
+        and 'STATE_MEMBER_READ_CAP + 1' in runner_test
+        and 'STATE_ARCHIVE_COMPRESSED_CAP' in runner_test
+        and 'STATE_ARCHIVE_EXPANDED_CAP' in runner_test
+        and 'OPS_MEMBER_RE' in runner_test
+        and 'SAFE_MEMBER_RE' in runner_test
+        and 'STATE_MEMBER_MAX' in runner_test
+        and '!seenNames.add(name)' in runner_test
+        and 'member.callAttr("isfile")' in runner_test,
+        "state validation streams the gzip tar and checks member names, type, uniqueness, and byte bounds")
+require('name.contains("secret-bot.log")' in runner_test
+        and 'state_text_error' not in runner_test,
+        "log exclusion is member-list exact and the compressed-byte scan is gone")
 
 # ---------------- bounded window-dump classification ----------------
 uidump = (

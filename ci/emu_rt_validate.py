@@ -445,13 +445,16 @@ EMU_PHASES = ("seeded", "python_ready", "screen_on", "screen_off",
               "raw_leak_priv", "raw_priv_clean",
               "bundle_parsed", "bundle_parse_error",
               "state_decrypted", "state_decrypt_error",
+              "state_archive_ok", "state_archive_error",
+              "state_members_ok", "state_members_unexpected",
+              "state_member_state_missing", "state_member_ops_missing",
               "state_mark_state_ok", "state_mark_state_fail",
               "state_mark_ops_ok", "state_mark_ops_fail",
               "state_logs_clean", "state_logs_leak",
               "prefs_decrypted", "prefs_decrypt_error",
               "prefs_marker_ok", "prefs_marker_fail",
               "wrap_decrypted", "wrap_decrypt_error",
-              "migration_module_error", "raw_text_error", "state_text_error")
+              "migration_module_error", "raw_text_error")
 _PHASE_RE = re.compile(r"^INSTRUMENTATION_STATUS: emu_phase=([a-z0-9_]+)$")
 MAX_UNKNOWN_PHASES = 100
 
