@@ -1,0 +1,149 @@
+# INTERNAL emulator qualification: IMPORT side (new identity) - REVIEW DRAFT.
+# Consumes the fixture bundle + one-time fixture code produced by the
+# emu-export-check run on the OLD identity branch (pass its run id).
+# Fixture-only: no configured servers, no I/O started, no real keys - the
+# app keeps its INTERNET permission and the emulator is NOT
+# network-isolated. Manual trigger only. No secrets, no signing, no
+# release, contents: read. Same arch/KVM/translation caveats as the
+# export workflow; arm64 fallback is slow and carries no promise.
+name: emu-import-check
+on:
+  workflow_dispatch:
+    inputs:
+      export_run_id:
+        description: 'Run ID of the emu-export-check run that produced the fixture bundle'
+        required: true
+      arch:
+        description: 'Emulator arch: x86_64 (fast, needs image ARM translation) or arm64-v8a (slow, native, no completion promise)'
+        default: 'x86_64'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emu-check
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.10'
+      - run: pip install deltachat-rpc-server==2.69.0 deltachat-rpc-client==2.69.0 cryptography
+      - run: python3 ci/emu_preflight.py
+
+  smoke:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.10'
+      - name: Verify KVM acceleration (unaccelerated x86_64 emulators stall)
+        run: |
+          if [ -w /dev/kvm ]; then ls -l /dev/kvm; else echo 'FATAL: no usable /dev/kvm - aborting (Bidik evidence: unaccelerated x86_64 emulators stall)'; exit 1; fi
+      - name: Smoke on emulator
+        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
+        with:
+          api-level: 30
+          target: google_apis
+          arch: ${{ inputs.arch || 'x86_64' }}
+          profile: Nexus 6
+          emulator-boot-timeout: 900
+          script: |
+            abis=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r')
+            echo "cpu abilist: $abis"
+            case "$abis" in
+              *arm64-v8a*) echo "arm64-v8a supported (native or translated)";;
+              *) echo "FATAL: no arm64-v8a on this image (no ARM translation) - re-dispatch with arch=arm64-v8a"; exit 2;;
+            esac
+            set +e
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.vanipy.migtest.EmuSmokeTest
+            status=$?
+            adb logcat -d > smoke-logcat.txt 2>/dev/null
+            adb exec-out run-as com.vanipy.intodo tar cf - -C files emu-out > smoke-out.tar 2>/dev/null
+            tar xf smoke-out.tar 2>/dev/null
+            ls -laR emu-out 2>/dev/null
+            exit $status
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emu-import-smoke
+          path: |
+            emu-out/
+            smoke-logcat.txt
+          retention-days: 14
+
+  emu-import:
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.10'
+      - name: Download the fixture bundle from the export run
+        env:
+          EXPORT_RUN_ID: ${{ inputs.export_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "$EXPORT_RUN_ID" in
+            ''|*[!0-9]*) echo "FATAL: export_run_id must be digits only, got: $EXPORT_RUN_ID"; exit 2;;
+          esac
+          gh run download "$EXPORT_RUN_ID" -n emu-export -D emu-in-dl
+          ls -la emu-in-dl emu-in-dl/emu-out
+      - name: Verify KVM acceleration
+        run: |
+          if [ -w /dev/kvm ]; then ls -l /dev/kvm; else echo 'FATAL: no usable /dev/kvm'; exit 1; fi
+      - name: Fixture import on emulator
+        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
+        with:
+          api-level: 30
+          target: google_apis
+          arch: ${{ inputs.arch || 'x86_64' }}
+          profile: Nexus 6
+          emulator-boot-timeout: 900
+          script: |
+            abis=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r')
+            echo "cpu abilist: $abis"
+            case "$abis" in
+              *arm64-v8a*) :;;
+              *) echo "FATAL: no arm64-v8a on this image - re-dispatch with arch=arm64-v8a"; exit 2;;
+            esac
+            ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon
+            adb push emu-in-dl/emu-out/dcbot-migration.dcmig /data/local/tmp/dcbot-migration.dcmig
+            adb push emu-in-dl/emu-out/code.txt /data/local/tmp/code.txt
+            adb shell run-as com.vanipy.intodo sh -c \
+              'mkdir -p files/emu-in && cp /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt files/emu-in/'
+            set +e
+            adb shell am instrument -w \
+              -e class com.vanipy.migtest.MigrationEmuImportTest \
+              com.vanipy.intodo.test/androidx.test.runner.AndroidJUnitRunner
+            status=$?
+            adb logcat -d > emu-logcat.txt 2>/dev/null
+            adb exec-out run-as com.vanipy.intodo tar cf - -C files emu-out > emu-out.tar 2>/dev/null
+            tar xf emu-out.tar 2>/dev/null
+            ls -laR emu-out 2>/dev/null
+            exit $status
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emu-import
+          path: |
+            emu-out/
+            emu-logcat.txt
+          retention-days: 14
