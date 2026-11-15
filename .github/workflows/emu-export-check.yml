@@ -25,6 +25,9 @@
 # - Desktop preflight is a fast gate only; it closes no Android proof.
 name: emu-export-check
 on:
+  push:
+    branches:
+      - qualification/intodo-dcmig2-v5.21
   workflow_dispatch:
     inputs:
       arch:
