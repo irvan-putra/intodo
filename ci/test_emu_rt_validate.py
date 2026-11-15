@@ -206,7 +206,8 @@ with tempfile.TemporaryDirectory() as d:
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     require(cli.returncode == 0
             and cli.stdout == ("emu_export_phases=seeded,python_ready\n"
-                               "emu_export_phase_unknown=1\n"),
+                               "emu_export_phase_unknown=1\n"
+                               "emu_export_failure_category=process_crashed\n"),
             "phases CLI must emit only bounded enum metadata")
     require("SECRET-PAYLOAD" not in cli.stdout + cli.stderr
             and "Process crashed" not in cli.stdout
@@ -224,7 +225,32 @@ with tempfile.TemporaryDirectory() as d:
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     require(cli.returncode == 0
             and cli.stdout == ("emu_export_phases=none\n"
-                               "emu_export_phase_unknown=100+\n"),
+                               "emu_export_phase_unknown=100+\n"
+                               "emu_export_failure_category=no_ok_summary\n"),
             "phase diagnostics must have a fixed output bound")
+
+# Only exact, standalone protocol fields can supply the category; strings
+# embedded in a stack, result detail, or arbitrary output are not evidence.
+require(validator.failure_category("OK (3 tests)\n") == "passed", "pass")
+require(validator.failure_category("FAILURES!!!\nTests run: 1\n")
+        == "junit_failure", "exact JUnit failure marker")
+require(validator.failure_category("INSTRUMENTATION_STATUS_CODE: -2\n")
+        == "junit_failure", "exact instrumentation failure status")
+require(validator.failure_category(
+        "INSTRUMENTATION_RESULT: shortMsg=Process crashed.\n")
+        == "process_crashed", "exact crash field")
+require(validator.failure_category("INSTRUMENTATION_STATUS: stack=FAILURES!!!\n")
+        == "no_ok_summary", "do not match arbitrary stack text")
+require(validator.failure_category(
+        "INSTRUMENTATION_RESULT: details=Process crashed.\n")
+        == "no_ok_summary", "do not match arbitrary result details")
+require(validator.failure_category("FAILURES!!!\n"
+        "INSTRUMENTATION_RESULT: shortMsg=Process crashed.\n")
+        == "junit_failure", "explicit JUnit failure outranks crash category")
+require(validator.failure_category("OK (1 test)\r\n") == "passed",
+        "CR-tolerant exact JUnit summary")
+require(all(p in validator.EMU_PHASES for p in
+            ("activity_launching", "activity_launched", "header_seen",
+             "expand_clicked")), "launch-span beacons must be in the enum")
 
 print("emu_rt_validate parser fixtures: PASS")

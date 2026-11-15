@@ -100,15 +100,19 @@ class MigrationEmuExportTest {
             files.absolutePath).toInt())
         phase("python_ready")
 
+        phase("activity_launching")
         ActivityScenario.launch(BotActivity::class.java).use {
+            phase("activity_launched")
             // ---- 3. real UI: Export bot + settings -> confirm ----
             // A provisioned install starts with the setup box COLLAPSED
             // (header "Setup & account  >") - expand it first.
             checkNotNull(device.wait(
                 Until.findObject(By.textContains("Setup & account")), 60_000))
                 { "setup header not shown" }
+            phase("header_seen")
             if (device.findObject(By.text("Export bot + settings")) == null) {
                 device.findObject(By.textContains("Setup & account"))?.click()
+                phase("expand_clicked")
             }
             phase("setup_open")
             var exportBtn = device.wait(

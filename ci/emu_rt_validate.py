@@ -59,8 +59,9 @@ Three modes:
       actual rendering instead of a guessed schema.
 
   emu_rt_validate.py phases <path>
-      Emit only first-seen allowlisted export phase names and a bounded
-      unknown-beacon count; never prints any other instrumentation data.
+      Emit first-seen allowlisted export phases, a bounded unknown-beacon
+      count and a fixed category derived only from exact JUnit/runner fields;
+      never prints raw exception, result or arbitrary instrumentation text.
 
   emu_rt_validate.py drop-delta <before> <after>
       Require numeric-only packet-count files (one nonnegative integer
@@ -426,9 +427,11 @@ def drop_row_shapes(text, max_rows=8):
 # Fixed vocabulary emitted by MigrationEmuExportTest. Keep first occurrence
 # order and cap unknown count so artifact output remains bounded even if a
 # malformed runner stream repeats phase-looking lines.
-EMU_PHASES = ("seeded", "python_ready", "setup_open", "button_clicked",
-              "confirm_clicked", "result_seen", "code_dialog_seen",
-              "bundle_validated", "artifacts_written")
+EMU_PHASES = ("seeded", "python_ready", "activity_launching",
+              "activity_launched", "header_seen", "expand_clicked",
+              "setup_open", "button_clicked", "confirm_clicked",
+              "result_seen", "code_dialog_seen", "bundle_validated",
+              "artifacts_written")
 _PHASE_RE = re.compile(r"^INSTRUMENTATION_STATUS: emu_phase=([a-z0-9_]+)$")
 MAX_UNKNOWN_PHASES = 100
 
@@ -449,6 +452,19 @@ def extract_phases(text):
         elif unknown < MAX_UNKNOWN_PHASES:
             unknown += 1
     return phases, unknown
+
+
+def failure_category(text):
+    """Classify only exact runner/JUnit protocol fields. Never scan
+    exception stack, app text, or arbitrary substrings for category words."""
+    lines = [line.strip() for line in text.splitlines()]
+    if "FAILURES!!!" in lines or "INSTRUMENTATION_STATUS_CODE: -2" in lines:
+        return "junit_failure"
+    if "INSTRUMENTATION_RESULT: shortMsg=Process crashed." in lines:
+        return "process_crashed"
+    if any(re.fullmatch(r"OK \([0-9]+ tests?\)", line) for line in lines):
+        return "passed"
+    return "no_ok_summary"
 
 
 def parse_numeric_counter(text):
@@ -489,10 +505,12 @@ def main():
             print(line)
         ok = True
     elif len(sys.argv) == 3 and sys.argv[1] == "phases":
-        phases, unknown = extract_phases(open(sys.argv[2]).read())
+        _text = open(sys.argv[2]).read()
+        phases, unknown = extract_phases(_text)
         print("emu_export_phases=%s" % (",".join(phases) if phases else "none"))
         print("emu_export_phase_unknown=%d%s" %
               (unknown, "+" if unknown == MAX_UNKNOWN_PHASES else ""))
+        print("emu_export_failure_category=%s" % failure_category(_text))
         ok = True
     else:
         ok = False
