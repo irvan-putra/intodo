@@ -318,20 +318,20 @@ def check_filter_order(path):
 def parse_drop_counters(text):
     """Return packets for the unique non-loopback DROP row.
 
-    Accept xtables' rendered negated-interface forms `!lo` and `! lo`;
-    reject other output interfaces and ambiguous duplicate DROP rows.
+    Xtables variants format the `opt` field differently. Identify the row
+    by target and output-interface columns, while accepting `!lo` and
+    `! lo` renderings. Reject ambiguous DROP rows and nonnumeric counts.
     """
     counts=[]
     for line in text.splitlines():
         p=line.split()
-        if len(p) < 9 or p[2] != "DROP" or p[4] != "--":
+        if len(p) < 7 or p[2] != "DROP":
             continue
-        # Standard columns: pkts bytes target prot opt in out source destination
-        # Some xtables builds render negation as one token (!lo), others as
-        # two (! lo). Match either form without relaxing the row identity.
+        # Standard columns: pkts bytes target prot opt in out source destination.
+        # Ignore opt rendering, but match the output interface exactly.
         if p[6] == "!lo":
             pass
-        elif p[6:8] == ["!", "lo"] and len(p) >= 10:
+        elif p[6] == "!" and len(p) >= 8 and p[7] == "lo":
             pass
         else:
             continue
@@ -353,11 +353,9 @@ def drop_counter_failure_reason(text):
     if len(rows) != 1:
         return "duplicate_drop_rows"
     p=rows[0]
-    if len(p) < 9 or p[4] != "--":
-        return "drop_row_malformed"
-    if p[6] == "!lo":
-        pass
-    elif p[6:8] == ["!", "lo"] and len(p) >= 10:
+    if len(p) < 7:
+        return "drop_row_too_short"
+    if p[6] == "!lo" or (p[6] == "!" and len(p) >= 8 and p[7] == "lo"):
         pass
     else:
         return "drop_interface_mismatch"

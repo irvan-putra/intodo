@@ -24,6 +24,10 @@ IPTABLES6_SEPARATE_NEGATION = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
  pkts bytes target     prot opt in     out     source               destination
     3   240 DROP       all      --  *      ! lo    ::/0                 ::/0
 """
+IPTABLES6_ALT_OPT = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target prot opt in out source destination
+ 4 320 DROP all ? * !lo ::/0 ::/0
+"""
 GOOD_ORDER = """IPV4_OUTPUT
 -A OUTPUT -o lo -j ACCEPT
 -A OUTPUT ! -o lo -j DROP
@@ -63,6 +67,8 @@ require(validator.parse_drop_counters(IPTABLES6) == 3,
         "documented IPv6 ip6tables -L form must parse")
 require(validator.parse_drop_counters(IPTABLES6_SEPARATE_NEGATION) == 3,
         "IPv6 xtables spaced ! lo form must parse")
+require(validator.parse_drop_counters(IPTABLES6_ALT_OPT) == 4,
+        "counter parser must not reject a valid DROP row solely on opt formatting")
 for bad in (
         "",
         IPTABLES4.replace("12  1024", "not-a-count 1024"),
