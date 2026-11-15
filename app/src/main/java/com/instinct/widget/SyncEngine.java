@@ -32,10 +32,39 @@ public class SyncEngine {
     // Build-time config (local.properties -> BuildConfig), never hardcoded in source:
     // the public repo ships without an endpoint and reports "feed URL not configured".
     public static final String FEED_URL = BuildConfig.FEED_URL;
+    /**
+     * Canonical feed address: drops the Files viewer's "?preview=<revision>" pin.
+     * The viewer writes the revision it served into the address bar, so a copied
+     * feed URL can carry that param. The pin works signed-out only while that
+     * revision is the current published one; after a newer publish the pinned
+     * revision turns owner-only, the WebView gets a sign-in wall instead of the
+     * payload, and sync fails with "payload not found on page" (phone-observed
+     * on 0.5.9). Other query params and any fragment are preserved.
+     */
+    public static String canonicalFeedUrl(String url) {
+        if (url == null) return "";
+        String u = url.trim();
+        int hash = u.indexOf('#');
+        String fragment = hash >= 0 ? u.substring(hash) : "";
+        if (hash >= 0) u = u.substring(0, hash);
+        int q = u.indexOf('?');
+        if (q < 0) return u + fragment;
+        String base = u.substring(0, q);
+        StringBuilder kept = new StringBuilder();
+        for (String param : u.substring(q + 1).split("&")) {
+            if (param.isEmpty()) continue;
+            int eq = param.indexOf('=');
+            String name = eq >= 0 ? param.substring(0, eq) : param;
+            if (name.equals("preview")) continue;
+            if (kept.length() > 0) kept.append('&');
+            kept.append(param);
+        }
+        return kept.length() == 0 ? base + fragment : base + "?" + kept + fragment;
+    }
     /** Effective feed address: an on-device entry (public unconfigured builds) wins over build config. */
     public static String effectiveFeedUrl(Context c) {
         String onDevice = Prefs.feedUrl(c);
-        return onDevice.isEmpty() ? FEED_URL : onDevice;
+        return canonicalFeedUrl(onDevice.isEmpty() ? FEED_URL : onDevice);
     }
     private static final Pattern PAYLOAD = Pattern.compile("IFW1\\.([A-Za-z0-9_\\-]{40,})");
     private static final long TIMEOUT_MS = 90000;

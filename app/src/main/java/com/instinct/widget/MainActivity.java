@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Feed address must start with https://", Toast.LENGTH_LONG).show();
                 return;
             }
-            Prefs.saveFeedUrl(this, url);
+            Prefs.saveFeedUrl(this, SyncEngine.canonicalFeedUrl(url));
             Toast.makeText(this, "Feed address saved", Toast.LENGTH_SHORT).show();
         });
         findViewById(R.id.updateLine).setOnClickListener(v -> {
