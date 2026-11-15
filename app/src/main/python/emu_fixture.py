@@ -119,8 +119,12 @@ def install_bounded_rpc_startup_diagnostics():
             stderr_data = bytearray()
             stderr_note = ""
             pipe = getattr(proc, "stderr", None)
-            if pipe is not None:
-                deadline = time.monotonic() + 1.0
+
+            def drain_stderr_until(deadline):
+                """Read only ready bytes, under one total 8 KiB cap."""
+                nonlocal stderr_note
+                if pipe is None:
+                    return
                 try:
                     fd = pipe.fileno()
                     while len(stderr_data) < 8192 and time.monotonic() < deadline:
@@ -132,10 +136,16 @@ def install_bounded_rpc_startup_diagnostics():
                             break
                         stderr_data.extend(chunk)
                 except Exception as read_exc:
-                    stderr_note = "stderr read diagnostic failed: %s" % read_exc
+                    if not stderr_note:
+                        stderr_note = "stderr read diagnostic failed: %s" % read_exc
+
+            # Sample before teardown, but never wait for bytes that are not ready.
+            drain_stderr_until(time.monotonic() + 1.0)
 
             # A failed health-check is terminal for this test-only child.
-            # Reap it so it cannot survive instrumentation teardown.
+            # Reap it so it cannot survive instrumentation teardown. Drain a
+            # short final stderr tail after termination because some servers
+            # emit their diagnostic only while exiting.
             try:
                 if proc.poll() is None:
                     proc.terminate()
@@ -145,6 +155,7 @@ def install_bounded_rpc_startup_diagnostics():
                         proc.kill()
                         proc.wait(timeout=1.0)
                 poll_after = proc.poll()
+                drain_stderr_until(time.monotonic() + 0.25)
             except Exception as cleanup_exc:
                 poll_after = "cleanup failed: %s" % cleanup_exc
             self.closing = True
