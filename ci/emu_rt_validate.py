@@ -22,14 +22,38 @@ Three modes:
       (prints nothing, verdict via exit code only)
 
   emu_rt_validate.py isolation <dir>
-      Fail-closed capability gates over the CR-stripped guest network
-      probe copies (.rt-probe-<name>.txt) in <dir>, collected by
-      verify_guest_offline BEFORE any gate ran. Prints one harness-
-      authored verdict line per interface and per gate (nonsecret:
-      interface names, states, gate names) for the artifact, exits 1
-      on any failure. Name-independent: no device-name allowlist - a
-      device demonstrates network capability only by holding a
-      routable address or a default route, whatever it is called.
+      DIAGNOSTIC capability classification + gate verdicts over the
+      CR-stripped guest network probe copies (.rt-probe-<name>.txt)
+      in <dir>, collected by verify_guest_offline before enforcement.
+      Prints one harness-authored verdict line per interface and per
+      gate (nonsecret: interface names, states, gate names) for the
+      artifact. The caller records these as EVIDENCE and never aborts
+      on them: the isolation claim is owned by the verified first-
+      match kernel filter (filter-order mode), not by inventory - an
+      addressed NIC is expected on the emulator, and Android's fwmark
+      per-table routing makes inventory a weak reachability signal.
+      Name-independent classification: a device demonstrates network
+      capability only by holding a routable address or a default
+      route, whatever it is called; up/down/carrier state is evidence,
+      never a verdict.
+
+  emu_rt_validate.py filter-order <path>
+      The kernel OUTPUT listings (IPV4_OUTPUT / IPV6_OUTPUT sections
+      in the probe copy at <path>) must each BEGIN with exactly
+      '-A OUTPUT -o lo -j ACCEPT' then '-A OUTPUT ! -o lo -j DROP',
+      in that order - first-match enforcement ahead of every
+      netd-managed jump. Anything else exits 1.
+
+  emu_rt_validate.py drop-counter <path>
+      Parse the unique non-loopback DROP packet counter from standard
+      iptables/ip6tables `-L OUTPUT -v -x -n` output. Prints only the
+      numeric packet count; malformed, absent, duplicate, or negative
+      counts exit 1.
+
+  emu_rt_validate.py drop-delta <before> <after>
+      Require numeric-only packet-count files (one nonnegative integer
+      each) and a strict increase; prints nothing and exits 1 otherwise.
+      (prints nothing, verdict via exit code only)
 """
 import base64
 import json
@@ -291,6 +315,36 @@ def check_filter_order(path):
     return True
 
 
+def parse_drop_counters(text):
+    """Return packets for the unique non-loopback DROP row from iptables -L -v -x -n."""
+    counts=[]
+    for line in text.splitlines():
+        p=line.split()
+        # Standard format: pkts bytes target prot opt in out source destination
+        # DROP row: 0 0 DROP all -- * !lo 0.0.0.0/0 0.0.0.0/0
+        if len(p)>=9 and p[2]=="DROP" and p[4]=="--" and p[6]=="!lo":
+            if not re.fullmatch(r"[0-9]+", p[0], flags=re.ASCII):
+                return None
+            counts.append(int(p[0]))
+    return counts[0] if len(counts)==1 else None
+
+
+def parse_numeric_counter(text):
+    """Parse a numeric-only counter scratch file, never raw command output."""
+    if not re.fullmatch(r"[0-9]+\n?", text, flags=re.ASCII):
+        return None
+    return int(text.strip())
+
+
+def check_drop_delta(before_path, after_path):
+    try:
+        before=parse_numeric_counter(open(before_path).read())
+        after=parse_numeric_counter(open(after_path).read())
+    except Exception:
+        return False
+    return before is not None and after is not None and after > before
+
+
 def main():
     if len(sys.argv) == 4 and sys.argv[1] == "json":
         ok = check_json(sys.argv[2], sys.argv[3])
@@ -302,6 +356,12 @@ def main():
             print(line)
     elif len(sys.argv) == 3 and sys.argv[1] == "filter-order":
         ok = check_filter_order(sys.argv[2])
+    elif len(sys.argv) == 4 and sys.argv[1] == "drop-delta":
+        ok = check_drop_delta(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 3 and sys.argv[1] == "drop-counter":
+        count = parse_drop_counters(open(sys.argv[2]).read())
+        ok = count is not None
+        if ok: print(count)
     else:
         ok = False
     sys.exit(0 if ok else 1)

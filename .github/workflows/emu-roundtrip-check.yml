@@ -13,31 +13,19 @@
 #
 # Fixture-only: the Delta Chat account has NO configured servers
 # (pseudo transport mirroring core's own add_pseudo_transport) and no
-# I/O is started. Network isolation is STRUCTURAL: the emulator is
-# launched with QEMU `-nic none` through the Android emulator's
-# documented `-qemu` passthrough (must be the LAST option; verified
-# against the pinned android-emulator-runner source, which appends
-# nothing after emulator-options, and a rejected option trips the
-# action's own 'invalid command-line parameter' watcher). The guest
-# kernel then has no network device beside loopback - no egress route
-# exists for any protocol, either app UID or any translated child,
-# and no host firewall rules are involved. ADB does not traverse a
-# guest NIC, so the artifact route is unaffected, and the app KEEPS
-# its INTERNET permission, so in-guest semantics (including the
-# loopback RPC the legs exercise for real) are production-identical.
-# VERIFIED fail-closed before any app leg runs (covers a silently
-# ignored passthrough): the guest LINK listing must show lo as the
-# only device (an unaddressed NIC must not pass), only loopback
-# addresses, no default route, and a sanity egress attempt must
-# fail, else the run aborts and no offline claim is made. Every
-# pre-test step, leg and probe appends its label+status to
-# emu-rt-pretest.txt / emu-rt-isolation.txt BEFORE running, so a
-# failing step always leaves exact evidence of which one failed. Stated
-# limit: this proves the migration core works with zero external
-# connectivity; it does not test behavior with the INTERNET
-# permission revoked (that permission gates loopback AF_INET too, so
-# a no-INTERNET manifest variant would need its own RPC compatibility
-# proof). See ci/emu_runner.sh (roundtrip).
+# I/O is started. QEMU `-nic none` stays as incidental surface reduction,
+# but has no proven isolation effect on this emulator: prior evidence
+# showed eth0/wlan0 with addresses and per-device policy routes. The
+# actual control is a root-verified first-match OUTPUT filter in both
+# iptables families (accept lo, drop non-lo), installed and checked
+# before any app leg. Rule order is rechecked after each leg and at
+# closeout. Controlled IPv4 and IPv6 probes require the respective DROP
+# packet counter to increase; an unrouteable family fails closed and is
+# not reported as counter proof. Loopback must remain functional. This
+# proves only fixture migration work behind observed AF_INET/AF_INET6
+# guest OUTPUT drops; it does not prove NIC/backend absence or block
+# non-IP raw sockets. The app keeps INTERNET permission to preserve its
+# loopback RPC behavior. See ci/emu_runner.sh (roundtrip).
 #
 # PUBLIC-REPO ARTIFACT POLICY: uploads are an ALLOWLIST of the
 # harness's own self-authored outputs with known nonsecret fields -
@@ -100,6 +88,8 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.10'
+      - name: Test isolation evidence parsers and fail-closed cases
+        run: python3 ci/test_emu_rt_validate.py
       - name: Enable KVM (documented udev rule; runner user is not in the kvm group)
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -116,10 +106,11 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           emulator-boot-timeout: 900
-          # QEMU `-nic none` removes the guest's network BACKEND only
-          # (the guest kernel still enumerates its virtual devices -
-          # run 43712263503); isolation is ENFORCED by a guest
-          # iptables/ip6tables egress drop installed and verified
+          # QEMU `-nic none` is kept as harmless surface reduction but
+          # has NO proven effect on this emulator's network (run
+          # 43713588792: eth0/wlan0 still provisioned with addresses +
+          # per-device routes); isolation is ENFORCED by a first-match
+          # guest iptables/ip6tables egress drop installed and verified
           # fail-closed by the runner (see verify_guest_offline).
           # `-qemu` passes the rest to QEMU verbatim and MUST be last;
           # the pinned action appends nothing after emulator-options
