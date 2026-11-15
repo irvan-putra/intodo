@@ -514,6 +514,11 @@ if [ "$mode" = roundtrip ]; then
   # adb install does not traverse a guest NIC either.
   record_step install_old_identity ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon
   record_step install_new_identity ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon -PemuAppId="$NEW_PKG"
+  # The qualification flow does not test the runtime notifications prompt.
+  # Grant the declared permission on this disposable API34 emulator before
+  # either identity launches BotActivity, which requests it in onCreate.
+  record_step grant_notif_old adb shell pm grant "$OLD_PKG" android.permission.POST_NOTIFICATIONS
+  record_step grant_notif_new adb shell pm grant "$NEW_PKG" android.permission.POST_NOTIFICATIONS
 
   # Fail-closed isolation verification BEFORE any app leg runs; the
   # smoke leg's loopback RPC health check then doubles as the tested
@@ -533,6 +538,17 @@ if [ "$mode" = roundtrip ]; then
       verdict=ok
     fi
     printf 'leg_%s_status=%s am_exit=%s\n' "$label" "$verdict" "$st" >> "$PRETEST"
+    if [ "$label" = export ] && [ "$verdict" != ok ]; then
+      # Private XML is temporary runner/emulator scratch. Only fixed enums
+      # reach metadata; arbitrary UI text is never logged or uploaded.
+      adb shell uiautomator dump /data/local/tmp/rt-uidump.xml >/dev/null 2>&1 || true
+      adb pull /data/local/tmp/rt-uidump.xml .rt-uidump.xml >/dev/null 2>&1 || true
+      adb shell rm -f /data/local/tmp/rt-uidump.xml >/dev/null 2>&1 || true
+      if [ -s .rt-uidump.xml ]; then
+        python3 ci/emu_rt_validate.py window-dump .rt-uidump.xml >> "$PRETEST" || true
+        rm -f .rt-uidump.xml
+      fi
+    fi
     if [ "$label" = export ]; then
       # Extract only fixed-enum phase beacons. This is diagnostic metadata;
       # the JUnit summary gate above is unchanged and raw output stays local.

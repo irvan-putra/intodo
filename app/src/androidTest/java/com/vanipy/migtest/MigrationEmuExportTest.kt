@@ -120,6 +120,10 @@ class MigrationEmuExportTest {
                 "com.android.systemui" -> "systemui"
                 "com.android.launcher3",
                 "com.google.android.apps.nexuslauncher" -> "launcher"
+                "com.android.permissioncontroller" -> "permissioncontroller"
+                "com.android.packageinstaller" -> "packageinstaller"
+                "com.android.settings" -> "settings"
+                "com.google.android.gms" -> "gms"
                 null -> "none"
                 else -> "other"
             })

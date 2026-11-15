@@ -255,7 +255,7 @@ require(all(p in validator.EMU_PHASES for p in
              "focused_systemui", "focused_launcher", "focused_none",
              "focused_other", "header_timeout", "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 23
+require(len(validator.EMU_PHASES) == 27
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
 runner_test = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/MigrationEmuExportTest.kt"), encoding="utf-8").read()
@@ -267,5 +267,38 @@ require("device.wakeUp()" in runner_test
         "screen/keyguard preparation and window flags must stay in the fixture test")
 require('org.junit.Assert.fail("setup header not shown")' in runner_test,
         "authored header timeout must remain an explicit JUnit failure")
+
+# ---------------- bounded window-dump classification ----------------
+uidump = (
+    '<?xml version="1.0"?><hierarchy>'
+    '<node text="" package="com.android.permissioncontroller" focused="false">'
+    '<node text="Allow" package="com.android.permissioncontroller" focused="true"/>'
+    '<node text="Don&apos;t allow" package="com.android.permissioncontroller" focused="false"/>'
+    '<node text="SECRET-PAYLOAD-9f2" package="com.thirdparty.unknown" focused="false"/>'
+    '</hierarchy>')
+status, focused, packages, strings, count = validator.window_dump_summary(uidump)
+require(status == "ok" and focused == "permissioncontroller",
+        "window focus must be reduced to fixed package enum")
+require(packages == ["permissioncontroller", "other(x1)"] and count == 4,
+        "package names and node counts must be bounded")
+require(strings == ["str_perm_allow", "str_perm_deny"],
+        "only fixed allowlisted strings are reported")
+with tempfile.TemporaryDirectory() as d:
+    dump_path = os.path.join(d, "dump.xml")
+    with open(dump_path, "w", encoding="utf-8") as f:
+        f.write(uidump)
+    cli = subprocess.run([sys.executable, os.path.join(HERE, "emu_rt_validate.py"),
+                          "window-dump", dump_path], check=False, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    require(cli.returncode == 0 and "SECRET-PAYLOAD" not in cli.stdout + cli.stderr
+            and "com.thirdparty.unknown" not in cli.stdout + cli.stderr,
+            "raw UI content must not escape classifier")
+    require("window_nodes=4" in cli.stdout
+            and "window_strings=str_perm_allow,str_perm_deny" in cli.stdout,
+            "window summary CLI output")
+require(validator.window_dump_summary("not XML") ==
+        ("malformed", "none", [], [], 0), "malformed dump has no inferred contents")
+require(validator.window_dump_summary("x" * (validator.WINDOW_DUMP_MAX_BYTES + 1))[0]
+        == "oversize", "window XML input must be bounded")
 
 print("emu_rt_validate parser fixtures: PASS")

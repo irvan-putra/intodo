@@ -430,7 +430,9 @@ def drop_row_shapes(text, max_rows=8):
 EMU_PHASES = ("seeded", "python_ready", "screen_on", "screen_off",
               "keyguard_locked", "keyguard_unlocked", "activity_launching",
               "activity_launched", "focused_app", "focused_systemui",
-              "focused_launcher", "focused_none", "focused_other",
+              "focused_launcher", "focused_permissioncontroller",
+              "focused_packageinstaller", "focused_settings", "focused_gms",
+              "focused_none", "focused_other",
               "header_timeout", "header_seen", "expand_clicked",
               "setup_open", "button_clicked", "confirm_clicked",
               "result_seen", "code_dialog_seen", "bundle_validated",
@@ -470,6 +472,63 @@ def failure_category(text):
     return "no_ok_summary"
 
 
+# Fixed-enum summary for a private uiautomator dump. The caller bounds
+# file reads; this function also bounds direct input and emitted counts.
+WINDOW_DUMP_MAX_BYTES = 1024 * 1024
+WINDOW_PACKAGES = {
+    "com.instinct.widget": "app",
+    "com.android.systemui": "systemui",
+    "com.android.launcher3": "launcher",
+    "com.google.android.apps.nexuslauncher": "launcher",
+    "com.android.permissioncontroller": "permissioncontroller",
+    "com.android.packageinstaller": "packageinstaller",
+    "com.android.settings": "settings",
+    "com.google.android.gms": "gms",
+}
+WINDOW_STRINGS = (
+    ("str_setup_header", "Setup & account"),
+    ("str_export_button", "Export bot + settings"),
+    ("str_confirm_text", "pauses the live bot"),
+    ("str_code_dialog", "one-time transfer code"),
+    ("str_perm_allow", "Allow"),
+    ("str_perm_deny", "Don't allow"),
+    ("str_start_bot", "Start bot"),
+    ("str_stop_bot", "Stop bot"),
+)
+_ATTR_RE = re.compile(r"([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*([\"'])(.*?)\2", re.DOTALL)
+_NODE_RE = re.compile(r"<node\b[^>]*>", re.DOTALL)
+
+
+def window_dump_summary(text):
+    """Return only fixed enums: status, focus, package ids, string ids, count."""
+    import html
+    if len(text.encode("utf-8", errors="replace")) > WINDOW_DUMP_MAX_BYTES:
+        return "oversize", "none", [], [], 0
+    if not re.search(r"<hierarchy\b", text) or not re.search(r"</hierarchy\s*>", text):
+        return "malformed", "none", [], [], 0
+    nodes = _NODE_RE.findall(text)
+    focused = "none"
+    packages = []
+    other = 0
+    shown_text = []
+    for tag in nodes:
+        attrs = {m.group(1): html.unescape(m.group(3)) for m in _ATTR_RE.finditer(tag)}
+        raw = attrs.get("package", "")
+        enum = WINDOW_PACKAGES.get(raw)
+        if raw and enum is None:
+            other += 1
+        elif enum is not None and enum not in packages:
+            packages.append(enum)
+        if focused == "none" and attrs.get("focused") == "true":
+            focused = enum or "other"
+        shown_text.append(attrs.get("text", ""))
+    if other:
+        packages.append("other(x%d%s)" % (min(other, 999), "+" if other > 999 else ""))
+    all_text = "\n".join(shown_text)
+    strings = [sid for sid, literal in WINDOW_STRINGS if literal in all_text]
+    return "ok", focused, packages, strings, min(len(nodes), 9999)
+
+
 def parse_numeric_counter(text):
     """Parse a numeric-only counter scratch file, never raw command output."""
     if not re.fullmatch(r"[0-9]+\n?", text, flags=re.ASCII):
@@ -506,6 +565,23 @@ def main():
     elif len(sys.argv) == 3 and sys.argv[1] == "row-shape":
         for line in drop_row_shapes(open(sys.argv[2]).read()):
             print(line)
+        ok = True
+    elif len(sys.argv) == 3 and sys.argv[1] == "window-dump":
+        try:
+            with open(sys.argv[2], "rb") as f:
+                raw_bytes = f.read(WINDOW_DUMP_MAX_BYTES + 1)
+            if len(raw_bytes) > WINDOW_DUMP_MAX_BYTES:
+                summary = ("oversize", "none", [], [], 0)
+            else:
+                summary = window_dump_summary(raw_bytes.decode("utf-8", errors="replace"))
+        except OSError:
+            summary = ("unavailable", "none", [], [], 0)
+        status, focused, packages, strings, count = summary
+        print("window_dump_status=%s" % status)
+        print("window_focused=%s" % focused)
+        print("window_packages=%s" % (",".join(packages) if packages else "none"))
+        print("window_strings=%s" % (",".join(strings) if strings else "none"))
+        print("window_nodes=%d" % count)
         ok = True
     elif len(sys.argv) == 3 and sys.argv[1] == "phases":
         _text = open(sys.argv[2]).read()
