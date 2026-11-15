@@ -103,4 +103,17 @@ with tempfile.TemporaryDirectory() as d:
                 and cli.stdout == "" and not cli.stderr,
                 "drop-delta CLI must be silent and match numeric-only verdict")
 
+# Android image's observed toybox ping form rejects -4/-6. Keep egress
+# probes on plain ping and ping6, and validate those binaries on loopback first.
+runner = open(os.path.join(HERE, "emu_runner.sh"), encoding="utf-8").read()
+require("probe='ping -c 1 -W 2 8.8.8.8'" in runner,
+        "IPv4 probe must use supported ping syntax without -4")
+require("probe='ping6 -c 1 -W 2 2001:4860:4860::8888'" in runner,
+        "IPv6 probe must use ping6 without unsupported -6")
+require("record_step probe_tool_check check_probe_tools" in runner
+        and "ping6 -c 1 -W 2 ::1" in runner,
+        "both families must pass loopback tool/option validation before build")
+require("loopback_v4" in runner and "loopback_v6" in runner,
+        "post-filter positive loopback checks must cover both families")
+
 print("emu_rt_validate parser fixtures: PASS")

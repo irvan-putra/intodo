@@ -106,6 +106,24 @@ PRETEST=emu-rt-pretest.txt
 # Probe content is nonsecret by construction: guest interface/route/
 # filter/listener listings and canned unreachable errors. CR bytes from
 # adb are stripped into the checked copies; scratch is wiped in the trap.
+check_probe_tools() {
+  # Validate the commands/options on this Android image before Gradle and
+  # package installation consume the long emulator window. The IPv4
+  # usage captured in run 43715097351 shows toybox `ping` has no -4/-6
+  # selector; use the IPv4 literal with `ping`, and require `ping6` for
+  # IPv6. Loopback only: this is a syntax/availability check, not an
+  # egress or counter proof. Raw help/errors stay local and are wiped.
+  if ! adb shell 'ping -c 1 -W 2 127.0.0.1' > .rt-probe-tool-v4.raw 2>&1; then
+    echo 'FATAL: Android IPv4 ping command/options unavailable on loopback' >&2
+    return 1
+  fi
+  if ! adb shell 'ping6 -c 1 -W 2 ::1' > .rt-probe-tool-v6.raw 2>&1; then
+    echo 'FATAL: Android ping6 command/options unavailable on loopback; IPv6 counter proof cannot run' >&2
+    return 1
+  fi
+  printf 'probe_tools=IPv4 ping and IPv6 ping6 validated on loopback\n'
+}
+
 verify_filter_order() {
   local label=$1 st
   if adb shell 'echo IPV4_OUTPUT; iptables -S OUTPUT && echo IPV6_OUTPUT; ip6tables -S OUTPUT' > ".rt-filter-${label}.raw" 2>&1; then st=0; else st=$?; fi
@@ -215,9 +233,9 @@ verify_guest_offline() {
   # A counter delta is required: a failed ping with no route is not proof.
   for fam in v4 v6; do
     if [ "$fam" = v4 ]; then
-      probe='ping -4 -c 1 -W 2 8.8.8.8'
+      probe='ping -c 1 -W 2 8.8.8.8'
     else
-      probe='ping -6 -c 1 -W 2 2001:4860:4860::8888'
+      probe='ping6 -c 1 -W 2 2001:4860:4860::8888'
     fi
     snapshot_drop_counters before "$fam" || {
       echo "drop_counter_delta_${fam}=unproven" >> emu-rt-isolation.txt
@@ -244,8 +262,10 @@ verify_guest_offline() {
     verify_filter_order "after_${fam}_probe" || return 1
   done
 
-  rt_probe loopback 'ping -c 1 -W 2 127.0.0.1' \
-    || { echo 'FATAL: loopback broken after filter install - aborting' >&2; return 1; }
+  rt_probe loopback_v4 'ping -c 1 -W 2 127.0.0.1' \
+    || { echo 'FATAL: IPv4 loopback broken after filter install - aborting' >&2; return 1; }
+  rt_probe loopback_v6 'ping6 -c 1 -W 2 ::1' \
+    || { echo 'FATAL: IPv6 loopback broken after filter install - aborting' >&2; return 1; }
   verify_filter_order final || return 1
   echo 'isolation_verified=yes (uid-0 verified; first-match v4+v6 accept-lo/drop-rest verified at install, after each probe and final; family-specific DROP counters increased; loopback positive; inventory diagnostic only; fail-closed)' >> emu-rt-isolation.txt
 }
@@ -463,6 +483,9 @@ if [ "$mode" = roundtrip ]; then
   }
 
   record_step abi_check require_arm64_abi
+  # Validate Android's actual family-specific ping syntax on loopback
+  # before the longer Gradle/build/install section.
+  record_step probe_tool_check check_probe_tools
   # Build + install BOTH identities. Gradle runs on the HOST (the
   # runner's own network, unaffected by the guest having no NIC);
   # adb install does not traverse a guest NIC either.
