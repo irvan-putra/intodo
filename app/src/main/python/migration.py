@@ -2,7 +2,8 @@
 packages (scratch test app -> itdapk). Reversible by design: export never
 deletes anything; import stages + verifies before committing.
 
-Bundle = one .dcmig zip with exactly three members:
+Bundle = one .dcmig zip with exactly three members (dcmig/1), or four
+when the activity supplied a settings snapshot (dcmig/2):
   manifest.json   non-secret metadata + sha256 of both ENCRYPTED payloads
                   (never an address, never account content)
   account.backup  core export_backup output (a tar holding the SQLCipher-
@@ -12,17 +13,26 @@ Bundle = one .dcmig zip with exactly three members:
                   (bot_state.json + ops-*.db per-chat stores) - the core
                   backup does NOT carry these (owner binding, chat list,
                   op history live only here)
+  prefs.bin       (dcmig/2 only) Fernet-encrypted JSON snapshot of the app
+                  settings in PREFS_ALLOWLIST: the widget feed keypair
+                  (priv/pub), the cached feed, the on-device feed URL and
+                  the review-canvas layout. Without it the imported app
+                  could not decrypt the feed it already paired for.
+                  Import re-stages it as IMPORT_PREFS.json; the importing
+                  activity applies it through SharedPreferences and deletes
+                  the file. dcmig/1 bundles (no prefs.bin) still import.
 
 One transfer code protects everything. The code is 32 random bytes,
 base64url (44 chars), generated on-device at export time, shown once in
 the app UI and handed over by the user (same-device clipboard or typing) -
 never logged, never sent through a chat, never inside the bundle.
 
-Key separation (one code, three distinct uses):
+Key separation (one code, four distinct uses):
   - core SQLCipher passphrase = the code itself (required by import_backup)
   - state cipher key  = SHA-256(code | STATE_DOMAIN), Fernet
   - backup wrap key   = SHA-256(code | WRAP_DOMAIN), Fernet
-So the two ciphers never share raw key material.
+  - prefs cipher key  = SHA-256(code | PREFS_DOMAIN), Fernet (dcmig/2)
+So the ciphers never share raw key material.
 
 Grounding (chatmail core v2.69.0 src/imex.rs):
   - export_backup(context, dir, passphrase): destination is a DIRECTORY;
@@ -48,11 +58,47 @@ import time
 import zipfile
 
 FORMAT = "dcmig/1"
+FORMAT_V2 = "dcmig/2"            # adds prefs.bin (app settings snapshot)
 STATE_DOMAIN = b"|dcbot-migration-state-v1"
 WRAP_DOMAIN = b"|dcbot-migration-wrap-v1"
+PREFS_DOMAIN = b"|dcbot-migration-prefs-v1"
 RESULT_FILE = "EXPORT_RESULT"     # json {bundle, code} or {error}; UI reads+deletes
 STAGING_DIR = ".import-staging"
 BACKUP_TMP = ".import-backup.tmp"
+PREFS_IN = "EXPORT_PREFS.json"   # activity-written snapshot input, read+deleted here
+PREFS_OUT = "IMPORT_PREFS.json"  # staged output; the importing activity applies+deletes
+
+# App settings that must survive the move to the new applicationId. Keys not
+# listed here are deliberately left behind: install_session is a device-local
+# package-installer handle, check_*/check_error are transient sync diagnostics,
+# last_mode must stay empty so the service cannot autostart mid-import, and
+# pending_publish_* only correlates an in-flight publish (the export UI
+# refuses to run while one is).
+PREFS_ALLOWLIST = {
+    "instinct_widget": ("priv", "pub", "feed", "feed_at", "feed_gen",
+                        "feed_url", "status"),
+    "review_canvas": ("layout",),
+}
+
+
+def filter_prefs(snapshot):
+    """Allowlist + type-check a {prefs_file: {key: value}} snapshot. Only str
+    and int values ride the bundle; anything else is dropped, never guessed."""
+    if not isinstance(snapshot, dict):
+        raise MigrationError("prefs snapshot is not an object")
+    out = {}
+    for name, keyvals in snapshot.items():
+        allowed = PREFS_ALLOWLIST.get(name)
+        if allowed is None or not isinstance(keyvals, dict):
+            continue
+        kept = {}
+        for k in allowed:
+            if k in keyvals and isinstance(keyvals[k], (str, int)) \
+                    and not isinstance(keyvals[k], bool):
+                kept[k] = keyvals[k]
+        if kept:
+            out[name] = kept
+    return out
 _STATE_NAMES = ("bot_state.json",)
 _STATE_GLOB = re.compile(r"^ops-\d+\.db$")
 _SAFE_MEMBER = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -173,50 +219,70 @@ def commit_state(staging_dir, files_dir):
 
 # -- bundle ------------------------------------------------------------------
 
-def build_bundle(backup_path, files_dir, out_path, code=None):
-    """Wrap core backup + bot state into one .dcmig zip. Returns (path, code)."""
+def build_bundle(backup_path, files_dir, out_path, code=None, prefs=None):
+    """Wrap core backup + bot state (+ optional prefs snapshot) into one
+    .dcmig zip. Returns (path, code). With prefs the bundle is FORMAT_V2;
+    without, it stays FORMAT so old parsers keep working."""
     code = code or generate_transfer_code()
     with open(backup_path, "rb") as f:
         backup_raw = f.read()
     wrapped = _encrypt(code, WRAP_DOMAIN, backup_raw)
     state_blob = _encrypt(code, STATE_DOMAIN, build_state_tar(files_dir))
+    prefs_blob = None
+    if prefs is not None:
+        prefs_blob = _encrypt(code, PREFS_DOMAIN,
+                              json.dumps(filter_prefs(prefs)).encode("utf-8"))
     manifest = {
-        "format": FORMAT,
+        "format": FORMAT_V2 if prefs_blob is not None else FORMAT,
         "created_at": int(time.time()),
         "backup_sha256": _sha256(wrapped),
         "backup_bytes": len(wrapped),
         "state_sha256": _sha256(state_blob),
         "state_bytes": len(state_blob),
     }
+    if prefs_blob is not None:
+        manifest["prefs_sha256"] = _sha256(prefs_blob)
+        manifest["prefs_bytes"] = len(prefs_blob)
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_STORED) as z:
         z.writestr("manifest.json", json.dumps(manifest, indent=1))
         z.writestr("account.backup", wrapped)
         z.writestr("state.bin", state_blob)
+        if prefs_blob is not None:
+            z.writestr("prefs.bin", prefs_blob)
     return out_path, code
 
 
 def parse_bundle(path):
-    """Verify structure + hashes BEFORE trusting any byte of the payload."""
+    """Verify structure + hashes BEFORE trusting any byte of the payload.
+    Accepts dcmig/1 (3 members) and dcmig/2 (adds prefs.bin); the declared
+    format must match the actual member set exactly."""
     try:
         with zipfile.ZipFile(path) as z:
             names = set(z.namelist())
-            if names != {"manifest.json", "account.backup", "state.bin"}:
+            if names not in ({"manifest.json", "account.backup", "state.bin"},
+                             {"manifest.json", "account.backup", "state.bin",
+                              "prefs.bin"}):
                 raise MigrationError("not a migration bundle (members %s)"
                                      % sorted(names))
             manifest = json.loads(z.read("manifest.json"))
             backup = z.read("account.backup")
             blob = z.read("state.bin")
+            prefs = z.read("prefs.bin") if "prefs.bin" in names else None
     except MigrationError:
         raise
     except Exception as e:
         raise MigrationError("unreadable bundle: %s" % e)
-    if manifest.get("format") != FORMAT:
+    want = FORMAT_V2 if prefs is not None else FORMAT
+    if manifest.get("format") != want:
         raise MigrationError("unsupported bundle format %r" % manifest.get("format"))
     if _sha256(backup) != manifest.get("backup_sha256"):
         raise MigrationError("account.backup payload corrupted (hash mismatch)")
     if _sha256(blob) != manifest.get("state_sha256"):
         raise MigrationError("state.bin payload corrupted (hash mismatch)")
-    return {"manifest": manifest, "backup": backup, "state_blob": blob}
+    if prefs is not None and _sha256(prefs) != manifest.get("prefs_sha256"):
+        raise MigrationError("prefs.bin payload corrupted (hash mismatch)")
+    return {"manifest": manifest, "backup": backup, "state_blob": blob,
+            "prefs_blob": prefs}
 
 
 # -- export (scratch side; service mode "export") ----------------------------
@@ -242,6 +308,18 @@ def export_migration(native_lib_dir, files_dir, out_dir):
         if os.path.isdir(out_dir):
             shutil.rmtree(out_dir)
         os.makedirs(out_dir)
+        # Optional settings snapshot written by the activity just before it
+        # started this export mode. Read then removed immediately: it holds
+        # the feed private key until the bundle wraps it.
+        prefs = None
+        prefs_in = os.path.join(files_dir, PREFS_IN)
+        if os.path.isfile(prefs_in):
+            try:
+                with open(prefs_in) as f:
+                    prefs = json.load(f)
+            except Exception:
+                raise MigrationError("unreadable %s - retry the export"
+                                     % PREFS_IN)
         rpc, dc = _rpc(native_lib_dir, files_dir)
         try:
             acct = _account(dc)
@@ -259,9 +337,14 @@ def export_migration(native_lib_dir, files_dir, out_dir):
             out_dir, max(produced,
                          key=lambda n: os.path.getmtime(os.path.join(out_dir, n))))
         bundle_path = os.path.join(out_dir, "dcbot-migration.dcmig")
-        build_bundle(backup_path, files_dir, bundle_path, code)
-        # The raw backup tar (plaintext blobs) must not linger on disk.
+        build_bundle(backup_path, files_dir, bundle_path, code, prefs=prefs)
+        # The raw backup tar (plaintext blobs) and the plaintext prefs
+        # snapshot must not linger on disk.
         os.unlink(backup_path)
+        try:
+            os.unlink(prefs_in)
+        except (OSError, UnboundLocalError):
+            pass
         with open(result + ".tmp", "w") as f:
             json.dump({"bundle": bundle_path, "code": code}, f)
         os.replace(result + ".tmp", result)
@@ -288,6 +371,12 @@ def import_migration(native_lib_dir, files_dir, bundle_path, code,
     parsed = parse_bundle(bundle_path)
     backup_raw = _decrypt(code, WRAP_DOMAIN, parsed["backup"])
     state_tar = _decrypt(code, STATE_DOMAIN, parsed["state_blob"])
+    prefs = None
+    if parsed.get("prefs_blob") is not None:
+        # Re-filter on this side too: the bundle is verified, but the
+        # allowlist is the contract the applying activity relies on.
+        prefs = filter_prefs(json.loads(
+            _decrypt(code, PREFS_DOMAIN, parsed["prefs_blob"]).decode("utf-8")))
     staging = os.path.join(files_dir, STAGING_DIR)
     open_rpc = _rpc_factory or _rpc
     rpc, dc = open_rpc(native_lib_dir, files_dir)
@@ -334,4 +423,14 @@ def import_migration(native_lib_dir, files_dir, bundle_path, code,
     commit_state(staging, files_dir)
     if not os.path.exists(os.path.join(files_dir, "bot_state.json")):
         save_state(files_dir, provisioned=True, bot_addr=addr)
+    if prefs is not None:
+        # Last step, after the account and state are committed: stage the
+        # settings snapshot for the activity to apply via SharedPreferences
+        # (Python must not write shared_prefs XML under a running app).
+        # app-private, removed by the activity once applied.
+        out = os.path.join(files_dir, PREFS_OUT)
+        with open(out + ".tmp", "w") as f:
+            json.dump(prefs, f)
+        os.chmod(out + ".tmp", 0o600)
+        os.replace(out + ".tmp", out)
     return addr

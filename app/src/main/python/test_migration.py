@@ -325,3 +325,175 @@ class TestImportFlow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+MARK_PRIV = "EC-PRIV-MARKER-b64url"
+
+
+def _prefs_snapshot():
+    return {
+        "instinct_widget": {
+            "priv": MARK_PRIV, "pub": "EC-PUB", "feed": "{\"items\":[]}",
+            "feed_at": 1763222400000, "feed_gen": "2026-11-15T12:00:00+0700",
+            "feed_url": "https://feed.example/x", "status": "synced just now",
+            # must be dropped: device-local / transient
+            "install_session": 991, "check_at": 1763222400001,
+            "check_attempt_at": 1763222400002, "check_error": "boom",
+        },
+        "review_canvas": {"layout": "{\"pan\":[1,2]}"},
+        "bot": {"last_mode": "live"},       # not allowlisted as a whole
+        "unknown_file": {"x": "y"},         # not allowlisted
+        "broken": None,                     # not a dict
+    }
+
+
+class _FakeExportAccount:
+    def __init__(self):
+        self.exported = None
+
+    def export_backup(self, out_dir, code):
+        self.exported = (out_dir, code)
+        with open(os.path.join(out_dir, "core-backup.tar"), "wb") as f:
+            f.write(b"fake-tar:" + MARK_DB.encode())
+
+
+def _stub_bot_runtime(dc, acct):
+    import types
+    mod = types.ModuleType("bot_runtime")
+    mod.RUN_LOCK = "LIVE_LOCK"  # absent from the fixture dir (service stopped)
+    mod._rpc = lambda native, files: (_FakeRpc(), dc)
+    mod._account = lambda d: acct
+    mod.load_state = lambda files: {"provisioned": True}
+    return mod
+
+
+class TestPrefsV2(unittest.TestCase):
+    """dcmig/2: settings snapshot member, filtering, tamper refusal and
+    backward compatibility with dcmig/1 bundles."""
+
+    def setUp(self):
+        self.src = _files_dir()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.backup = _fake_backup(self.src)
+        self.dst = tempfile.mkdtemp(prefix="mig-dst-")
+        self.addCleanup(shutil.rmtree, self.dst, True)
+
+    def _factory(self, dc):
+        return lambda native, files: (_FakeRpc(), dc)
+
+    def test_v2_roundtrip_prefs(self):
+        bundle, code = M.build_bundle(self.backup, self.src,
+                                      os.path.join(self.src, "out.dcmig"),
+                                      prefs=_prefs_snapshot())
+        parsed = M.parse_bundle(bundle)
+        self.assertEqual(parsed["manifest"]["format"], M.FORMAT_V2)
+        self.assertIsNotNone(parsed["prefs_blob"])
+        # The plaintext private key must never appear in the bundle bytes.
+        with open(bundle, "rb") as f:
+            raw = f.read()
+        self.assertNotIn(MARK_PRIV.encode(), raw)
+        dc = _FakeDC([])
+        M.import_migration("nl", self.dst, bundle, code,
+                           _rpc_factory=self._factory(dc))
+        out = os.path.join(self.dst, M.PREFS_OUT)
+        self.assertTrue(os.path.exists(out))
+        with open(out) as f:
+            got = json.load(f)
+        w = got["instinct_widget"]
+        self.assertEqual(w["priv"], MARK_PRIV)
+        self.assertEqual(w["feed_at"], 1763222400000)
+        self.assertEqual(w["feed_url"], "https://feed.example/x")
+        for dropped in ("install_session", "check_at", "check_attempt_at",
+                        "check_error"):
+            self.assertNotIn(dropped, w)
+        self.assertEqual(got["review_canvas"]["layout"], "{\"pan\":[1,2]}")
+        self.assertNotIn("bot", got)          # last_mode stays behind
+        self.assertNotIn("unknown_file", got)
+
+    def test_v1_bundle_still_imports(self):
+        bundle, code = M.build_bundle(self.backup, self.src,
+                                      os.path.join(self.src, "out.dcmig"))
+        parsed = M.parse_bundle(bundle)
+        self.assertEqual(parsed["manifest"]["format"], M.FORMAT)
+        self.assertIsNone(parsed["prefs_blob"])
+        dc = _FakeDC([])
+        M.import_migration("nl", self.dst, bundle, code,
+                           _rpc_factory=self._factory(dc))
+        self.assertFalse(os.path.exists(os.path.join(self.dst, M.PREFS_OUT)))
+
+    def test_v2_tamper_prefs(self):
+        bundle, code = M.build_bundle(self.backup, self.src,
+                                      os.path.join(self.src, "out.dcmig"),
+                                      prefs=_prefs_snapshot())
+        fixed = os.path.join(self.src, "tampered.dcmig")
+        with zipfile.ZipFile(bundle) as zin:
+            items = {n: zin.read(n) for n in zin.namelist()}
+        p = bytearray(items["prefs.bin"]); p[10] ^= 1
+        items["prefs.bin"] = bytes(p)
+        with zipfile.ZipFile(fixed, "w", zipfile.ZIP_STORED) as z:
+            for n, b in items.items():
+                z.writestr(n, b)
+        with self.assertRaises(M.MigrationError):
+            M.parse_bundle(fixed)
+
+    def test_v2_member_format_mismatch(self):
+        bundle, code = M.build_bundle(self.backup, self.src,
+                                      os.path.join(self.src, "out.dcmig"),
+                                      prefs=_prefs_snapshot())
+        stripped = os.path.join(self.src, "stripped.dcmig")
+        with zipfile.ZipFile(bundle) as zin:
+            items = {n: zin.read(n) for n in zin.namelist()
+                     if n != "prefs.bin"}
+        with zipfile.ZipFile(stripped, "w", zipfile.ZIP_STORED) as z:
+            for n, b in items.items():
+                z.writestr(n, b)
+        with self.assertRaises(M.MigrationError):
+            M.parse_bundle(stripped)
+
+    def test_v2_wrong_code_stages_nothing(self):
+        bundle, code = M.build_bundle(self.backup, self.src,
+                                      os.path.join(self.src, "out.dcmig"),
+                                      prefs=_prefs_snapshot())
+        dc = _FakeDC([])
+        with self.assertRaises(M.MigrationError):
+            M.import_migration("nl", self.dst, bundle,
+                               M.generate_transfer_code(),
+                               _rpc_factory=self._factory(dc))
+        self.assertEqual(os.listdir(self.dst), [])
+
+    def test_export_consumes_prefs_snapshot(self):
+        """export_migration reads EXPORT_PREFS.json, wraps it into the
+        bundle and removes the plaintext snapshot from disk."""
+        with open(os.path.join(self.src, M.PREFS_IN), "w") as f:
+            json.dump(_prefs_snapshot(), f)
+        dc, acct = _FakeDC([]), _FakeExportAccount()
+        import sys as _sys
+        _sys.modules["bot_runtime"] = _stub_bot_runtime(dc, acct)
+        try:
+            out_dir = os.path.join(self.src, "export-out")
+            bundle = M.export_migration("nl", self.src, out_dir)
+        finally:
+            del _sys.modules["bot_runtime"]
+        self.assertFalse(os.path.exists(os.path.join(self.src, M.PREFS_IN)))
+        parsed = M.parse_bundle(bundle)
+        self.assertEqual(parsed["manifest"]["format"], M.FORMAT_V2)
+        with open(os.path.join(self.src, M.RESULT_FILE)) as f:
+            res = json.load(f)
+        code = res["code"]
+        dc2 = _FakeDC([])
+        M.import_migration("nl", self.dst, bundle, code,
+                           _rpc_factory=self._factory(dc2))
+        with open(os.path.join(self.dst, M.PREFS_OUT)) as f:
+            got = json.load(f)
+        self.assertEqual(got["instinct_widget"]["priv"], MARK_PRIV)
+
+    def test_bundle_carries_no_package_names(self):
+        """The bundle must be applicationId-agnostic: it crosses from the
+        old package to the new one."""
+        bundle, code = M.build_bundle(self.backup, self.src,
+                                      os.path.join(self.src, "out.dcmig"),
+                                      prefs=_prefs_snapshot())
+        with open(bundle, "rb") as f:
+            raw = f.read()
+        for needle in (b"com.instinct", b"com.vanipy", b"itdapk", b"dcbot"):
+            self.assertNotIn(needle, raw)
