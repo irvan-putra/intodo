@@ -324,29 +324,21 @@ def check_filter_order(path):
 
 
 # ---------------- DROP counter (structural, source-grounded) ----------------
-#
-# Android ships iptables built from xtables-legacy-multi.c ONLY (AOSP
-# external/iptables, iptables/Android.bp). The legacy print_firewall +
-# print_ifaces rendering (iptables/iptables.c + xshared.c, a function
-# the source itself notes "serves for both iptables and ip6tables")
-# yields EXACTLY ONE row shape for the enforced `-I OUTPUT 2 ! -o lo -j
-# DROP` rule: the opt column carries FRAGMENT inversion only (always
-# "--" here - interface negation never lands in opt), and the interface
-# negation is ALWAYS glued into the iface token ("!lo", never split).
-# Run 43715793352 confirmed the v4 row end-to-end. A row that deviates
-# is not a "format variant": it is not the enforced rule, or the
-# listing is damaged - either way it must fail CLOSED, and the bounded
-# token-CLASS skeleton (drop_row_shapes, fixed vocabulary, never raw
-# third-party tokens) records the actual rendering for a grounded
-# correction instead of another guessed schema.
-
+# Android's Android 14 iptables binary builds xtables-legacy-multi.c.
+# The family-specific print_firewall implementations differ: iptables.c
+# emits the opt column ("--" for this non-fragment rule), while
+# ip6tables.c emits three spaces for that column, so whitespace splitting
+# omits it entirely. Both then call shared xshared.c print_ifaces, which
+# emits the negated output interface as one glued token, "!lo". The
+# source and the bounded run-43718205279 skeleton agree on v6's 8-token
+# row: num num DROP all * !lo ipv6-cidr ipv6-cidr. A wrong-family,
+# truncated, shifted, duplicate, or otherwise changed row never counts.
 DROP_ROW_TEMPLATES = {
     "v4": ("num", "num", "DROP", "all", "--", "*", "!lo",
            "0.0.0.0/0", "0.0.0.0/0"),
-    "v6": ("num", "num", "DROP", "all", "--", "*", "!lo",
+    "v6": ("num", "num", "DROP", "all", "*", "!lo",
            "::/0", "::/0"),
 }
-
 
 def _is_num(tok):
     return re.fullmatch(r"[0-9]+", tok, flags=re.ASCII) is not None

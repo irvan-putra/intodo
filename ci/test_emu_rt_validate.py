@@ -16,17 +16,19 @@ IPTABLES4 = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
  pkts bytes target     prot opt in     out     source               destination
    12  1024 DROP       all  --  *      !lo     0.0.0.0/0            0.0.0.0/0
 """
+# AOSP ip6tables.c prints three blank opt-column characters, so the
+# v6 DROP row has 8 whitespace tokens, unlike IPv4's 9-token row.
 IPTABLES6 = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination
-    3   240 DROP       all      --  *      !lo     ::/0                 ::/0
+ pkts bytes target prot opt in out source destination
+    3   240 DROP       all      *      !lo     ::/0                 ::/0
 """
 IPTABLES6_SEPARATE_NEGATION = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
- pkts bytes target     prot opt in     out     source               destination
-    3   240 DROP       all      --  *      ! lo    ::/0                 ::/0
+ pkts bytes target prot opt in out source destination
+    3   240 DROP       all      *      ! lo    ::/0                 ::/0
 """
 IPTABLES6_ALT_OPT = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
  pkts bytes target prot opt in out source destination
- 4 320 DROP all ? * !lo ::/0 ::/0
+ 4 320 DROP all -- * !lo ::/0 ::/0
 """
 GOOD_ORDER = """IPV4_OUTPUT
 -A OUTPUT -o lo -j ACCEPT
@@ -51,14 +53,11 @@ def order_passes(text):
         return validator.check_filter_order(f.name)
 
 
-# The counter row template is source-grounded: Android ships iptables
-# from xtables-legacy-multi.c only (AOSP iptables/Android.bp), whose
-# print_firewall + print_ifaces render the opt column as FRAGMENT
-# inversion only (always "--" for the enforced rule) and glue interface
-# negation ("!lo", one token), for BOTH families. Run 43715793352
-# confirmed the v4 row. Ungrounded "variants" (spaced negation,
-# alternate opt markers) must FAIL CLOSED - the row-shape skeleton is
-# the diagnostic that records the actual rendering if reality differs.
+# The counter row templates are bound to Android's family-specific
+# AOSP legacy print_firewall implementations and shared print_ifaces.
+# IPv4 has the opt token; IPv6 prints only spaces there, so split() yields
+# an exact 8-token v6 row. The v6 form is also confirmed by the bounded
+# structural skeleton from run 43718205279. Deviations fail closed.
 require(validator.parse_drop_counters(IPTABLES4, "v4") == 12,
         "source-grounded IPv4 iptables -L form must parse")
 with tempfile.TemporaryDirectory() as d:
@@ -73,13 +72,22 @@ with tempfile.TemporaryDirectory() as d:
             "drop-counter CLI must print only the parsed number")
 require(validator.parse_drop_counters(IPTABLES6, "v6") == 3,
         "source-grounded IPv6 ip6tables -L form must parse")
+v6shape = validator.drop_row_shapes(IPTABLES6)
+require(any("tokens=8 [num num DROP all * !lo ipv6-cidr ipv6-cidr]" in x
+            for x in v6shape),
+        "IPv6 structural diagnostic must match source-grounded 8-token row")
 require(validator.parse_drop_counters(IPTABLES6, "v4") is None
         and validator.parse_drop_counters(IPTABLES4, "v6") is None,
         "family binding: a v6 row must not count as v4 or vice versa")
 require(validator.parse_drop_counters(IPTABLES6_SEPARATE_NEGATION, "v6") is None,
         "ungrounded spaced-negation variant must fail closed")
+TRUNCATED_V6_TAIL = IPTABLES6.replace("::/0                 ::/0", "::/0")
+require(validator.parse_drop_counters(TRUNCATED_V6_TAIL, "v6") is None,
+        "truncated IPv6 destination must fail closed")
+require(validator.parse_drop_counters(IPTABLES6 + IPTABLES6.splitlines()[-1] + "\n", "v6") is None,
+        "duplicate exact IPv6 counter rows must fail closed")
 require(validator.parse_drop_counters(IPTABLES6_ALT_OPT, "v6") is None,
-        "ungrounded alternate opt marker must fail closed")
+        "an IPv4-style opt token in the v6 row must fail closed")
 # A truncated row can never be admitted: it may be a damaged read of a
 # rule whose tail (match conditions) would disqualify it.
 TRUNCATED_TAIL = IPTABLES4.replace("0.0.0.0/0            0.0.0.0/0",
