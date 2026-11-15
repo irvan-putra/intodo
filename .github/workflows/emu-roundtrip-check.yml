@@ -116,8 +116,11 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           emulator-boot-timeout: 900
-          # QEMU `-nic none`: the guest gets NO virtual network device
-          # - structural isolation, verified fail-closed by the runner.
+          # QEMU `-nic none` removes the guest's network BACKEND only
+          # (the guest kernel still enumerates its virtual devices -
+          # run 43712263503); isolation is ENFORCED by a guest
+          # iptables/ip6tables egress drop installed and verified
+          # fail-closed by the runner (see verify_guest_offline).
           # `-qemu` passes the rest to QEMU verbatim and MUST be last;
           # the pinned action appends nothing after emulator-options
           # (verified: emulator -port P -avd A <emulator-options> &).

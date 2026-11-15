@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Allowlist validators for round-trip evidence (public-repo policy).
 
-Two modes, both print NOTHING but a verdict and exit 0/1:
+Three modes:
 
   emu_rt_validate.py json <name> <path>
+      (prints nothing, verdict via exit code only)
       The pulled file must be a top-level JSON object whose keys are
       within <name>'s allowlist, with per-key type and bounded-value
       checks against the known fixture constants. Exact-set files
@@ -18,9 +19,21 @@ Two modes, both print NOTHING but a verdict and exit 0/1:
       shape migration.py's generate_transfer_code produces: 44 chars,
       urlsafe-base64 of exactly 32 bytes (43 alphabet chars + '=').
       Checked WITHOUT printing it.
+      (prints nothing, verdict via exit code only)
+
+  emu_rt_validate.py isolation <dir>
+      Fail-closed capability gates over the CR-stripped guest network
+      probe copies (.rt-probe-<name>.txt) in <dir>, collected by
+      verify_guest_offline BEFORE any gate ran. Prints one harness-
+      authored verdict line per interface and per gate (nonsecret:
+      interface names, states, gate names) for the artifact, exits 1
+      on any failure. Name-independent: no device-name allowlist - a
+      device demonstrates network capability only by holding a
+      routable address or a default route, whatever it is called.
 """
 import base64
 import json
+import os
 import re
 import sys
 
@@ -154,11 +167,141 @@ def check_code(path):
         return False
 
 
+# ---------------- isolation evidence gates ----------------
+
+ISO_FILES = ("sysfs_net", "ifstate", "link", "addr", "route4", "route6")
+ISO_ERROR_MARKERS = ("error:", "not found", "permission denied")
+
+
+def check_isolation(dirpath):
+    """Returns (ok, lines): per-iface capability classification, then
+    one verdict line per gate. Pure text in, verdict text out."""
+    lines = []
+    probes = {}
+    for name in ISO_FILES:
+        try:
+            with open(os.path.join(
+                    dirpath, ".rt-probe-%s.txt" % name)) as f:
+                probes[name] = f.read()
+        except Exception:
+            lines.append("gate evidence_%s: FAIL "
+                         "(probe file missing/unreadable)" % name)
+            return False, lines
+    ok = True
+
+    # Per-interface kind/state, from the remote sysfs loop:
+    # "<name> operstate=<o> carrier=<c>" (a carrier read on a down
+    # interface fails in-kernel; the harness records readfail).
+    ifaces = {}
+    for raw in probes["ifstate"].splitlines():
+        p = raw.split()
+        if (len(p) >= 3 and p[1].startswith("operstate=")
+                and p[2].startswith("carrier=")):
+            ifaces[p[0]] = (p[1][10:], p[2][8:])
+    # ip -o addr: one line per entry, "<idx>: <if> <family> <addr>
+    # scope <scope> ...".
+    addr_map = {}
+    for raw in probes["addr"].splitlines():
+        p = raw.split()
+        if len(p) >= 4 and p[2] in ("inet", "inet6"):
+            addr_map.setdefault(p[1], []).append(
+                (p[2], "scope link" in raw))
+    routes_by_dev = {}
+    for fam in ("route4", "route6"):
+        for raw in probes[fam].splitlines():
+            p = raw.split()
+            if "dev" in p:
+                routes_by_dev.setdefault(
+                    p[p.index("dev") + 1], []).append(raw)
+
+    # Classification is EVIDENCE, not a gate: a device is reported as
+    # network-capable only when it demonstrates capability (a routable
+    # address or a default route). State alone (up/down, carrier) is
+    # recorded but never a verdict - that would be a state heuristic.
+    for name in sorted(set(ifaces) | set(addr_map) | set(routes_by_dev)):
+        o, c = ifaces.get(name, ("unlisted", "unlisted"))
+        addrs = addr_map.get(name, [])
+        rts = routes_by_dev.get(name, [])
+        capable = (any(f == "inet" or not ll for f, ll in addrs)
+                   or any(r.startswith("default") for r in rts))
+        if name == "lo":
+            kind = "loopback"
+        elif capable:
+            kind = "NETWORK-CAPABLE"
+        else:
+            kind = "no demonstrated capability"
+        lines.append("iface %s: operstate=%s carrier=%s addrs=%d "
+                     "routes=%d -> %s"
+                     % (name, o, c, len(addrs), len(rts), kind))
+
+    def gate(gname, cond, reason=""):
+        nonlocal ok
+        if cond:
+            lines.append("gate %s: ok" % gname)
+        else:
+            lines.append("gate %s: FAIL %s" % (gname, reason))
+            ok = False
+
+    link_lines = [l for l in probes["link"].splitlines() if l.strip()]
+    lo_links = [l for l in link_lines if l.split()[1:2] == ["lo:"]]
+    gate("lo_link_exactly_one", len(lo_links) == 1,
+         "(found %d loopback link lines)" % len(lo_links))
+    lo_inet = any(l.split()[1:3] == ["lo", "inet"]
+                  for l in probes["addr"].splitlines())
+    gate("lo_inet_present", lo_inet, "(no inet address on lo)")
+    bad = []
+    for raw in probes["addr"].splitlines():
+        p = raw.split()
+        if len(p) >= 4 and p[1] != "lo" and p[2] in ("inet", "inet6"):
+            if p[2] == "inet" or "scope link" not in raw:
+                bad.append("%s/%s" % (p[1], p[2]))
+    gate("no_nonlo_address", not bad,
+         "(%s)" % ",".join(bad) if bad else "")
+    badr = [fam for fam in ("route4", "route6")
+            if any(l.startswith("default")
+                   for l in probes[fam].splitlines())]
+    gate("no_default_route", not badr,
+         "(%s)" % ",".join(badr) if badr else "")
+    marked = [n for n in ISO_FILES
+              if any(m in probes[n].lower() for m in ISO_ERROR_MARKERS)]
+    gate("no_error_markers", not marked,
+         "(%s)" % ",".join(marked) if marked else "")
+    return ok, lines
+
+
+def check_filter_order(path):
+    """Require exact first-match rule order for both OUTPUT families."""
+    try:
+        with open(path) as f:
+            text = f.read()
+    except Exception:
+        return False
+    sections = text.split("IPV4_OUTPUT\n")
+    if len(sections) != 2:
+        return False
+    v4_and_v6 = sections[1].split("IPV6_OUTPUT\n")
+    if len(v4_and_v6) != 2:
+        return False
+    expected = ["-A OUTPUT -o lo -j ACCEPT", "-A OUTPUT ! -o lo -j DROP"]
+    for body in v4_and_v6:
+        rules = [line.strip() for line in body.splitlines()
+                 if line.strip().startswith("-A OUTPUT ")]
+        if len(rules) < 2 or rules[:2] != expected:
+            return False
+    return True
+
+
 def main():
     if len(sys.argv) == 4 and sys.argv[1] == "json":
         ok = check_json(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 3 and sys.argv[1] == "code":
         ok = check_code(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == "isolation":
+        ok, out = check_isolation(sys.argv[2])
+        for line in out:
+            print(line)
+    elif len(sys.argv) == 3 and sys.argv[1] == "filter-order":
+        ok = check_filter_order(sys.argv[2])
     else:
         ok = False
     sys.exit(0 if ok else 1)

@@ -46,40 +46,65 @@ OLD_PKG=com.instinct.widget
 NEW_PKG=com.vanipy.intodo
 PRETEST=emu-rt-pretest.txt
 
-# Guest network isolation is STRUCTURAL: the workflow launches the
-# emulator with QEMU `-nic none` (via the Android emulator's `-qemu`
-# passthrough, which is documented to be the LAST option - verified
-# against the pinned action source, which appends nothing after
-# emulator-options; a rejected option trips the action's own
-# 'invalid command-line parameter' watcher). The guest kernel then has
-# no network device beside loopback. That is enforcement by absence -
-# there is no route for ANY protocol, either app UID or any translated
-# child, and no host firewall rule whose coverage would need proving.
-# ADB/adbd do not traverse a guest NIC, so the artifact route is
-# unaffected; the app KEEPS its INTERNET permission, so in-guest
-# semantics (including the loopback RPC the legs exercise for real)
-# are production-identical. Stated limit: this proves the migration
-# core works with ZERO external connectivity; it says nothing about
-# behavior with the INTERNET permission revoked (that permission gates
-# loopback AF_INET too, so a no-INTERNET manifest variant would need
-# its own RPC compatibility proof and was not chosen).
-# Fail-closed verification (covers a silently ignored passthrough):
-# adb unreadable, any link-layer device besides lo (an UNADDRESSED NIC
-# must NOT pass), any non-loopback address, any default route, or a
-# successful egress attempt aborts the run - offline is NEVER asserted
-# from an unverified setup.
+# Guest network isolation has TWO layers after an empirical correction:
+# run 43712263503 (evidence retained in its emu-rt-isolation.txt) showed
+# the NIC-ABSENCE premise false: QEMU `-nic none` removes the network
+# BACKEND only - the guest kernel still enumerates its virtual hardware
+# (eth0, wlan0) plus inert kernel-virtual devices (dummy0, gre0, ...).
+# A device inventory can therefore never prove isolation without a
+# name allowlist (rejected: a new device name would silently evade it).
 #
-# The evidence file is created FIRST and grown INCREMENTALLY: every
-# probe appends its command status and (nonsecret) content BEFORE any
-# gate can abort, so a failing probe can never erase which probe
-# failed (v1 of this function collected into variables under `set -e`
-# first - one nonzero adb exit and the run died with NO evidence).
-# Probe content is nonsecret by construction: guest interface/route
-# listings and canned unreachable errors. CR bytes from adb are
+#  1. STRUCTURAL SURFACE REDUCTION: the workflow still launches the
+#     emulator with QEMU `-nic none` (via the Android emulator's `-qemu`
+#     passthrough, documented to be the LAST option - verified against
+#     the pinned action source, which appends nothing after
+#     emulator-options; a rejected option trips the action's own
+#     'invalid command-line parameter' watcher). With no backend, even
+#     a working guest device has nothing behind it.
+#  2. ENFORCED EGRESS DROP: as root (the google_apis target is a
+#     userdebug image) the guest filter inserts FIRST `-I OUTPUT 1 -o
+#     lo -j ACCEPT` then `-I OUTPUT 2 ! -o lo -j DROP` in BOTH iptables
+#     and ip6tables. The validator checks exact first-match order from
+#     each kernel listing; any mismatch fails closed. Kernel-level and
+#     device-name-independent. Scope
+#     (stated limit): AF_INET/AF_INET6 egress only - raw AF_PACKET
+#     egress needs NET_ADMIN/NET_RAW, which the app does not hold, and
+#     `-nic none` leaves no backend even for that. adbd does not
+#     traverse guest inet (empirical: installs and probes worked
+#     backend-less in runs 43710243750 and 43712263503), and the
+#     adb_alive pre-test step re-proves ADB AFTER the filter is live.
+# The app KEEPS its INTERNET permission (revoking it gates loopback
+# AF_INET too, killing the loopback RPC the legs exercise for real).
+#
+# VERIFICATION is fail-closed and evidence-BEFORE-gates:
+#  - Phase 1 records EVERY probe (sysfs list, per-interface
+#    operstate/carrier, link, addr, v4+v6 routes, rules, and a
+#    pre-filter egress attempt) into emu-rt-isolation.txt with its
+#    status; NO gate aborts during collection, so one unexpected
+#    device can never hide the rest of the picture (v6 aborted at the
+#    first sysfs gate and the run showed ONLY the sysfs list).
+#  - Phase 2 hands the evidence to `ci/emu_rt_validate.py isolation`,
+#    which classifies every interface's DEMONSTRATED capability
+#    (routable address or default route - never its name or state)
+#    and enforces name-independent gates: exactly one lo link device,
+#    lo inet present, NO non-loopback inet or non-link-local inet6
+#    address, NO default route, no probe error markers.
+#  - A PRE-filter egress attempt must already FAIL (`-nic none` not
+#    effective otherwise).
+#  - Phase 3 installs + verifies the filter; phase 4 re-proves egress
+#    must-fail BEHIND the live filter and loopback must work; the
+#    smoke leg's loopback RPC then doubles as the tested (not guessed)
+#    proof that guest loopback/IPC is unaffected.
+# Changed semantics, explicitly scoped: this run proves the migration
+# core works with ALL non-loopback egress kernel-dropped on a guest
+# that HAS virtual network devices; it is NOT a hardware-absence claim
+# and NOT a revoked-INTERNET test.
+# Probe content is nonsecret by construction: guest interface/route/
+# filter listings and canned unreachable errors. CR bytes from adb are
 # stripped into the checked copies; scratch is wiped in the trap.
 verify_guest_offline() {
   : > emu-rt-isolation.txt
-  echo 'isolation=structural (emulator launched with -qemu -nic none; no guest NIC)' >> emu-rt-isolation.txt
+  echo 'isolation=enforced egress drop (guest iptables+ip6tables OUTPUT: accept lo, drop rest) + -qemu -nic none backend removal; capability gates over complete pre-filter evidence' >> emu-rt-isolation.txt
 
   rt_probe() {  # $1=label, $2=remote command (single string)
     local st
@@ -91,65 +116,79 @@ verify_guest_offline() {
     return "$st"
   }
 
-  # Corroborating enumeration via sysfs: no ip binary involved.
-  rt_probe sysfs_net 'ls /sys/class/net' \
-    || { echo 'FATAL: sysfs net listing failed - cannot verify isolation, aborting' >&2; return 1; }
-  if [ "$(cat .rt-probe-sysfs_net.txt)" != "lo" ]; then
-    echo 'FATAL: /sys/class/net is not exactly {lo} - NOT isolated, aborting' >&2
+  # PHASE 1 - complete evidence collection, NO aborts: every probe's
+  # status+content lands in the artifact before anything is evaluated.
+  local coll_fail=0
+  rt_probe sysfs_net 'ls /sys/class/net' || coll_fail=1
+  # Per-interface kind/state straight from sysfs (no ip binary). One
+  # remote loop as ONE single-quoted argument: adb joins argv with
+  # bare spaces, so a locally single-quoted string is what the remote
+  # shell receives. A carrier read on a down interface fails in-kernel
+  # -> readfail is itself recorded evidence, not a probe failure.
+  rt_probe ifstate 'for i in /sys/class/net/*; do n=${i##*/}; o=$(cat $i/operstate 2>/dev/null); c=$(cat $i/carrier 2>/dev/null); echo "$n operstate=${o:-readfail} carrier=${c:-readfail}"; done' || coll_fail=1
+  rt_probe link 'ip -o link show' || coll_fail=1
+  rt_probe addr 'ip -o addr show' || coll_fail=1
+  rt_probe route4 'ip route show' || coll_fail=1
+  rt_probe route6 'ip -6 route show' || coll_fail=1
+  rt_probe rule 'ip rule show' || coll_fail=1
+  # Pre-filter egress attempt: EXPECTED to fail with the backend
+  # removed. A success means `-nic none` did nothing and the guest can
+  # really reach out - abort; the surface-reduction statement and the
+  # evidence gates' meaning would both be false.
+  if rt_probe egress_prefilter 'ping -c 1 -W 2 8.8.8.8'; then
+    echo 'FATAL: guest egress SUCCEEDED with no filter yet - -nic none not effective, setup not understood, aborting' >&2
+    return 1
+  fi
+  if [ "$coll_fail" -ne 0 ]; then
+    echo 'FATAL: isolation evidence collection failed - cannot verify, aborting' >&2
     return 1
   fi
 
-  rt_probe link 'ip -o link show' \
-    || { echo 'FATAL: link listing command failed - cannot verify isolation, aborting' >&2; return 1; }
-  rt_probe addr 'ip -o addr show' \
-    || { echo 'FATAL: address listing command failed - cannot verify isolation, aborting' >&2; return 1; }
-  rt_probe route4 'ip route show' \
-    || { echo 'FATAL: ipv4 route query failed - cannot verify isolation, aborting' >&2; return 1; }
-  rt_probe route6 'ip -6 route show' \
-    || { echo 'FATAL: ipv6 route query failed - cannot verify isolation, aborting' >&2; return 1; }
+  # PHASE 2 - capability gates over the complete evidence (validator
+  # verdict lines land in the artifact). Name-independent: any
+  # demonstrated address or default route fails, whatever the device
+  # is called; an up interface with NO address/route does NOT fail
+  # (state is evidence, not capability) - the filter below drops its
+  # egress regardless.
+  if ! python3 ci/emu_rt_validate.py isolation . >> emu-rt-isolation.txt; then
+    echo 'FATAL: isolation evidence gates failed (see emu-rt-isolation.txt) - aborting' >&2
+    return 1
+  fi
 
-  if grep -Eiq 'error:|not found|permission denied' \
-    .rt-probe-sysfs_net.txt .rt-probe-link.txt .rt-probe-addr.txt \
-    .rt-probe-route4.txt .rt-probe-route6.txt; then
-    echo 'FATAL: probe output carried an error marker - cannot verify isolation, aborting' >&2
+  # PHASE 3 - enforcement. adb root is available on the userdebug
+  # google_apis image; rules are verified back from the kernel
+  # listing, never trusted on exit status alone.
+  printf '== adb root (filter install requires root; userdebug image) ==\n' >> emu-rt-isolation.txt
+  if adb root >/dev/null 2>&1 && adb wait-for-device && adb shell true; then
+    echo 'adb_root=ok' >> emu-rt-isolation.txt
+  else
+    echo 'adb_root=FAILED' >> emu-rt-isolation.txt
+    echo 'FATAL: adb root unavailable - cannot install the egress filter, aborting' >&2
     return 1
   fi
-  # Link layer: lo must be the ONLY device (exactly one). An
-  # unaddressed NIC has no inet line, so the address check alone would
-  # let it pass - it must not. (If a stock image ships an inert
-  # kernel-virtual device here, this aborts honestly and the listing
-  # above says exactly what was seen.)
-  if ! awk '$2 == "lo:" { lo++ } END { exit (lo == 1 ? 0 : 1) }' .rt-probe-link.txt; then
-    echo 'FATAL: guest link listing does not contain exactly one loopback device - cannot verify isolation, aborting' >&2
+  rt_probe filter_install 'iptables -I OUTPUT 1 -o lo -j ACCEPT && iptables -I OUTPUT 2 ! -o lo -j DROP && ip6tables -I OUTPUT 1 -o lo -j ACCEPT && ip6tables -I OUTPUT 2 ! -o lo -j DROP && echo FILTER_INSTALLED' \
+    || { echo 'FATAL: egress filter install failed - cannot enforce isolation, aborting' >&2; return 1; }
+  if ! grep -q FILTER_INSTALLED .rt-probe-filter_install.txt; then
+    echo 'FATAL: egress filter install did not confirm - cannot enforce isolation, aborting' >&2
     return 1
   fi
-  if awk '{ if ($2 != "lo:") bad=1 } END { exit (bad ? 0 : 1) }' .rt-probe-link.txt; then
-    echo 'FATAL: guest has a non-loopback link device - NOT isolated, aborting' >&2
+  rt_probe filter_list 'echo IPV4_OUTPUT; iptables -S OUTPUT && echo IPV6_OUTPUT; ip6tables -S OUTPUT' \
+    || { echo 'FATAL: egress filter listing failed - cannot verify enforcement, aborting' >&2; return 1; }
+  if ! python3 ci/emu_rt_validate.py filter-order .rt-probe-filter_list.txt; then
+    echo 'FATAL: first-match OUTPUT policy is not verified accept-lo then drop-rest in both v4+v6 - aborting' >&2
     return 1
   fi
-  # Positive proof loopback is addressed (an empty addr listing or a
-  # silently broken ip must not pass), then no non-loopback address.
-  if ! awk '$2 == "lo" && $3 == "inet" { ok=1 } END { exit (ok ? 0 : 1) }' .rt-probe-addr.txt; then
-    echo 'FATAL: loopback inet address missing - cannot verify isolation, aborting' >&2
+
+  # PHASE 4 - functional proof behind the live filter: external egress
+  # must STILL fail (now by kernel drop) and loopback must work.
+  if rt_probe egress_postfilter 'ping -c 1 -W 2 8.8.8.8'; then
+    echo 'FATAL: guest egress SUCCEEDED behind the egress filter - enforcement broken, aborting' >&2
     return 1
   fi
-  if awk '$3 == "inet" || $3 == "inet6" { if ($2 != "lo") bad=1 } END { exit (bad ? 0 : 1) }' .rt-probe-addr.txt; then
-    echo 'FATAL: guest has a non-loopback interface with an address - NOT isolated, aborting' >&2
-    return 1
-  fi
-  if grep -q '^default' .rt-probe-route4.txt .rt-probe-route6.txt; then
-    echo 'FATAL: guest has a default route - NOT isolated, aborting' >&2
-    return 1
-  fi
-  # Sanity demonstration (the listings above are the proof): with no
-  # NIC there is no route for any protocol, so any egress attempt fails
-  # at route lookup. If one ever succeeds the setup is not what we
-  # think. The canned unreachable error is nonsecret and recorded.
-  if rt_probe egress 'ping -c 1 -W 2 8.8.8.8'; then
-    echo 'FATAL: guest egress SUCCEEDED despite -qemu -nic none - setup not understood, aborting' >&2
-    return 1
-  fi
-  echo 'isolation_verified=yes (sysfs + link + addr + routes + egress, fail-closed)' >> emu-rt-isolation.txt
+  rt_probe loopback 'ping -c 1 -W 2 127.0.0.1' \
+    || { echo 'FATAL: loopback broken after filter install - aborting' >&2; return 1; }
+
+  echo 'isolation_verified=yes (complete evidence + capability gates + enforced v4/v6 egress drop + pre/post-filter egress must-fail + loopback positive; fail-closed)' >> emu-rt-isolation.txt
 }
 
 check_instrumentation() {
@@ -304,7 +343,8 @@ capture_roundtrip_outputs() {
   # Secret + raw-output wipe: the runner-local handoff copy, every
   # raw instrumentation capture and the probe scratch. The apps'
   # private emu-out (bundle, code, screenshots, logs) dies with the
-  # ephemeral emulator; there is no host isolation state to tear down
+  # ephemeral emulator; the guest egress filter dies with it too, and
+  # there is no host isolation state to tear down
   # (see verify_guest_offline).
   rm -f rt-bundle.dcmig rt-code.txt \
     smoke-instrumentation.txt export-instrumentation.txt import-instrumentation.txt \
@@ -336,10 +376,11 @@ require_arm64_abi() {
 }
 
 if [ "$mode" = roundtrip ]; then
-  # FULL FIXTURE ROUND TRIP on ONE emulator launched with QEMU `-nic
-  # none` (see verify_guest_offline): the old identity exports, the renamed
-  # identity imports, the old identity's data is verified untouched
-  # afterwards. There is no host firewall state - nothing to clean up.
+  # FULL FIXTURE ROUND TRIP on ONE emulator (guest egress drop + QEMU
+  # `-nic none` backend removal, see verify_guest_offline): the old
+  # identity exports, the renamed identity imports, the old identity's
+  # data is verified untouched afterwards. The guest filter dies with
+  # the ephemeral emulator - no host state to clean up.
   #
   # Every pre-test step and leg appends its label+status to
   # emu-rt-pretest.txt BEFORE and AFTER running (uploaded, nonsecret):
