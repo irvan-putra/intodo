@@ -32,7 +32,6 @@ public class BotActivity extends Activity {
     private TextView logsHeader;
     private LinearLayout setupBox;
     private ScrollView logScroll;
-    private float lastLogY;
     private final Handler handler = new Handler();
     private String lastStateJson = null;
     private BotImport importer;
@@ -261,35 +260,58 @@ public class BotActivity extends Activity {
         logView = new TextView(this);
         logView.setPadding(pad, 0, pad, 0);
         logView.setTextIsSelectable(true);  // allow copying log lines
-        logScroll = new ScrollView(this);
+        // Nested inside the outer page ScrollView: while the page can still
+        // scroll it intercepts every vertical drag, so the log box never
+        // receives the gesture. Keep the gesture only while the log can
+        // actually scroll that way. This must run in dispatchTouchEvent:
+        // the selectable log TextView consumes ACTION_DOWN, so neither an
+        // OnTouchListener nor onInterceptTouchEvent reliably sees the start
+        // of the gesture.
+        logScroll = new ScrollView(this) {
+            private float lastY = -1f;
+
+            @Override
+            public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+                switch (ev.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        lastY = ev.getY();
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                        break;
+                    case android.view.MotionEvent.ACTION_MOVE:
+                        if (lastY >= 0f) {
+                            float y = ev.getY();
+                            float dy = y - lastY;   // per-event delta: handles direction reversal
+                            lastY = y;
+                            boolean canScroll = (dy > 0 && canScrollVertically(-1))
+                                    || (dy < 0 && canScrollVertically(1));
+                            getParent().requestDisallowInterceptTouchEvent(canScroll);
+                        }
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        lastY = -1f;
+                        getParent().requestDisallowInterceptTouchEvent(false);
+                        break;
+                }
+                return super.dispatchTouchEvent(ev);
+            }
+
+            // The selectable text asks ancestors to keep the gesture while a
+            // selection is being dragged: honor that, or the nested scroll
+            // handoff steals selection drags. Outside an active selection the
+            // request stays ignored - vertical drags in the log box belong to
+            // the dispatchTouchEvent handoff above.
+            @Override
+            public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+                if (disallowIntercept && logView != null && logView.hasSelection()) {
+                    super.requestDisallowInterceptTouchEvent(true);
+                }
+            }
+        };
         logScroll.addView(logView);
         int logH = (int) (getResources().getDisplayMetrics().heightPixels * 0.6);
         logScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, logH));
         logScroll.setVisibility(android.view.View.GONE);
-        // Nested inside the outer page ScrollView: while the page can still
-        // scroll it intercepts every vertical drag, so the log box never
-        // receives the gesture. Keep the gesture only while the log can
-        // actually scroll that way.
-        logScroll.setOnTouchListener((v, ev) -> {
-            switch (ev.getActionMasked()) {
-                case android.view.MotionEvent.ACTION_DOWN:
-                    lastLogY = ev.getY();
-                    v.getParent().requestDisallowInterceptTouchEvent(true);
-                    break;
-                case android.view.MotionEvent.ACTION_MOVE:
-                    float y = ev.getY();
-                    float dy = y - lastLogY;   // per-event delta: handles direction reversal
-                    lastLogY = y;
-                    boolean innerCan = (dy > 0 && v.canScrollVertically(-1)) || (dy < 0 && v.canScrollVertically(1));
-                    v.getParent().requestDisallowInterceptTouchEvent(innerCan);
-                    break;
-                case android.view.MotionEvent.ACTION_UP:
-                case android.view.MotionEvent.ACTION_CANCEL:
-                    v.getParent().requestDisallowInterceptTouchEvent(false);
-                    break;
-            }
-            return false;
-        });
         root.addView(logScroll);
         logsHeader.setOnClickListener(v -> {
             boolean show = logScroll.getVisibility() == android.view.View.GONE;
@@ -458,7 +480,13 @@ public class BotActivity extends Activity {
     }
 
     private void refresh() {
-        logView.setText(readLog());
+        // setText clears any in-progress selection, so only push the log into
+        // the view when it actually changed, and never while a selection is
+        // active (the user may be copying it).
+        String log = readLog();
+        if (!log.contentEquals(logView.getText()) && !logView.hasSelection()) {
+            logView.setText(log);
+        }
         File f = new File(getFilesDir(), "bot_state.json");
         String json = f.exists() ? read(f) : "";
         boolean running = new File(getFilesDir(), "RUNNING").exists();
