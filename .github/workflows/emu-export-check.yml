@@ -78,7 +78,7 @@ jobs:
         run: |
           if [ -w /dev/kvm ]; then ls -l /dev/kvm; else echo 'FATAL: no usable /dev/kvm - aborting (Bidik evidence: unaccelerated x86_64 emulators stall)'; exit 1; fi
       - name: Smoke on emulator
-        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
+        uses: reactivecircus/android-emulator-runner@62dbb605bba737720e10b196cb4220d374026a6d # v2.33.0 (verified commit; tag object 9b78b339)
         with:
           api-level: 30
           target: google_apis
@@ -131,7 +131,7 @@ jobs:
         run: |
           if [ -w /dev/kvm ]; then ls -l /dev/kvm; else echo 'FATAL: no usable /dev/kvm'; exit 1; fi
       - name: Fixture export on emulator
-        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
+        uses: reactivecircus/android-emulator-runner@62dbb605bba737720e10b196cb4220d374026a6d # v2.33.0 (verified commit; tag object 9b78b339)
         with:
           api-level: 30
           target: google_apis
