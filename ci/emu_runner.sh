@@ -148,11 +148,16 @@ snapshot_drop_counters() {  # label, v4|v6
   fi
   tr -d '\r' < ".rt-counter-${label}-${fam}.raw" > ".rt-counter-${label}-${fam}.txt"
   local value
-  if ! value=$(python3 ci/emu_rt_validate.py drop-counter ".rt-counter-${label}-${fam}.txt") || [[ ! "$value" =~ ^[0-9]+$ ]]; then
-    # Keep the reason explicit without uploading the raw family listing.
+  if ! value=$(python3 ci/emu_rt_validate.py drop-counter "$fam" ".rt-counter-${label}-${fam}.txt") || [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    # Keep the reason explicit without uploading the raw family
+    # listing, and record the bounded token-CLASS skeleton of every
+    # DROP-candidate row: any future parser correction is then grounded
+    # in the actual rendering (fixed vocabulary, never raw values),
+    # not in another guessed schema.
     local reason
-    reason=$(python3 -c 'import sys; sys.path.insert(0,"ci"); import emu_rt_validate as v; print(v.drop_counter_failure_reason(open(sys.argv[1]).read()))' ".rt-counter-${label}-${fam}.txt")
+    reason=$(python3 -c 'import sys; sys.path.insert(0,"ci"); import emu_rt_validate as v; print(v.drop_counter_failure_reason(open(sys.argv[1]).read(), sys.argv[2]))' ".rt-counter-${label}-${fam}.txt" "$fam")
     echo "drop_counter_${fam}_${label}=unavailable (${reason})" >> emu-rt-isolation.txt
+    python3 ci/emu_rt_validate.py row-shape ".rt-counter-${label}-${fam}.txt" >> emu-rt-isolation.txt || true
     return 1
   fi
   printf '%s\n' "$value" > ".rt-probe-counter_${label}_${fam}.txt"
@@ -167,6 +172,7 @@ verify_guest_offline() {
     local st
     if adb shell "$2" > ".rt-probe-$1.raw" 2>&1; then st=0; else st=$?; fi
     tr -d '\r' < ".rt-probe-$1.raw" > ".rt-probe-$1.txt"
+    printf '%s' "$st" > ".rt-probe-$1.status"
     printf '== probe %s: adb shell %s (status %s) ==\n' "$1" "$2" "$st" >> emu-rt-isolation.txt
     cat ".rt-probe-$1.txt" >> emu-rt-isolation.txt
     printf '\n' >> emu-rt-isolation.txt
@@ -233,7 +239,21 @@ verify_guest_offline() {
 
   # PHASE 3 - controlled family-specific probes. Raw counter listings
   # stay in local scratch; only numeric values and verdicts are retained.
-  # A counter delta is required: a failed ping with no route is not proof.
+  # A counter delta is REQUIRED for BOTH families: a failed ping with no
+  # route is not proof, and a no-route family cannot produce a delta at
+  # all (its probe dies at route lookup before OUTPUT) - that case FAILS
+  # CLOSED like any other missing proof; route_diagnostic only records
+  # WHY, it never converts the failure into a pass.
+  route_diagnostic() {  # v4|v6 -> one safe diagnostic phrase (never a verdict)
+    local rtbase=".rt-probe-route${1#v}"
+    if [ "$(cat "$rtbase.status" 2>/dev/null)" != "0" ]; then
+      printf 'route-evidence-unavailable'
+    elif grep -q '^default ' "$rtbase.txt"; then
+      printf 'default-route-present'
+    else
+      printf 'no-default-route-observed (specific routes may still exist; diagnostic only)'
+    fi
+  }
   for fam in v4 v6; do
     if [ "$fam" = v4 ]; then
       probe='ping -c 1 -W 2 8.8.8.8'
@@ -241,7 +261,7 @@ verify_guest_offline() {
       probe='ping6 -c 1 -W 2 2001:4860:4860::8888'
     fi
     snapshot_drop_counters before "$fam" || {
-      echo "drop_counter_delta_${fam}=unproven" >> emu-rt-isolation.txt
+      echo "drop_counter_delta_${fam}=unproven (route_diagnostic=$(route_diagnostic "$fam"))" >> emu-rt-isolation.txt
       echo "FATAL: $fam OUTPUT DROP counter unavailable before probe; no counter proof" >&2
       return 1
     }
@@ -251,13 +271,13 @@ verify_guest_offline() {
       return 1
     fi
     snapshot_drop_counters after "$fam" || {
-      echo "drop_counter_delta_${fam}=unproven" >> emu-rt-isolation.txt
+      echo "drop_counter_delta_${fam}=unproven (route_diagnostic=$(route_diagnostic "$fam"))" >> emu-rt-isolation.txt
       echo "FATAL: $fam OUTPUT DROP counter unavailable after probe; no counter proof" >&2
       return 1
     }
     if ! python3 ci/emu_rt_validate.py drop-delta \
         ".rt-probe-counter_before_${fam}.txt" ".rt-probe-counter_after_${fam}.txt"; then
-      echo "drop_counter_delta_${fam}=unproven" >> emu-rt-isolation.txt
+      echo "drop_counter_delta_${fam}=unproven (route_diagnostic=$(route_diagnostic "$fam"))" >> emu-rt-isolation.txt
       echo "FATAL: $fam OUTPUT DROP counter did not increase; no counter proof (possibly no route)" >&2
       return 1
     fi
@@ -270,7 +290,7 @@ verify_guest_offline() {
   rt_probe loopback_v6 'ping6 -c 1 -W 2 ::1' \
     || { echo 'FATAL: IPv6 loopback broken after filter install - aborting' >&2; return 1; }
   verify_filter_order final || return 1
-  echo 'isolation_verified=yes (uid-0 verified; first-match v4+v6 accept-lo/drop-rest verified at install, after each probe and final; family-specific DROP counters increased; loopback positive; inventory diagnostic only; fail-closed)' >> emu-rt-isolation.txt
+  echo 'isolation_verified=yes (uid-0 verified; first-match v4+v6 accept-lo/drop-rest verified at install, after each probe and final; v4+v6 DROP counter deltas positive; loopback positive; inventory diagnostic only; fail-closed)' >> emu-rt-isolation.txt
 }
 
 check_instrumentation() {
@@ -430,7 +450,7 @@ capture_roundtrip_outputs() {
   # (see verify_guest_offline).
   rm -f rt-bundle.dcmig rt-code.txt \
     smoke-instrumentation.txt export-instrumentation.txt import-instrumentation.txt \
-    .rt-probe-*.raw .rt-probe-*.txt .rt-counter-*.raw .rt-counter-*.txt .rt-filter-*.raw .rt-filter-*.txt
+    .rt-probe-*.raw .rt-probe-*.txt .rt-probe-*.status .rt-counter-*.raw .rt-counter-*.txt .rt-filter-*.raw .rt-filter-*.txt
 
   if [ "$original_status" -eq 0 ]; then
     if [ ! -f "capture/$OLD_PKG/export-done.json" ]; then

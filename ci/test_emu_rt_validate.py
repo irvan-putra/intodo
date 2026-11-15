@@ -51,36 +51,78 @@ def order_passes(text):
         return validator.check_filter_order(f.name)
 
 
-require(validator.parse_drop_counters(IPTABLES4) == 12,
-        "documented IPv4 iptables -L form must parse")
+# The counter row template is source-grounded: Android ships iptables
+# from xtables-legacy-multi.c only (AOSP iptables/Android.bp), whose
+# print_firewall + print_ifaces render the opt column as FRAGMENT
+# inversion only (always "--" for the enforced rule) and glue interface
+# negation ("!lo", one token), for BOTH families. Run 43715793352
+# confirmed the v4 row. Ungrounded "variants" (spaced negation,
+# alternate opt markers) must FAIL CLOSED - the row-shape skeleton is
+# the diagnostic that records the actual rendering if reality differs.
+require(validator.parse_drop_counters(IPTABLES4, "v4") == 12,
+        "source-grounded IPv4 iptables -L form must parse")
 with tempfile.TemporaryDirectory() as d:
     listing = os.path.join(d, "listing")
     with open(listing, "w", encoding="utf-8") as f:
         f.write(IPTABLES4)
     cli = subprocess.run(
         [sys.executable, os.path.join(HERE, "emu_rt_validate.py"),
-         "drop-counter", listing], check=False, text=True,
+         "drop-counter", "v4", listing], check=False, text=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     require(cli.returncode == 0 and cli.stdout == "12\n" and not cli.stderr,
             "drop-counter CLI must print only the parsed number")
-require(validator.parse_drop_counters(IPTABLES6) == 3,
-        "documented IPv6 ip6tables -L form must parse")
-require(validator.parse_drop_counters(IPTABLES6_SEPARATE_NEGATION) == 3,
-        "IPv6 xtables spaced ! lo form must parse")
-require(validator.parse_drop_counters(IPTABLES6_ALT_OPT) == 4,
-        "counter parser must not reject a valid DROP row solely on opt formatting")
+require(validator.parse_drop_counters(IPTABLES6, "v6") == 3,
+        "source-grounded IPv6 ip6tables -L form must parse")
+require(validator.parse_drop_counters(IPTABLES6, "v4") is None
+        and validator.parse_drop_counters(IPTABLES4, "v6") is None,
+        "family binding: a v6 row must not count as v4 or vice versa")
+require(validator.parse_drop_counters(IPTABLES6_SEPARATE_NEGATION, "v6") is None,
+        "ungrounded spaced-negation variant must fail closed")
+require(validator.parse_drop_counters(IPTABLES6_ALT_OPT, "v6") is None,
+        "ungrounded alternate opt marker must fail closed")
+# A truncated row can never be admitted: it may be a damaged read of a
+# rule whose tail (match conditions) would disqualify it.
+TRUNCATED_TAIL = IPTABLES4.replace("0.0.0.0/0            0.0.0.0/0",
+                                   "0.0.0.0/0")
+TRUNCATED_AT_IFACE = ("Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)\n"
+                      " pkts bytes target prot opt in out source destination\n"
+                      "   12  1024 DROP       all  --  *      !lo\n")
+FOREIGN_WITH_MATCH = IPTABLES4 + (
+    "    7   512 DROP       tcp  --  *      !lo     0.0.0.0/0            "
+    "0.0.0.0/0            tcp dpt:53\n")
+require(validator.parse_drop_counters(FOREIGN_WITH_MATCH, "v4") == 12,
+        "a foreign DROP row with match conditions must not shadow the enforced rule")
 for bad in (
         "",
+        TRUNCATED_TAIL,
+        TRUNCATED_AT_IFACE,
         IPTABLES4.replace("12  1024", "not-a-count 1024"),
         IPTABLES4.replace("12  1024", "-1 1024"),
         IPTABLES4.replace("12  1024", "+12 1024"),
         IPTABLES4.replace("12  1024", "1_2 1024"),
         IPTABLES4.replace("DROP       all", "ACCEPT     all"),
         IPTABLES4.replace("!lo", "eth0"),
-        IPTABLES6_SEPARATE_NEGATION.replace("! lo", "eth0"),
         IPTABLES4 + IPTABLES4.splitlines()[-1] + "\n"):
-    require(validator.parse_drop_counters(bad) is None,
-            "absent/malformed/negative/wrong/duplicate DROP must fail closed")
+    require(validator.parse_drop_counters(bad, "v4") is None,
+            "absent/truncated/malformed/negative/wrong/duplicate DROP must fail closed")
+require(validator.drop_counter_failure_reason(FOREIGN_WITH_MATCH, "v6")
+        == "drop_row_malformed",
+        "a DROP row matching no template is malformed, not absent")
+require(validator.drop_counter_failure_reason("", "v4") == "drop_row_absent"
+        and "duplicate" in validator.drop_counter_failure_reason(
+            IPTABLES4 + IPTABLES4.splitlines()[-1] + "\n", "v4"),
+        "absent vs duplicate reasons must stay distinct")
+# The skeleton is the bounded privacy-safe shape diagnostic: classes and
+# fixed vocabulary only, never raw third-party values.
+shapes = validator.drop_row_shapes(
+    "  9  99 DROP all -- * !weird9 10.0.2.15/8 0.0.0.0/0\n")
+require(len(shapes) == 1 and "tokens=9" in shapes[0]
+        and "other(7)" in shapes[0] and "ipv4-cidr" in shapes[0]
+        and "!weird9" not in shapes[0] and "10.0.2.15" not in shapes[0],
+        "row-shape must record classes, never raw values")
+require(validator.drop_row_shapes("no drops here\n") ==
+        ["no DROP rows in listing"],
+        "row-shape must say when no DROP row exists")
 require(order_passes(GOOD_ORDER), "exact first-match order must pass")
 for bad in (
         GOOD_ORDER.replace("-A OUTPUT -o lo -j ACCEPT\n", "", 1),

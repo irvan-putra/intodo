@@ -44,11 +44,19 @@ Three modes:
       in that order - first-match enforcement ahead of every
       netd-managed jump. Anything else exits 1.
 
-  emu_rt_validate.py drop-counter <path>
-      Parse the unique non-loopback DROP packet counter from standard
+  emu_rt_validate.py drop-counter <v4|v6> <path>
+      Parse the unique packet counter of the row matching the enforced
+      DROP rule's exact source-grounded shape for that family in
       iptables/ip6tables `-L OUTPUT -v -x -n` output. Prints only the
-      numeric packet count; malformed, absent, duplicate, or negative
-      counts exit 1.
+      numeric packet count; absent/duplicate/malformed rows exit 1.
+
+  emu_rt_validate.py row-shape <path>
+      Bounded, privacy-safe diagnostic: for every DROP-candidate row in
+      a `-L -v -x -n` listing, print the line number, token count and
+      per-token CLASS (fixed vocabulary: num/DROP/all/--/!/*/!lo/lo/
+      any/ipv4-cidr/ipv6-cidr/ipv4addr/ipv6addr/other(len)) - never raw
+      third-party values. Grounds any future parser correction in the
+      actual rendering instead of a guessed schema.
 
   emu_rt_validate.py drop-delta <before> <after>
       Require numeric-only packet-count files (one nonnegative integer
@@ -315,53 +323,108 @@ def check_filter_order(path):
     return True
 
 
-def parse_drop_counters(text):
-    """Return packets for the unique non-loopback DROP row.
+# ---------------- DROP counter (structural, source-grounded) ----------------
+#
+# Android ships iptables built from xtables-legacy-multi.c ONLY (AOSP
+# external/iptables, iptables/Android.bp). The legacy print_firewall +
+# print_ifaces rendering (iptables/iptables.c + xshared.c, a function
+# the source itself notes "serves for both iptables and ip6tables")
+# yields EXACTLY ONE row shape for the enforced `-I OUTPUT 2 ! -o lo -j
+# DROP` rule: the opt column carries FRAGMENT inversion only (always
+# "--" here - interface negation never lands in opt), and the interface
+# negation is ALWAYS glued into the iface token ("!lo", never split).
+# Run 43715793352 confirmed the v4 row end-to-end. A row that deviates
+# is not a "format variant": it is not the enforced rule, or the
+# listing is damaged - either way it must fail CLOSED, and the bounded
+# token-CLASS skeleton (drop_row_shapes, fixed vocabulary, never raw
+# third-party tokens) records the actual rendering for a grounded
+# correction instead of another guessed schema.
 
-    Xtables variants format the `opt` field differently. Identify the row
-    by target and output-interface columns, while accepting `!lo` and
-    `! lo` renderings. Reject ambiguous DROP rows and nonnumeric counts.
-    """
-    counts=[]
-    for line in text.splitlines():
-        p=line.split()
-        if len(p) < 7 or p[2] != "DROP":
-            continue
-        # Standard columns: pkts bytes target prot opt in out source destination.
-        # Ignore opt rendering, but match the output interface exactly.
-        if p[6] == "!lo":
-            pass
-        elif p[6] == "!" and len(p) >= 8 and p[7] == "lo":
-            pass
-        else:
-            continue
-        if not re.fullmatch(r"[0-9]+", p[0], flags=re.ASCII):
-            return None
-        counts.append(int(p[0]))
-    return counts[0] if len(counts)==1 else None
+DROP_ROW_TEMPLATES = {
+    "v4": ("num", "num", "DROP", "all", "--", "*", "!lo",
+           "0.0.0.0/0", "0.0.0.0/0"),
+    "v6": ("num", "num", "DROP", "all", "--", "*", "!lo",
+           "::/0", "::/0"),
+}
 
 
-def drop_counter_failure_reason(text):
+def _is_num(tok):
+    return re.fullmatch(r"[0-9]+", tok, flags=re.ASCII) is not None
+
+
+def _drop_template_matches(tokens, family):
+    tpl = DROP_ROW_TEMPLATES[family]
+    if len(tokens) != len(tpl):
+        return False
+    return all(_is_num(tok) if want == "num" else tok == want
+               for tok, want in zip(tokens, tpl))
+
+
+def parse_drop_counters(text, family):
+    """Packets of the UNIQUE row matching the enforced rule's exact
+    full-row shape in <family> ('v4' or 'v6'); None on absence,
+    duplicates, or a bad family. Foreign DROP rows (other matches,
+    conditions, endpoints) never match the template and cannot be
+    mistaken for the enforced rule's counter."""
+    if family not in DROP_ROW_TEMPLATES:
+        return None
+    counts = [int(p[0]) for p in (line.split() for line in text.splitlines())
+              if _drop_template_matches(p, family)]
+    return counts[0] if len(counts) == 1 else None
+
+
+def drop_counter_failure_reason(text, family):
     """Return only a safe reason code, never the external command line."""
-    rows=[]
-    for line in text.splitlines():
-        p=line.split()
-        if len(p) >= 3 and p[2] == "DROP":
-            rows.append(p)
-    if not rows:
-        return "drop_row_absent"
-    if len(rows) != 1:
+    if family not in DROP_ROW_TEMPLATES:
+        return "bad_family"
+    matches = sum(1 for line in text.splitlines()
+                  if _drop_template_matches(line.split(), family))
+    if matches > 1:
         return "duplicate_drop_rows"
-    p=rows[0]
-    if len(p) < 7:
-        return "drop_row_too_short"
-    if p[6] == "!lo" or (p[6] == "!" and len(p) >= 8 and p[7] == "lo"):
-        pass
-    else:
-        return "drop_interface_mismatch"
-    if not re.fullmatch(r"[0-9]+", p[0], flags=re.ASCII):
-        return "packet_count_malformed"
-    return "drop_row_ambiguous"
+    if matches == 1:
+        return "drop_row_ambiguous"
+    if any(len(line.split()) >= 3 and line.split()[2] == "DROP"
+           for line in text.splitlines()):
+        return "drop_row_malformed"  # see the row-shape skeleton nearby
+    return "drop_row_absent"
+
+
+def drop_row_shapes(text, max_rows=8):
+    """Bounded, privacy-safe skeleton of every DROP-candidate row:
+    line number, token count, and each token mapped to a fixed class
+    vocabulary - NEVER raw third-party values. This is the diagnostic
+    that grounds any future parser correction in the actual rendering.
+    """
+    def classify(tok):
+        if _is_num(tok):
+            return "num"
+        if tok in ("DROP", "all", "--", "!", "*", "!lo", "lo", "any"):
+            return tok
+        if re.fullmatch(r"[0-9]+(\.[0-9]+){3}/[0-9]+", tok):
+            return "ipv4-cidr"
+        if ":" in tok and "/" in tok:
+            return "ipv6-cidr"
+        if re.fullmatch(r"[0-9]+(\.[0-9]+){3}", tok):
+            return "ipv4addr"
+        if ":" in tok:
+            return "ipv6addr"
+        return "other(%d)" % len(tok)
+
+    out = []
+    candidates = 0
+    for lineno, line in enumerate(text.splitlines(), 1):
+        p = line.split()
+        if len(p) < 3 or p[2] != "DROP":
+            continue
+        candidates += 1
+        if candidates > max_rows:
+            out.append("... further DROP rows elided")
+            break
+        out.append("drop_row line%d tokens=%d [%s]"
+                   % (lineno, len(p), " ".join(classify(t) for t in p)))
+    if candidates == 0:
+        out.append("no DROP rows in listing")
+    return out
 
 
 def parse_numeric_counter(text):
@@ -393,10 +456,14 @@ def main():
         ok = check_filter_order(sys.argv[2])
     elif len(sys.argv) == 4 and sys.argv[1] == "drop-delta":
         ok = check_drop_delta(sys.argv[2], sys.argv[3])
-    elif len(sys.argv) == 3 and sys.argv[1] == "drop-counter":
-        count = parse_drop_counters(open(sys.argv[2]).read())
+    elif len(sys.argv) == 4 and sys.argv[1] == "drop-counter":
+        count = parse_drop_counters(open(sys.argv[3]).read(), sys.argv[2])
         ok = count is not None
         if ok: print(count)
+    elif len(sys.argv) == 3 and sys.argv[1] == "row-shape":
+        for line in drop_row_shapes(open(sys.argv[2]).read()):
+            print(line)
+        ok = True
     else:
         ok = False
     sys.exit(0 if ok else 1)
