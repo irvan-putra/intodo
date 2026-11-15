@@ -2,10 +2,10 @@ plugins { id 'com.android.application'; id 'com.chaquo.python'; id 'org.jetbrain
 android {
     testOptions { unitTests { includeAndroidResources = true } }
     buildFeatures { buildConfig true }
-    namespace 'com.instinct.widget'
+    namespace 'com.vanipy.intodo'
     compileSdk 34
     defaultConfig {
-        applicationId 'com.instinct.widget'
+        applicationId 'com.vanipy.intodo'
         minSdk 26
         targetSdk 34
         versionCode 25

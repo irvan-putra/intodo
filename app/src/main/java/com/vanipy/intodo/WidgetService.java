@@ -1,0 +1,64 @@
+package com.vanipy.intodo;
+
+import android.content.Context;
+import android.content.Intent;
+import android.view.View;
+import android.widget.RemoteViews;
+import android.widget.RemoteViewsService;
+import java.util.ArrayList;
+import java.util.List;
+
+public class WidgetService extends RemoteViewsService {
+    @Override
+    public RemoteViewsFactory onGetViewFactory(Intent intent) {
+        return new Factory(getApplicationContext());
+    }
+
+    static class Factory implements RemoteViewsService.RemoteViewsFactory {
+        private final Context context;
+        private List<Object> rows = new ArrayList<>();
+        Factory(Context c) { context = c; }
+
+        @Override public void onCreate() { }
+        @Override public void onDestroy() { }
+
+        @Override
+        public void onDataSetChanged() {
+            rows = new ArrayList<>();
+            String json = Prefs.feed(context);
+            if (json == null) return;
+            try {
+                FeedParser.Feed feed = FeedParser.parse(json);
+                // pure list (user-chosen): no section headings anywhere, items only
+                for (FeedParser.Section sec : feed.sections) {
+                    rows.addAll(sec.items);
+                }
+            } catch (Exception ignored) { }
+        }
+
+        @Override public int getCount() { return rows.size(); }
+        @Override public int getViewTypeCount() { return 1; }
+        @Override public long getItemId(int i) { return i; }
+        @Override public boolean hasStableIds() { return true; }
+        @Override public RemoteViews getLoadingView() { return null; }
+
+        @Override
+        public RemoteViews getViewAt(int i) {
+            FeedParser.Item item = (FeedParser.Item) rows.get(i);
+            RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.widget_item);
+            String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
+            v.setTextViewText(R.id.item_title, item.title + suffix);
+            if (item.note != null && !item.note.isEmpty()) {
+                v.setTextViewText(R.id.item_note, item.note);
+                v.setViewVisibility(R.id.item_note, View.VISIBLE);
+            } else {
+                v.setViewVisibility(R.id.item_note, View.GONE);
+            }
+            // the whole row opens the app: root (covers padding) and both lines
+            v.setOnClickFillInIntent(R.id.item_row, new Intent());
+            v.setOnClickFillInIntent(R.id.item_title, new Intent());
+            v.setOnClickFillInIntent(R.id.item_note, new Intent());
+            return v;
+        }
+    }
+}
