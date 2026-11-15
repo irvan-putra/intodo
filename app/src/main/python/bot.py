@@ -35,6 +35,8 @@ from types import SimpleNamespace
 from deltachat_rpc_client import Bot, Chat, EventType, Message
 from deltachat_rpc_client.events import NewMessage, RawEvent
 
+from event_guard import run_forever_tolerant
+
 from ops_store import OpsStore, is_boot, is_bot_envelope, is_resume_hint
 
 
@@ -363,7 +365,8 @@ class BridgeBot:
 
     def run_in_thread(self):
         self.reconcile_on_boot()
-        t = threading.Thread(target=self.bot.run_forever, daemon=True)
+        t = threading.Thread(target=lambda: run_forever_tolerant(self.bot),
+                             daemon=True)
         t.start()
         return t
 
@@ -394,4 +397,4 @@ if __name__ == "__main__":
     )
     bridge = BridgeBot(account, store, gate)
     log.info("bridge bot online as %s", _account_addr(account))
-    bridge.bot.run_forever()
+    run_forever_tolerant(bridge.bot)

@@ -29,7 +29,11 @@ android {
 chaquopy {
     defaultConfig {
         pip {
-            install 'deltachat-rpc-client==2.69.0'
+            // Fork of chatmail/core v2.69.0 with the missing
+            // PINNED_MESSAGES_CHANGED enum entry (core emits the event since
+            // 2.63.0; upstream client bindings predate it). Immutable commit
+            // pin, branch fix/pinned-messages-changed on irvan-putra/encore.
+            install 'deltachat-rpc-client @ git+https://github.com/irvan-putra/encore@c89d6294fea0599048f5c5b78cc1df38d3c81d3c#subdirectory=deltachat-rpc-client'
             install 'cryptography'
         }
     }

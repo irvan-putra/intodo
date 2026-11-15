@@ -50,6 +50,8 @@ import threading
 import time
 import zipfile
 
+from event_guard import run_forever_tolerant
+
 log = logging.getLogger("bot_runtime")
 
 RELAY = "nine.testrun.org"
@@ -993,7 +995,7 @@ def run(native_lib_dir, files_dir):
         control.boot_runtimes()  # needs IO (download retries)
         log.info("live bot running as %s (chats %s)",
                  control.bot_addr, sorted(control.runtimes))
-        ctl_bot.run_forever()
+        run_forever_tolerant(ctl_bot)
     finally:
         try:
             witness.live_stop()
