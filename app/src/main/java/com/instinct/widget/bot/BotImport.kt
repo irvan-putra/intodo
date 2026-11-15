@@ -841,7 +841,7 @@ class BotImport(
                     if (!Python.isStarted()) Python.start(AndroidPlatform(context))
                     val py = Python.getInstance().getModule("migration")
                     object : RecoveryModule {
-                        override fun recoverImport(nativeLib: String, files: String): String =
+                        override fun recoverImport(nativeLib: String?, files: String): String =
                             py.callAttr("recover_import", nativeLib, files).toString()
                         override fun recoverExport(files: String) {
                             py.callAttr("recover_export", files)
@@ -987,7 +987,12 @@ class BotImport(
  * branch (including the recover_export admission) runs under
  * Robolectric, which cannot start Python. */
 internal interface RecoveryModule {
-    fun recoverImport(nativeLib: String, files: String): String
+    /** nativeLib is nullable: Robolectric does not populate
+     * ApplicationInfo.nativeLibraryDir, and a non-null Kotlin parameter
+     * would throw an intrinsic NPE in a JVM fake before it runs. On
+     * device the value is always present; only Python path resolution
+     * consumes it. */
+    fun recoverImport(nativeLib: String?, files: String): String
     fun recoverExport(files: String)
 }
 

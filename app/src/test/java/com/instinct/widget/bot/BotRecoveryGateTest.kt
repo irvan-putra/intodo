@@ -40,6 +40,10 @@ class BotRecoveryGateTest {
 
     @Before
     fun setUp() {
+        // Route android.util.Log (the recovery body's failure logging)
+        // to the test output: a red run must SHOW the caught exception,
+        // not just its FAILED outcome.
+        org.robolectric.shadows.ShadowLog.stream = System.out
         activity = Robolectric.buildActivity(Activity::class.java).get()
         BotImport.resetRecoveryGateForTest()
         BotImport.resetExportSetupForTest()
@@ -53,7 +57,11 @@ class BotRecoveryGateTest {
         BotImport.releaseServiceReservation(serviceOwner)
         BotImport.resetExportSetupForTest()
         clearPending()
-        BotImport.resetRecoveryGateForTest()
+        // Leave the static gate as the run found it (PENDING), not DONE:
+        // Robolectric reuses the sandbox across test CLASSES, so a DONE
+        // left here contaminates later classes whose assertions assume
+        // the virgin gate (ServiceReservationTest).
+        BotImport.resetRecoveryGateForTest(BotImport.RecoveryState.PENDING)
     }
 
     /** Drives the REAL recoveryBody branch under Robolectric (no
@@ -67,7 +75,7 @@ class BotRecoveryGateTest {
     ) : RecoveryModule {
         val importCalls = AtomicInteger()
         val exportCalls = AtomicInteger()
-        override fun recoverImport(nativeLib: String, files: String): String {
+        override fun recoverImport(nativeLib: String?, files: String): String {
             importCalls.incrementAndGet()
             File(files, "IMPORT_PENDING.json").delete()
             onRecoverImport()
