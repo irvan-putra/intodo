@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -353,6 +354,22 @@ class ServiceReservationTest {
 
     private val context: Context
         get() = RuntimeEnvironment.getApplication()
+
+    @Before
+    fun setUp() {
+        // Explicit static-gate baseline, order-independent: neighbors in
+        // this file (RecoveryGateLockTest, CallerFailureBranchLockTest)
+        // legitimately END tests at resetRecoveryGateForTest()'s default
+        // DONE, and Robolectric reuses the sandbox across classes, so the
+        // gate this class inherits is whichever neighbor ran last.
+        // runRecoveryBlocking and recoverAndReserveService never publish
+        // gate state (only the activity's recoverInterruptedImport does),
+        // so pendingArtifactBehindActiveOwnerDefersNeverFails' gate
+        // assertion sees exactly this baseline - a DEFERRED outcome
+        // publishes nothing. It must observe the VIRGIN state (PENDING),
+        // never a neighbor's DONE.
+        BotImport.resetRecoveryGateForTest(BotImport.RecoveryState.PENDING)
+    }
 
     @Test
     fun reservationClaimsServiceAndBlocksAdmission() {
