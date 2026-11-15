@@ -55,14 +55,14 @@ def _pseudo_transport_rows(addr):
 
 
 def install_bounded_rpc_startup_diagnostics():
-    """Replace the RPC startup wrapper only inside the instrumentation fixture.
+    """Add fixture-only bounded diagnostics around RPC start and close.
 
     The pinned client reads stderr with an unbounded .read() after stdout EOF.
-    On a still-live child that can hang the test and hide the cause. This
-    test-only version preserves the client startup sequence, samples stderr
-    using select/os.read with hard time and byte limits, records process poll
-    and argv, then terminates the failed fixture child and joins its pipes.
-    It is never imported by the production runtime.
+    On startup failure this test-only version samples stderr nonblocking under
+    time/byte limits, records process state/argv, then reaps that failed child.
+    On normal close it logs process status and waits at most 3s so late native
+    exits/crashes are visible before instrumentation teardown. It never
+    suppresses a crash or changes production code.
     """
     import itertools
     import logging
@@ -179,19 +179,50 @@ def install_bounded_rpc_startup_diagnostics():
     bounded_start._emu_bounded_diagnostics = True
     Rpc.start = bounded_start
 
+    original_close = Rpc.close
+
+    def bounded_close(self):
+        proc = getattr(self, "process", None)
+        pid = getattr(proc, "pid", None)
+        print("EMU_DIAG rpc_close_begin pid=%r poll=%r" % (pid, proc.poll() if proc else None))
+        try:
+            return original_close(self)
+        finally:
+            if proc is not None:
+                try:
+                    rc = proc.wait(timeout=3.0)
+                    print("EMU_DIAG rpc_close_end pid=%r returncode=%r" % (pid, rc))
+                except subprocess.TimeoutExpired:
+                    print("EMU_DIAG rpc_close_end pid=%r still_alive_after_3s poll=%r" % (pid, proc.poll()))
+                except Exception as wait_exc:
+                    print("EMU_DIAG rpc_close_end pid=%r wait_error=%r poll=%r" % (pid, wait_exc, proc.poll()))
+
+    Rpc.close = bounded_close
+
+
+def _fixture_rpc(native_lib_dir, files_dir):
+    """Instrument test-only RPC calls with chronology markers."""
+    from bot_runtime import _rpc
+    print("EMU_DIAG rpc_open_begin")
+    rpc, dc = _rpc(native_lib_dir, files_dir)
+    print("EMU_DIAG rpc_open_ready pid=%r" % getattr(rpc.process, "pid", None))
+    return rpc, dc
+
 
 def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
     """Create the fixture account inside files_dir/accounts. Offline.
 
     Returns the address. Raises on any failure - a partially seeded
     fixture must never pass as provisioned."""
-    from bot_runtime import _rpc
-    rpc, dc = _rpc(native_lib_dir, files_dir)
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
     try:
+        print("EMU_DIAG seed_add_account_begin")
         acct = dc.add_account()
+        print("EMU_DIAG seed_add_account_done")
         acct.set_config("addr", addr)
         acct.set_config("mail_pw", FIXTURE_PW)
     finally:
+        print("EMU_DIAG seed_first_rpc_close")
         rpc.close()
     # The rpc channel is closed (it holds the DB open otherwise). The
     # account DB is plaintext SQLite - verified against core v2.69.0.
@@ -199,6 +230,7 @@ def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
     if len(dbs) != 1:
         raise RuntimeError("fixture expected exactly 1 account db, found %d"
                            % len(dbs))
+    print("EMU_DIAG seed_sql_begin")
     entered, configured = _pseudo_transport_rows(addr)
     con = sqlite3.connect(dbs[0])
     try:
@@ -214,11 +246,14 @@ def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
         con.commit()
     finally:
         con.close()
+    print("EMU_DIAG seed_sql_done")
     # Prove it through core's own contract before returning: reopen and
     # require is_configured + a readable transport address.
-    rpc, dc = _rpc(native_lib_dir, files_dir)
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
     try:
+        print("EMU_DIAG verify_get_accounts_begin")
         accts = [a for a in dc.get_all_accounts() if a.is_configured()]
+        print("EMU_DIAG verify_get_accounts_done count=%r" % len(accts))
         if len(accts) != 1:
             raise RuntimeError(
                 "fixture seed failed: %d configured accounts" % len(accts))
@@ -228,15 +263,21 @@ def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
             raise RuntimeError("fixture addr mismatch: %r != %r"
                                % (got, addr))
     finally:
+        print("EMU_DIAG verify_rpc_close")
         rpc.close()
+    print("EMU_DIAG seed_account_return")
     return addr
 
 
 def count_configured(native_lib_dir, files_dir):
     """Fixture assertion helper: how many configured accounts exist."""
     from bot_runtime import _rpc
-    rpc, dc = _rpc(native_lib_dir, files_dir)
+    print("EMU_DIAG count_configured_begin")
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
     try:
-        return len([a for a in dc.get_all_accounts() if a.is_configured()])
+        count = len([a for a in dc.get_all_accounts() if a.is_configured()])
+        print("EMU_DIAG count_configured_result=%r" % count)
+        return count
     finally:
+        print("EMU_DIAG count_rpc_close")
         rpc.close()

@@ -59,4 +59,11 @@ jobs:
           path: |
             emu-out/
             smoke-logcat.txt
+            smoke-out.tar
+            smoke-out.tar.stderr
+            emu-capture-meta.txt
+            emu-capture-tar-list.txt
+            emu-capture-tar-list.stderr
+            emu-capture-files.txt
+            emu-capture-files.stderr
           retention-days: 14
