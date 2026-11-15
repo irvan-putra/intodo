@@ -75,7 +75,7 @@ capture_emulator_outputs() {
     printf 'Could not pull app output from %s; archive and stderr retained.\n' "$package_id" >&2
     head -c 4096 "$tar_file.stderr" >&2
   fi
-  adb shell run-as "$package_id" sh -c 'if [ -d files/emu-out ]; then find files/emu-out -maxdepth 2 -type f -printf "%p %s bytes\n"; else echo "files/emu-out missing"; fi' > emu-capture-files.txt 2> emu-capture-files.stderr
+  adb shell run-as "$package_id" sh -c 'ls -laR files/emu-out' > emu-capture-files.txt 2> emu-capture-files.stderr
   files_status=$?
   printf 'files_listing_status=%s\n' "$files_status" >> emu-capture-meta.txt
   if [ -s emu-capture-files.stderr ]; then
@@ -118,8 +118,25 @@ if [ "$mode" = import ]; then
   adb push emu-in-dl/emu-out/code.txt /data/local/tmp/code.txt
   adb shell run-as com.vanipy.intodo sh -c 'mkdir -p files/emu-in && cp /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt files/emu-in/'
   set +e
-  adb shell am instrument -w -e class "$test_class" com.vanipy.intodo.test/androidx.test.runner.AndroidJUnitRunner
+  adb shell am instrument -w -e class "$test_class" com.vanipy.intodo.test/androidx.test.runner.AndroidJUnitRunner > import-instrumentation.txt 2>&1
   test_status=$?
+  set -e
+elif [ "$mode" = smoke-export ]; then
+  # connectedDebugAndroidTest uninstalls both APKs before this script's EXIT
+  # trap can capture app-private emu-out. Install and invoke instrumentation
+  # directly so the bounded EXIT capture runs while the fixture app exists.
+  ./gradlew :app:installDebug :app:installDebugAndroidTest --no-daemon
+  set +e
+  adb shell am instrument -w -e class "$test_class" "$package_id.test/androidx.test.runner.AndroidJUnitRunner" > smoke-instrumentation.txt 2>&1
+  test_status=$?
+  set -e
+  if grep -q 'FAILURES!!!' smoke-instrumentation.txt || grep -q 'INSTRUMENTATION_STATUS_CODE: -2' smoke-instrumentation.txt; then
+    test_status=1
+  elif ! grep -Eq 'OK \([0-9]+ tests?\)' smoke-instrumentation.txt; then
+    echo 'FATAL: instrumentation output did not contain a passing JUnit summary; preserving logs' >&2
+    test_status=1
+  fi
+  tail -n 80 smoke-instrumentation.txt
 else
   set +e
   ./gradlew :app:connectedDebugAndroidTest --no-daemon "-Pandroid.testInstrumentationRunnerArguments.class=$test_class"

@@ -59,6 +59,7 @@ jobs:
           path: |
             emu-out/
             smoke-logcat.txt
+            smoke-instrumentation.txt
             smoke-out.tar
             smoke-out.tar.stderr
             emu-capture-meta.txt
