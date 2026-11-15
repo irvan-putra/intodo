@@ -54,18 +54,175 @@ def _pseudo_transport_rows(addr):
     return json.dumps(entered), json.dumps(configured)
 
 
+def install_bounded_rpc_startup_diagnostics():
+    """Add fixture-only bounded diagnostics around RPC start and close.
+
+    The pinned client reads stderr with an unbounded .read() after stdout EOF.
+    On startup failure this test-only version samples stderr nonblocking under
+    time/byte limits, records process state/argv, then reaps that failed child.
+    On normal close it logs process status and waits at most 3s so late native
+    exits/crashes are visible before instrumentation teardown. It never
+    suppresses a crash or changes production code.
+    """
+    import itertools
+    import logging
+    import select
+    import subprocess
+    import sys
+    import time
+    from deltachat_rpc_client.rpc import JsonRpcError, Rpc
+
+    if getattr(Rpc.start, "_emu_bounded_diagnostics", False):
+        return
+
+    def bounded_start(self):
+        popen_kwargs = {
+            "stdin": subprocess.PIPE,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+        }
+        if sys.version_info >= (3, 11):
+            popen_kwargs["process_group"] = 0
+        else:
+            popen_kwargs["preexec_fn"] = os.setpgrp
+        popen_kwargs.update(self._kwargs)
+        self.process = subprocess.Popen(self.rpc_server_path, **popen_kwargs)
+
+        self.id_iterator = itertools.count(start=1)
+        self.event_queues = {}
+        self.request_results = {}
+        self.request_queue = __import__("queue").Queue()
+        self.request_queue_closed = False
+        self.closing = False
+        from threading import Thread
+        self.reader_thread = Thread(target=self.reader_loop)
+        self.reader_thread.start()
+        self.writer_thread = Thread(target=self.writer_loop)
+        self.writer_thread.start()
+        self.events_thread = Thread(target=self.events_loop)
+        self.events_thread.start()
+
+        try:
+            system_info = self.get_system_info()
+        except Exception as exc:
+            proc = self.process
+            pid = getattr(proc, "pid", None)
+            try:
+                cmdline = open("/proc/%s/cmdline" % pid, "rb").read(2048).replace(b"\0", b" ").decode(errors="replace").strip()
+            except Exception as cmd_exc:
+                cmdline = "unavailable: %s" % cmd_exc
+            try:
+                poll_before = proc.poll()
+            except Exception as poll_exc:
+                poll_before = "unavailable: %s" % poll_exc
+
+            stderr_data = bytearray()
+            stderr_note = ""
+            pipe = getattr(proc, "stderr", None)
+
+            def drain_stderr_until(deadline):
+                """Read only ready bytes, under one total 8 KiB cap."""
+                nonlocal stderr_note
+                if pipe is None:
+                    return
+                try:
+                    fd = pipe.fileno()
+                    while len(stderr_data) < 8192 and time.monotonic() < deadline:
+                        ready, _, _ = select.select([fd], [], [], max(0.0, deadline-time.monotonic()))
+                        if not ready:
+                            break
+                        chunk = os.read(fd, min(4096, 8192-len(stderr_data)))
+                        if not chunk:
+                            break
+                        stderr_data.extend(chunk)
+                except Exception as read_exc:
+                    if not stderr_note:
+                        stderr_note = "stderr read diagnostic failed: %s" % read_exc
+
+            # Sample before teardown, but never wait for bytes that are not ready.
+            drain_stderr_until(time.monotonic() + 1.0)
+
+            # A failed health-check is terminal for this test-only child.
+            # Reap it so it cannot survive instrumentation teardown. Drain a
+            # short final stderr tail after termination because some servers
+            # emit their diagnostic only while exiting.
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=1.0)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=1.0)
+                poll_after = proc.poll()
+                drain_stderr_until(time.monotonic() + 0.25)
+            except Exception as cleanup_exc:
+                poll_after = "cleanup failed: %s" % cleanup_exc
+            self.closing = True
+            try:
+                self._shutdown_loops()
+            except Exception as shutdown_exc:
+                stderr_note = (stderr_note + "; " if stderr_note else "") + "pipe shutdown: %s" % shutdown_exc
+            stderr_text = stderr_data.decode(errors="replace").strip()
+            detail = (
+                "pid=%r poll_before=%r poll_after_cleanup=%r cmdline=%r "
+                "stderr_nonblocking=%r%s"
+                % (pid, poll_before, poll_after, cmdline, stderr_text, "; " + stderr_note if stderr_note else "")
+            )
+            raise JsonRpcError("RPC startup health check failed: %s; bounded diagnostics: %s" % (exc, detail)) from exc
+
+        logging.info(
+            "RPC server ready. Core version: %s",
+            system_info.get("deltachat_core_version", "unknown"),
+        )
+
+    bounded_start._emu_bounded_diagnostics = True
+    Rpc.start = bounded_start
+
+    original_close = Rpc.close
+
+    def bounded_close(self):
+        proc = getattr(self, "process", None)
+        pid = getattr(proc, "pid", None)
+        print("EMU_DIAG rpc_close_begin pid=%r poll=%r" % (pid, proc.poll() if proc else None))
+        try:
+            return original_close(self)
+        finally:
+            if proc is not None:
+                try:
+                    rc = proc.wait(timeout=3.0)
+                    print("EMU_DIAG rpc_close_end pid=%r returncode=%r" % (pid, rc))
+                except subprocess.TimeoutExpired:
+                    print("EMU_DIAG rpc_close_end pid=%r still_alive_after_3s poll=%r" % (pid, proc.poll()))
+                except Exception as wait_exc:
+                    print("EMU_DIAG rpc_close_end pid=%r wait_error=%r poll=%r" % (pid, wait_exc, proc.poll()))
+
+    Rpc.close = bounded_close
+
+
+def _fixture_rpc(native_lib_dir, files_dir):
+    """Instrument test-only RPC calls with chronology markers."""
+    from bot_runtime import _rpc
+    print("EMU_DIAG rpc_open_begin")
+    rpc, dc = _rpc(native_lib_dir, files_dir)
+    print("EMU_DIAG rpc_open_ready pid=%r" % getattr(rpc.process, "pid", None))
+    return rpc, dc
+
+
 def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
     """Create the fixture account inside files_dir/accounts. Offline.
 
     Returns the address. Raises on any failure - a partially seeded
     fixture must never pass as provisioned."""
-    from bot_runtime import _rpc
-    rpc, dc = _rpc(native_lib_dir, files_dir)
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
     try:
+        print("EMU_DIAG seed_add_account_begin")
         acct = dc.add_account()
+        print("EMU_DIAG seed_add_account_done")
         acct.set_config("addr", addr)
         acct.set_config("mail_pw", FIXTURE_PW)
     finally:
+        print("EMU_DIAG seed_first_rpc_close")
         rpc.close()
     # The rpc channel is closed (it holds the DB open otherwise). The
     # account DB is plaintext SQLite - verified against core v2.69.0.
@@ -73,6 +230,7 @@ def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
     if len(dbs) != 1:
         raise RuntimeError("fixture expected exactly 1 account db, found %d"
                            % len(dbs))
+    print("EMU_DIAG seed_sql_begin")
     entered, configured = _pseudo_transport_rows(addr)
     con = sqlite3.connect(dbs[0])
     try:
@@ -88,11 +246,14 @@ def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
         con.commit()
     finally:
         con.close()
+    print("EMU_DIAG seed_sql_done")
     # Prove it through core's own contract before returning: reopen and
     # require is_configured + a readable transport address.
-    rpc, dc = _rpc(native_lib_dir, files_dir)
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
     try:
+        print("EMU_DIAG verify_get_accounts_begin")
         accts = [a for a in dc.get_all_accounts() if a.is_configured()]
+        print("EMU_DIAG verify_get_accounts_done count=%r" % len(accts))
         if len(accts) != 1:
             raise RuntimeError(
                 "fixture seed failed: %d configured accounts" % len(accts))
@@ -102,15 +263,35 @@ def seed_account(native_lib_dir, files_dir, addr=FIXTURE_ADDR):
             raise RuntimeError("fixture addr mismatch: %r != %r"
                                % (got, addr))
     finally:
+        print("EMU_DIAG verify_rpc_close")
         rpc.close()
+    print("EMU_DIAG seed_account_return")
     return addr
+
+
+def configured_addrs(native_lib_dir, files_dir):
+    """Fixture assertion helper: JSON list of configured account addrs."""
+    from bot_runtime import _account_addr
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
+    try:
+        addrs = [_account_addr(a) for a in dc.get_all_accounts()
+                 if a.is_configured()]
+        print("EMU_DIAG configured_addrs=%r" % (addrs,))
+        return json.dumps(addrs)
+    finally:
+        print("EMU_DIAG configured_addrs_rpc_close")
+        rpc.close()
 
 
 def count_configured(native_lib_dir, files_dir):
     """Fixture assertion helper: how many configured accounts exist."""
     from bot_runtime import _rpc
-    rpc, dc = _rpc(native_lib_dir, files_dir)
+    print("EMU_DIAG count_configured_begin")
+    rpc, dc = _fixture_rpc(native_lib_dir, files_dir)
     try:
-        return len([a for a in dc.get_all_accounts() if a.is_configured()])
+        count = len([a for a in dc.get_all_accounts() if a.is_configured()])
+        print("EMU_DIAG count_configured_result=%r" % count)
+        return count
     finally:
+        print("EMU_DIAG count_rpc_close")
         rpc.close()

@@ -5,7 +5,11 @@ android {
     namespace 'com.instinct.widget'
     compileSdk 34
     defaultConfig {
-        applicationId 'com.instinct.widget'
+        // Emulator qualification only: -PemuAppId=com.vanipy.intodo builds
+        // the renamed-side APK from this same tree (the round-trip import
+        // leg needs BOTH identities installed on one emulator). Production
+        // builds never pass the property and keep the old ID.
+        applicationId project.findProperty('emuAppId') ?: 'com.instinct.widget'
         minSdk 26
         targetSdk 34
         versionCode 25

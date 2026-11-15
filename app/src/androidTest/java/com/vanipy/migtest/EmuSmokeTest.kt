@@ -28,6 +28,7 @@ class EmuSmokeTest {
         File(files, "accounts").deleteRecursively()
         if (!Python.isStarted()) Python.start(AndroidPlatform(ctx))
         val py = Python.getInstance()
+        py.getModule("emu_fixture").callAttr("install_bounded_rpc_startup_diagnostics")
         py.getModule("emu_fixture").callAttr(
             "seed_account", ctx.applicationInfo.nativeLibraryDir,
             files.absolutePath)

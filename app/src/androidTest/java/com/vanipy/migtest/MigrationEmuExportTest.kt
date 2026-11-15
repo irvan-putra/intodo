@@ -26,11 +26,15 @@ import org.junit.runner.RunWith
  *
  * Drives the REAL export path end to end with a fixture-only Delta
  * Chat account (emu_fixture.seed_account: no configured servers, no
- * I/O started, no real keys; the app KEEPS its INTERNET permission
- * and the emulator is NOT network-isolated): the export button, the service "export" mode, migration.py
+ * I/O started, no real keys; the app KEEPS its INTERNET permission -
+ * in the round-trip harness the emulator runs with QEMU `-nic none`,
+ * i.e. no guest NIC at all, verified fail-closed by ci/emu_runner.sh): the
+ * export button, the service "export" mode, migration.py
  * export_migration under Chaquopy with the real core, and the transfer
- * code dialog. Produces to filesDir/emu-out (adb-pulled by the
- * workflow): the .dcmig bundle, code.txt, screenshots and logs.
+ * code dialog. Produces to filesDir/emu-out: the .dcmig bundle,
+ * code.txt, screenshots and logs (NEVER uploaded - secret by design;
+ * only the self-authored export-done.json and listings leave the
+ * emulator, see ci/emu_runner.sh).
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationEmuExportTest {
