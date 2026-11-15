@@ -92,6 +92,14 @@ public class BotService extends Service {
         // dead may this start clear its STOP flag and run - so a restart
         // can never delete STOP before the old worker observes it.
         final String modeF = mode;  // lambdas need an effectively final capture
+        final boolean exportMode = modeF.equals("export");
+        // The claiming UI parked its setup token for THIS start; consume
+        // it UP FRONT so EVERY terminal path below (start dedupe, join
+        // timeout, reservation reject, successful reservation) can spend
+        // exactly this token. An unconsumed handoff/owner would wedge
+        // all future export claims as ALREADY_CLAIMED and shield truly
+        // abandoned artifacts from recovery indefinitely.
+        final Object exportSetup = exportMode ? BotImport.Companion.takeExportSetupHandoff() : null;
         final Thread previous;
         final Thread t;
         synchronized (WORKER_LOCK) {
@@ -110,6 +118,10 @@ public class BotService extends Service {
                 //   and the registry entry is never overwritten.
                 if (!new File(getFilesDir(), "STOP").exists()
                         || activeWorkerJoining) {
+                    // This start will never run: spend exactly the token
+                    // it consumed (null or another flow's is a safe
+                    // no-op) so its claim cannot wedge future exports.
+                    if (exportMode) BotImport.Companion.clearExportSetup(exportSetup);
                     return START_STICKY;
                 }
             }
@@ -127,13 +139,16 @@ public class BotService extends Service {
                                 activeWorkerJoining = false;
                             }
                         }
+                        // Join timeout: this start is refused. Spend
+                        // exactly the token it consumed - the sticky
+                        // restart resumes the last mode without it.
+                        if (exportMode) BotImport.Companion.clearExportSetup(exportSetup);
                         stopSelf();
                         return;
                     }
                 }
                 // Export is a mutation that outlives one lock scope: the
                 // phase marks the boundary while it runs (finally clears).
-                final boolean exportMode = modeF.equals("export");
                 try {
                     // Recovery barrier + atomic service reservation BEFORE
                     // any bot mode: an interrupted import/export must be
@@ -149,9 +164,21 @@ public class BotService extends Service {
                     BotImport.ReserveResult res =
                             BotImport.Companion.recoverAndReserveService(this, serviceOwner);
                     if (res != BotImport.ReserveResult.RESERVED) {
+                        // The export will never run: spend the UI's
+                        // setup claim so its snapshot becomes ordinary
+                        // recoverable leftovers. Owner-checked: a token
+                        // mismatch (another flow's live claim) is left
+                        // untouched.
+                        if (exportMode) BotImport.Companion.clearExportSetup(exportSetup);
                         stopSelf();
                         return;
                     }
+                    // The phase reservation now protects the export (any
+                    // recovery DEFERs behind it): the UI's setup claim
+                    // is spent. Note the reservation's own recovery body
+                    // already ran INSIDE the setup window and skipped
+                    // recover_export because of it.
+                    if (exportMode) BotImport.Companion.clearExportSetup(exportSetup);
                     // The SERVICE reservation is now held by THIS instance:
                     // no import can be admitted between the barrier
                     // passing and the runtime opening, and only this

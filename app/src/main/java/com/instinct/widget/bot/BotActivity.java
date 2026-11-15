@@ -551,6 +551,13 @@ public class BotActivity extends Activity {
     // ---- export flow (move this install's bot + settings to the new app package) ----
     private static final int REQ_SAVE_BUNDLE = 45;
     private String pendingBundlePath = null;
+    /** The live export flow's setup claim token (null when no flow is
+     * between claim and terminal cleanup). Every terminal path -
+     * snapshot/start failure, result-poll timeout, user abort -
+     * releases EXACTLY this token; a token the service already spent
+     * makes the release a safe no-op, and a stale token can never
+     * clear a newer flow's claim. */
+    private Object currentExportSetup = null;
 
     /** Snapshot of the allowlisted app settings for the migration bundle.
      * Written just before the export service mode starts; migration.py
@@ -626,14 +633,54 @@ public class BotActivity extends Activity {
         final Runnable[] poll = new Runnable[1];
         poll[0] = new Runnable() { public void run() {
             if (!new File(getFilesDir(), "RUNNING").exists()) {
+                // Claim the setup window BEFORE the snapshot lands: until
+                // the service claims the lifecycle phase, only this owner
+                // token stops crash recovery from deleting the snapshot
+                // as if it were an interrupted export's leftovers. The
+                // claim is the authority: it re-checks the recovery gate
+                // (the tap-time recoveryPending() check is stale by now)
+                // and excludes in-flight recovery workers in ONE
+                // synchronized step, so the snapshot below can never be
+                // deleted by a worker that was already running.
+                final Object exportSetup = new Object();
+                BotImport.ExportSetupClaim claim =
+                        BotImport.Companion.claimExportSetup(BotActivity.this, exportSetup);
+                if (claim == BotImport.ExportSetupClaim.RECOVERY_FAILED) {
+                    Toast.makeText(BotActivity.this, "Cleanup of the previous session failed - restart the app once, then retry", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                if (claim != BotImport.ExportSetupClaim.CLAIMED) {
+                    // RECOVERY_PENDING / RECOVERY_IN_FLIGHT /
+                    // ALREADY_CLAIMED: transient. Kick the gate and retry
+                    // inside the same 15s window.
+                    if (claim == BotImport.ExportSetupClaim.RECOVERY_PENDING) {
+                        BotImport.recoverInterruptedImport(BotActivity.this);
+                    }
+                    if (System.currentTimeMillis() - t0 < 15000) {
+                        handler.postDelayed(poll[0], 500);
+                    } else {
+                        Toast.makeText(BotActivity.this, "Cleanup is taking longer than expected - try again in a moment", Toast.LENGTH_LONG).show();
+                    }
+                    return;
+                }
+                currentExportSetup = exportSetup;
                 try {
                     writeExportPrefsSnapshot();
                 } catch (Exception e) {
+                    BotImport.Companion.releaseExportSetup(exportSetup);
+                    currentExportSetup = null;
                     Toast.makeText(BotActivity.this, "Could not snapshot settings: " + e + " - bot left stopped", Toast.LENGTH_LONG).show();
                     return;
                 }
                 new File(getFilesDir(), "EXPORT_RESULT").delete();
-                startMode("export");
+                try {
+                    startMode("export");
+                } catch (Exception e) {
+                    BotImport.Companion.releaseExportSetup(exportSetup);
+                    currentExportSetup = null;
+                    Toast.makeText(BotActivity.this, "Could not start the export: " + e + " - bot left stopped", Toast.LENGTH_LONG).show();
+                    return;
+                }
                 pollExportResult(System.currentTimeMillis());
             } else if (System.currentTimeMillis() - t0 < 15000) {
                 handler.postDelayed(poll[0], 500);
@@ -714,7 +761,12 @@ public class BotActivity extends Activity {
             if (System.currentTimeMillis() - t0 < 120000) {
                 handler.postDelayed(poll[0], 1000);
             } else {
-                // Leave no secret-bearing export files behind on timeout.
+                // Timed out with no result: release the setup claim
+                // FIRST (token-checked; a no-op when the service already
+                // spent it) so its leftovers stop being shielded, then
+                // leave no secret-bearing export files behind.
+                BotImport.Companion.releaseExportSetup(currentExportSetup);
+                currentExportSetup = null;
                 new File(getFilesDir(), "EXPORT_RESULT").delete();
                 new File(getFilesDir(), "EXPORT_PREFS.json").delete();
                 deleteRecursively(new File(getFilesDir(), "export-out"));
@@ -769,6 +821,13 @@ public class BotActivity extends Activity {
     }
 
     private void abortExport() {
+        // Token-checked release: normally a no-op (the service spent
+        // the claim when the export ran), but it closes the window
+        // when an abort somehow precedes the service's spend - a
+        // lingering owner would wedge future exports and shield these
+        // deleted files from recovery.
+        BotImport.Companion.releaseExportSetup(currentExportSetup);
+        currentExportSetup = null;
         new File(getFilesDir(), "EXPORT_RESULT").delete();
         new File(getFilesDir(), "EXPORT_PREFS.json").delete();
         deleteRecursively(new File(getFilesDir(), "export-out"));

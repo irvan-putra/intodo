@@ -68,6 +68,15 @@ class BotImport(
      * lives directly in BotImport. */
     enum class ReserveResult { RESERVED, RECOVERY_FAILED, LIFECYCLE_ACTIVE }
 
+    /** Result of a claimExportSetup admission. CLAIMED: the caller owns
+     * the export-setup window. ALREADY_CLAIMED, RECOVERY_IN_FLIGHT and
+     * RECOVERY_PENDING are TRANSIENT refusals (the UI retries on its
+     * poll); RECOVERY_FAILED is the fail-closed gate - crash recovery
+     * must succeed before any export may be set up. */
+    enum class ExportSetupClaim {
+        CLAIMED, ALREADY_CLAIMED, RECOVERY_IN_FLIGHT, RECOVERY_PENDING, RECOVERY_FAILED
+    }
+
     enum class RecoveryState { PENDING, DONE, FAILED }
 
     /** Outcome of the activity recovery barrier: CLEAN (nothing
@@ -332,7 +341,13 @@ class BotImport(
          * leaves state recovery cannot resolve in this process: gated
          * controls stay locked until the restart recovery runs. */
         internal fun lockControlsUntilRecovery() {
-            recoveryState.set(RecoveryState.FAILED)
+            synchronized(gateLock) {
+                // A NEW failure supersedes any in-flight recovery: bump the
+                // generation so its late CLEAN/FAILED publication is
+                // discarded instead of overwriting this FAILED.
+                ++recoveryGeneration
+                recoveryState.set(RecoveryState.FAILED)
+            }
         }
 
         /** The single decision every abort-succeeded failure branch in
@@ -353,10 +368,170 @@ class BotImport(
 
         /** Unit-test hook: the gate is static, so tests reset it between
          * cases. Production code never calls this. */
-        internal fun resetRecoveryGateForTest() {
-            recoveryState.set(RecoveryState.DONE)
+        internal fun resetRecoveryGateForTest(state: RecoveryState = RecoveryState.DONE) {
+            synchronized(gateLock) {
+                ++recoveryGeneration
+                recoveryState.set(state)
+            }
         }
         private val recoveryState = AtomicReference(RecoveryState.PENDING)
+
+        /** Serialization for the UI readiness gate ONLY - the pending
+         * check, the generation and every publication. NEVER migrationLock:
+         * an import transaction holds that monitor for its whole duration
+         * and the main thread (onCreate) must never wait behind it. This
+         * lock is only ever held for a disk check or a counter write. */
+        private val gateLock = Any()
+
+        /** Generation of the LATEST launched in-process recovery
+         * (guarded by gateLock). A worker may publish gate state only for
+         * its own generation: runRecoveryBlocking releases the migration
+         * phase BEFORE the worker publishes, so without this guard an
+         * older worker's late CLEAN or FAILED can overwrite a newer
+         * recovery's truthful state - in either direction. */
+        private var recoveryGeneration = 0L
+
+        /** Gate state from the LATEST generation only; a superseded
+         * worker leaves the gate for the newer authority. */
+        private fun publishGateState(generation: Long, state: RecoveryState) {
+            synchronized(gateLock) {
+                if (generation == recoveryGeneration) recoveryState.set(state)
+            }
+        }
+
+        /** Test seam (same style as pidAliveProbe): lets JVM gate tests
+         * control a recovery's duration/result without Python. Production
+         * code never sets it. */
+        @Volatile
+        internal var recoveryBodyOverride: ((Context) -> Boolean)? = null
+
+        /** Test seam for the migration Python module: JVM tests
+         * substitute a fake so the REAL recovery branch - including the
+         * recover_export admission - runs under Robolectric, which
+         * cannot start Python. Production never sets it. */
+        internal var recoveryModuleForTest: RecoveryModule? = null
+
+        /** Test seam: invoked on the recovery worker AFTER
+         * runRecoveryBlocking has released the lifecycle phase and BEFORE
+         * the gate publication - the exact window where a superseded
+         * worker's late publication lands. Production never sets it. */
+        @Volatile
+        internal var recoveryOutcomeHook: ((RecoveryOutcome) -> Unit)? = null
+
+        /** Test accessor for the raw gate state (isRecoveryComplete
+         * collapses PENDING and FAILED into the same false). */
+        internal fun recoveryGateStateForTest(): RecoveryState = recoveryState.get()
+
+        /** Ownership for the export SETUP window. The UI handler writes
+         * EXPORT_PREFS.json (and deletes EXPORT_RESULT) BEFORE the
+         * service claims the lifecycle phase; in between, phase is IDLE
+         * and the snapshot is indistinguishable from an interrupted
+         * export's leftovers, so an unsynchronized pending check could
+         * make recovery delete a LIVE export's settings just before the
+         * export starts. While an owner is registered here,
+         * exportPendingOnDisk reports those artifacts as not-pending and
+         * recoveryBody skips recover_export.
+         *
+         * v5.24 reconciliation of the custodian's v5.23 review:
+         * - Admission is check+claim in ONE synchronized(gateLock) step
+         *   on BOTH sides: a worker enters recover_export only after
+         *   taking an active-recovery slot under gateLock, and a claim
+         *   is refused while any slot is held - so a worker already past
+         *   its pending check can never be inside recover_export when a
+         *   claim lands. (v5.23's bare CAS closed only claim-vs-claim.)
+         * - The claim itself re-checks the gate in the same step (only
+         *   DONE admits; FAILED fails closed; PENDING refuses - a worker
+         *   can already have removed the disk markers while its settings
+         *   restore is still running - and so do still-pending
+         *   artifacts): the tap-time recoveryPending() check in the UI
+         *   is stale by the time the poll runnable runs.
+         * - Every release/spend is owner-checked with the exact token,
+         *   parked for the service in a one-slot handoff, so a rejected
+         *   or stale service start can never clear ANOTHER flow's claim
+         *   (v5.23's unconditional clear could).
+         * The main thread never waits: claimExportSetup holds gateLock
+         * for a disk check only and refuses fast; the UI retries on a
+         * poll. Lock order is migrationLock -> gateLock (a worker holds
+         * migrationLock through recoveryBody and takes gateLock briefly);
+         * nothing holding gateLock ever takes migrationLock, so no cycle.
+         * Process death clears all three statics, so a truly interrupted
+         * setup is recovered normally at next launch. Public for the
+         * Java UI/service call sites, like recoverAndReserveService. */
+        private val exportSetupOwner = AtomicReference<Any?>(null)
+
+        /** In-flight recover_export invocations (guarded by gateLock). */
+        private var activeRecoverExports = 0
+
+        /** One-slot token handoff from the claiming UI to the export
+         * service instance that start launches (guarded by gateLock). */
+        private var exportSetupHandoff: Any? = null
+
+        /** Claim the export-setup window for a NEW export flow. Never
+         * blocks; every refusal except RECOVERY_FAILED is transient and
+         * the caller's poll retries it. The gate must be DONE: PENDING
+         * refuses too - a worker can have removed the last disk marker
+         * (recover_import deletes the journal) while its settings
+         * restore is still running, and a snapshot taken in that window
+         * would capture half-restored settings. */
+        fun claimExportSetup(context: Context, owner: Any): ExportSetupClaim =
+            synchronized(gateLock) {
+                if (exportSetupOwner.get() != null) ExportSetupClaim.ALREADY_CLAIMED
+                else if (activeRecoverExports > 0) ExportSetupClaim.RECOVERY_IN_FLIGHT
+                else when (recoveryState.get()) {
+                    RecoveryState.FAILED -> ExportSetupClaim.RECOVERY_FAILED
+                    RecoveryState.PENDING -> ExportSetupClaim.RECOVERY_PENDING
+                    RecoveryState.DONE ->
+                        if (recoveryPending(context)) ExportSetupClaim.RECOVERY_PENDING
+                        else {
+                            exportSetupOwner.set(owner)
+                            exportSetupHandoff = owner
+                            ExportSetupClaim.CLAIMED
+                        }
+                }
+            }
+
+        /** Abandon a claimed setup after a snapshot/start failure, a
+         * result-poll timeout or a user abort: export leftovers become
+         * recoverable again. Owner-checked: a stale release can never
+         * clear a newer claim; null (no live claim) is a safe no-op. */
+        fun releaseExportSetup(owner: Any?) {
+            if (owner == null) return
+            synchronized(gateLock) {
+                if (exportSetupOwner.compareAndSet(owner, null))
+                    exportSetupHandoff = null
+            }
+        }
+
+        /** Take the token the claiming UI parked for THIS service start
+         * (null for a non-export start or a stale intent). The service
+         * spends it with clearExportSetup once its phase reservation
+         * protects the export, or when the start is rejected and the
+         * export will never run. */
+        fun takeExportSetupHandoff(): Any? = synchronized(gateLock) {
+            val t = exportSetupHandoff
+            exportSetupHandoff = null
+            t
+        }
+
+        /** Owner-checked spend: only the exact setup token clears the
+         * owner, so a rejected/stale service start can never unshield
+         * ANOTHER flow's live snapshot. */
+        fun clearExportSetup(owner: Any?) {
+            if (owner == null) return
+            synchronized(gateLock) { exportSetupOwner.compareAndSet(owner, null) }
+        }
+
+        /** True while a live export setup owns the export artifacts. */
+        fun exportSetupInFlight(): Boolean = exportSetupOwner.get() != null
+
+        /** Unit-test reset of the whole export-setup window state. */
+        internal fun resetExportSetupForTest() {
+            synchronized(gateLock) {
+                exportSetupOwner.set(null)
+                exportSetupHandoff = null
+                activeRecoverExports = 0
+            }
+        }
 
         /** False until crash recovery finished; on failure it stays false
          * (fail CLOSED): controls that could race recovery must not run. */
@@ -398,23 +573,51 @@ class BotImport(
          */
         @JvmStatic
         fun recoverInterruptedImport(activity: Activity) {
-            if (!recoveryPending(activity)) {
-                recoveryState.set(RecoveryState.DONE)
-                return
+            // Pending check, reset and generation claim are ONE atomic step
+            // under gateLock: a fast-path DONE can never interleave with
+            // another caller's PENDING reset, and every launched worker is
+            // tagged so only the LATEST recovery may publish. Import
+            // artifact creation is serialized by migrationLock (imports
+            // hold it for the whole transaction), a live export/service
+            // holds a non-IDLE phase, and the export SETUP window (the UI
+            // writing EXPORT_PREFS.json before the service claims the
+            // phase) is owned by exportSetupOwner, which makes
+            // recoveryPending skip those live artifacts: a pending==false
+            // read here cannot race artifact creation into a false DONE,
+            // and recovery never deletes a live export's snapshot.
+            val generation = synchronized(gateLock) {
+                if (!recoveryPending(activity)) {
+                    // The clean fast path is the NEWEST authority on the
+                    // gate: it must claim a generation too, or an
+                    // in-flight worker whose recovery target vanished
+                    // mid-run (pending became false before it returned)
+                    // could stamp its late FAILED/CLEAN over this DONE.
+                    ++recoveryGeneration
+                    recoveryState.set(RecoveryState.DONE)
+                    return
+                }
+                // Reset BEFORE launching: with recovery known-pending, DONE
+                // is a lie until THIS recovery finishes.
+                recoveryState.set(RecoveryState.PENDING)
+                ++recoveryGeneration
             }
             Thread {
-                when (runRecoveryBlocking(activity)) {
+                val outcome = runRecoveryBlocking(activity)
+                recoveryOutcomeHook?.invoke(outcome)
+                when (outcome) {
                     RecoveryOutcome.CLEAN ->
-                        recoveryState.set(RecoveryState.DONE)
+                        publishGateState(generation, RecoveryState.DONE)
                     RecoveryOutcome.FAILED -> {
                         Log.w("BotImport", "import/export recovery failed - controls stay locked")
-                        lockControlsUntilRecovery()
+                        publishGateState(generation, RecoveryState.FAILED)
                     }
                     RecoveryOutcome.DEFERRED ->
                         // A live owner (export/service/import) holds the
-                        // lifecycle: NOT a failure. Re-run once when that
-                        // owner finishes - no busy loop, and the single
-                        // slot keeps concurrent cleanups impossible.
+                        // lifecycle: NOT a failure, and NOTHING is
+                        // published - the gate stays PENDING (truthful)
+                        // while the owner runs. The deferred retry below
+                        // re-enters recoverInterruptedImport as a NEW
+                        // generation once the owner finishes.
                         deferRecoveryUntilIdle { recoverInterruptedImport(activity) }
                 }
             }.start()
@@ -464,13 +667,23 @@ class BotImport(
             else
                 FailureDisposition.CLEAN_ERROR
 
+        /** True when interrupted export artifacts exist that recovery
+         * must resolve. While a LIVE export setup holds its owner token
+         * (the UI writes EXPORT_PREFS.json before the service claims the
+         * lifecycle phase), those artifacts belong to the live flow and
+         * are NOT recovery work; process death clears the static owner,
+         * so a truly interrupted setup is recovered at next launch. */
+        internal fun exportPendingOnDisk(context: Context): Boolean {
+            if (exportSetupInFlight()) return false
+            val f = context.filesDir
+            return !File(f, "EXPORT_RESULT").exists() &&
+                (File(f, "export-out").exists() || File(f, "EXPORT_PREFS.json").exists())
+        }
+
         /** True when interrupted import/export artifacts exist that
          * recovery must resolve before any bot work starts. */
         fun recoveryPending(context: Context): Boolean {
-            val f = context.filesDir
-            return importPendingOnDisk(context) ||
-                (!File(f, "EXPORT_RESULT").exists() &&
-                    (File(f, "export-out").exists() || File(f, "EXPORT_PREFS.json").exists()))
+            return importPendingOnDisk(context) || exportPendingOnDisk(context)
         }
 
         /** Whole-lifecycle migration serialization. The manifest declares
@@ -622,9 +835,19 @@ class BotImport(
         @PublishedApi
         internal fun recoveryBody(context: Context): Boolean {
             if (!recoveryPending(context)) return true
+            recoveryBodyOverride?.let { return it(context) }
             return try {
-                if (!Python.isStarted()) Python.start(AndroidPlatform(context))
-                val mod = Python.getInstance().getModule("migration")
+                val mod = recoveryModuleForTest ?: run {
+                    if (!Python.isStarted()) Python.start(AndroidPlatform(context))
+                    val py = Python.getInstance().getModule("migration")
+                    object : RecoveryModule {
+                        override fun recoverImport(nativeLib: String, files: String): String =
+                            py.callAttr("recover_import", nativeLib, files).toString()
+                        override fun recoverExport(files: String) {
+                            py.callAttr("recover_export", files)
+                        }
+                    }
+                }
                 val nativeLib = context.applicationInfo.nativeLibraryDir
                 val files = context.filesDir.absolutePath
                 val staged = File(files, "IMPORT_PREFS.json")
@@ -632,7 +855,7 @@ class BotImport(
                 val open = { name: String ->
                     SharedPrefsFile(context.getSharedPreferences(name, Context.MODE_PRIVATE))
                 }
-                when (mod.callAttr("recover_import", nativeLib, files).toString()) {
+                when (mod.recoverImport(nativeLib, files)) {
                     "rollback_prefs", "restore_orphan_prior" -> {
                         val err = StagedPrefsApplier(staged, prior, open)
                             .restoreFromDurableSnapshot()
@@ -653,7 +876,29 @@ class BotImport(
                         }
                     }
                 }
-                mod.callAttr("recover_export", files)
+                // A LIVE export setup owns the export artifacts, and the
+                // admission is check+slot in ONE gateLock step: either a
+                // setup claim landed first (skip) or this worker holds a
+                // slot that makes every claim fail fast until the call
+                // returns. A claim can NEVER slip between the check and
+                // the destructive call (under v5.23's bare check it
+                // could: the worker passed the check, the claim landed,
+                // then this call deleted the live snapshot). The slot is
+                // released in finally; process death kills the worker
+                // with it, and recover_export is rerunnable on leftovers.
+                val admitted = synchronized(gateLock) {
+                    if (exportSetupInFlight()) false else {
+                        activeRecoverExports++
+                        true
+                    }
+                }
+                if (admitted) {
+                    try {
+                        mod.recoverExport(files)
+                    } finally {
+                        synchronized(gateLock) { activeRecoverExports-- }
+                    }
+                }
                 true
             } catch (e: Exception) {
                 Log.w("BotImport", "recovery barrier failed", e)
@@ -735,6 +980,15 @@ class BotImport(
             if (phaseOwner === owner) migrationPhase = MigrationPhase.EXPORTING
         }
     }
+}
+
+/** The migration Python module behind a seam: production wraps the
+ * Chaquopy module; JVM tests substitute a fake so the REAL recovery
+ * branch (including the recover_export admission) runs under
+ * Robolectric, which cannot start Python. */
+internal interface RecoveryModule {
+    fun recoverImport(nativeLib: String, files: String): String
+    fun recoverExport(files: String)
 }
 
 /** One app SharedPreferences file behind the transactional applier. */
