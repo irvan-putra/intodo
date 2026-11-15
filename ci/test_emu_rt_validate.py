@@ -20,6 +20,10 @@ IPTABLES6 = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
  pkts bytes target     prot opt in     out     source               destination
     3   240 DROP       all      --  *      !lo     ::/0                 ::/0
 """
+IPTABLES6_SEPARATE_NEGATION = """Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+    3   240 DROP       all      --  *      ! lo    ::/0                 ::/0
+"""
 GOOD_ORDER = """IPV4_OUTPUT
 -A OUTPUT -o lo -j ACCEPT
 -A OUTPUT ! -o lo -j DROP
@@ -57,6 +61,8 @@ with tempfile.TemporaryDirectory() as d:
             "drop-counter CLI must print only the parsed number")
 require(validator.parse_drop_counters(IPTABLES6) == 3,
         "documented IPv6 ip6tables -L form must parse")
+require(validator.parse_drop_counters(IPTABLES6_SEPARATE_NEGATION) == 3,
+        "IPv6 xtables spaced ! lo form must parse")
 for bad in (
         "",
         IPTABLES4.replace("12  1024", "not-a-count 1024"),
@@ -65,6 +71,7 @@ for bad in (
         IPTABLES4.replace("12  1024", "1_2 1024"),
         IPTABLES4.replace("DROP       all", "ACCEPT     all"),
         IPTABLES4.replace("!lo", "eth0"),
+        IPTABLES6_SEPARATE_NEGATION.replace("! lo", "eth0"),
         IPTABLES4 + IPTABLES4.splitlines()[-1] + "\n"):
     require(validator.parse_drop_counters(bad) is None,
             "absent/malformed/negative/wrong/duplicate DROP must fail closed")

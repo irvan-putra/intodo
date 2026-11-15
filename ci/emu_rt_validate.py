@@ -316,17 +316,54 @@ def check_filter_order(path):
 
 
 def parse_drop_counters(text):
-    """Return packets for the unique non-loopback DROP row from iptables -L -v -x -n."""
+    """Return packets for the unique non-loopback DROP row.
+
+    Accept xtables' rendered negated-interface forms `!lo` and `! lo`;
+    reject other output interfaces and ambiguous duplicate DROP rows.
+    """
     counts=[]
     for line in text.splitlines():
         p=line.split()
-        # Standard format: pkts bytes target prot opt in out source destination
-        # DROP row: 0 0 DROP all -- * !lo 0.0.0.0/0 0.0.0.0/0
-        if len(p)>=9 and p[2]=="DROP" and p[4]=="--" and p[6]=="!lo":
-            if not re.fullmatch(r"[0-9]+", p[0], flags=re.ASCII):
-                return None
-            counts.append(int(p[0]))
+        if len(p) < 9 or p[2] != "DROP" or p[4] != "--":
+            continue
+        # Standard columns: pkts bytes target prot opt in out source destination
+        # Some xtables builds render negation as one token (!lo), others as
+        # two (! lo). Match either form without relaxing the row identity.
+        if p[6] == "!lo":
+            pass
+        elif p[6:8] == ["!", "lo"] and len(p) >= 10:
+            pass
+        else:
+            continue
+        if not re.fullmatch(r"[0-9]+", p[0], flags=re.ASCII):
+            return None
+        counts.append(int(p[0]))
     return counts[0] if len(counts)==1 else None
+
+
+def drop_counter_failure_reason(text):
+    """Return only a safe reason code, never the external command line."""
+    rows=[]
+    for line in text.splitlines():
+        p=line.split()
+        if len(p) >= 3 and p[2] == "DROP":
+            rows.append(p)
+    if not rows:
+        return "drop_row_absent"
+    if len(rows) != 1:
+        return "duplicate_drop_rows"
+    p=rows[0]
+    if len(p) < 9 or p[4] != "--":
+        return "drop_row_malformed"
+    if p[6] == "!lo":
+        pass
+    elif p[6:8] == ["!", "lo"] and len(p) >= 10:
+        pass
+    else:
+        return "drop_interface_mismatch"
+    if not re.fullmatch(r"[0-9]+", p[0], flags=re.ASCII):
+        return "packet_count_malformed"
+    return "drop_row_ambiguous"
 
 
 def parse_numeric_counter(text):

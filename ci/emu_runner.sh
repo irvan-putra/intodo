@@ -143,13 +143,16 @@ snapshot_drop_counters() {  # label, v4|v6
     cmd='ip6tables -L OUTPUT -v -x -n'
   fi
   if ! adb shell "$cmd" > ".rt-counter-${label}-${fam}.raw" 2>&1; then
-    echo "drop_counter_${fam}_${label}=unavailable" >> emu-rt-isolation.txt
+    echo "drop_counter_${fam}_${label}=unavailable (command_failed)" >> emu-rt-isolation.txt
     return 1
   fi
   tr -d '\r' < ".rt-counter-${label}-${fam}.raw" > ".rt-counter-${label}-${fam}.txt"
   local value
   if ! value=$(python3 ci/emu_rt_validate.py drop-counter ".rt-counter-${label}-${fam}.txt") || [[ ! "$value" =~ ^[0-9]+$ ]]; then
-    echo "drop_counter_${fam}_${label}=unavailable" >> emu-rt-isolation.txt
+    # Keep the reason explicit without uploading the raw family listing.
+    local reason
+    reason=$(python3 -c 'import sys; sys.path.insert(0,"ci"); import emu_rt_validate as v; print(v.drop_counter_failure_reason(open(sys.argv[1]).read()))' ".rt-counter-${label}-${fam}.txt")
+    echo "drop_counter_${fam}_${label}=unavailable (${reason})" >> emu-rt-isolation.txt
     return 1
   fi
   printf '%s\n' "$value" > ".rt-probe-counter_${label}_${fam}.txt"
