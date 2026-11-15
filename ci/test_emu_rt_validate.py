@@ -254,9 +254,10 @@ require(all(p in validator.EMU_PHASES for p in
              "activity_launching", "activity_launched", "focused_app",
              "focused_systemui", "focused_launcher", "focused_none",
              "focused_other", "header_timeout", "confirm_timeout",
-             "header_seen", "expand_clicked")),
+             "confirm_shown", "confirm_wait_error", "confirm_button_missing",
+             "confirm_button_wait_error", "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 28
+require(len(validator.EMU_PHASES) == 32
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
 runner_test = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/MigrationEmuExportTest.kt"), encoding="utf-8").read()
@@ -269,8 +270,15 @@ require("device.wakeUp()" in runner_test
 require('org.junit.Assert.fail("setup header not shown")' in runner_test,
         "authored header timeout must remain an explicit JUnit failure")
 require('org.junit.Assert.fail("confirm dialog not shown")' in runner_test
+        and 'org.junit.Assert.fail("confirm Export button not found")' in runner_test
         and 'device.dumpWindowHierarchy(failureDump)' in runner_test,
-        "both authored UI timeouts preserve JUnit failure and capture before teardown")
+        "authored confirmation failures preserve JUnit failure and capture before teardown")
+require('By.res("android", "parentPanel")' in runner_test
+        and '.hasDescendant(By.textContains("pauses the live bot"))' in runner_test
+        and 'By.res("android", "button1")' in runner_test
+        and '"^export$"' in runner_test
+        and 'Pattern.CASE_INSENSITIVE' in runner_test,
+        "confirm button selector must be anchored/case-insensitive and scoped to the dialog positive button")
 require('failureDump.delete()' in runner_test
         and 'record_step clear_stale_failure_dump' in runner
         and 'files/rt-uidump-failure.xml' in runner,

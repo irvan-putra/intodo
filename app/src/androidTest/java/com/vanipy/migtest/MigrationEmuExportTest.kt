@@ -167,15 +167,42 @@ class MigrationEmuExportTest {
             val btn = checkNotNull(exportBtn) { "export button not shown" }
             btn.click()
             phase("button_clicked")
-            val confirm = device.wait(
-                Until.findObject(By.textContains("pauses the live bot")), 15_000)
-            if (confirm == null) {
+            val confirmPanel = try {
+                device.wait(
+                    Until.findObject(By.res("android", "parentPanel")
+                        .hasDescendant(By.textContains("pauses the live bot"))), 15_000)
+            } catch (t: Throwable) {
+                phase("confirm_wait_error")
+                try { device.dumpWindowHierarchy(failureDump) } catch (_: Exception) {}
+                throw t
+            }
+            if (confirmPanel == null) {
                 phase("confirm_timeout")
                 try { device.dumpWindowHierarchy(failureDump) } catch (_: Exception) {}
                 org.junit.Assert.fail("confirm dialog not shown")
             }
-            checkNotNull(device.findObject(By.text("Export"))) {
-                "confirm Export button not found" }.click()
+            phase("confirm_shown")
+            // Match only the platform AlertDialog positive-button resource
+            // inside the parent panel whose descendant is the confirmation
+            // message. Anchored case-insensitive text accepts presentation
+            // variants without matching unrelated Export-labelled controls.
+            val confirmButtonSelector = By.res("android", "button1")
+                .clazz("android.widget.Button")
+                .text(java.util.regex.Pattern.compile(
+                    "^export$", java.util.regex.Pattern.CASE_INSENSITIVE))
+            val confirmBtn = try {
+                confirmPanel.wait(Until.findObject(confirmButtonSelector), 10_000)
+            } catch (t: Throwable) {
+                phase("confirm_button_wait_error")
+                try { device.dumpWindowHierarchy(failureDump) } catch (_: Exception) {}
+                throw t
+            }
+            if (confirmBtn == null) {
+                phase("confirm_button_missing")
+                try { device.dumpWindowHierarchy(failureDump) } catch (_: Exception) {}
+                org.junit.Assert.fail("confirm Export button not found")
+            }
+            confirmBtn.click()
             phase("confirm_clicked")
 
             // ---- 4. the service export mode runs migration.py for real ----
