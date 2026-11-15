@@ -257,7 +257,7 @@ require(all(p in validator.EMU_PHASES for p in
              "confirm_shown", "confirm_wait_error", "confirm_button_missing",
              "confirm_button_wait_error", "header_seen", "expand_clicked")),
         "environment and launch-span beacons must be in the enum")
-require(len(validator.EMU_PHASES) == 64
+require(len(validator.EMU_PHASES) == 65
         and len(set(validator.EMU_PHASES)) == len(validator.EMU_PHASES),
         "fixed first-seen phase output must remain bounded and unique")
 require(all(p in validator.EMU_PHASES for p in (
@@ -267,7 +267,7 @@ require(all(p in validator.EMU_PHASES for p in (
              "raw_leak_priv", "raw_priv_clean",
              "bundle_parsed", "bundle_parse_error",
              "state_decrypted", "state_decrypt_error",
-             "state_archive_ok", "state_archive_error",
+             "state_archive_ok", "state_archive_error", "state_helper_error",
              "state_members_ok", "state_members_unexpected",
              "state_member_state_missing", "state_member_ops_missing",
              "state_mark_state_ok", "state_mark_state_fail",
@@ -311,7 +311,8 @@ require('adb shell uiautomator dump' not in runner,
         "failure capture must come from instrumentation at the timeout, not post-teardown")
 
 require('diagnosticPhase("bundle_read_ok")' in runner_test
-        and 'diagnosticPhase("state_mark_state_fail")' in runner_test
+        and 'diagnosticPhase(outcome)' in runner_test
+        and '"state_mark_state_fail" -> ' in runner_test
         and 'diagnosticPhase("prefs_decrypt_error")' in runner_test
         and 'diagnosticPhase("wrap_decrypt_error")' in runner_test
         and 'diagnosticPhase("bundle_validated")' in runner_test,
@@ -327,22 +328,47 @@ require('String(raw, Charsets.ISO_8859_1)' in runner_test
         and 'parsed.callAttr("get", "prefs_blob")' in runner_test
         and 'parsed.callAttr("get", "backup")' in runner_test,
         "diagnostic edits preserve stage-6 byte decoding and Python decryption inputs")
-require('tarfileMod.callAttr("open", null, "r|"' in runner_test
-        and 'GZIPInputStream(ByteArrayInputStream(stateTar))' in runner_test
-        and 'stateArchive.callAttr("next")' in runner_test
-        and 'stateArchive.callAttr("extractfile", member)' in runner_test
-        and 'STATE_MEMBER_READ_CAP + 1' in runner_test
-        and 'STATE_ARCHIVE_COMPRESSED_CAP' in runner_test
-        and 'STATE_ARCHIVE_EXPANDED_CAP' in runner_test
-        and 'OPS_MEMBER_RE' in runner_test
-        and 'SAFE_MEMBER_RE' in runner_test
-        and 'STATE_MEMBER_MAX' in runner_test
-        and '!seenNames.add(name)' in runner_test
-        and 'member.callAttr("isfile")' in runner_test,
-        "state validation streams the gzip tar and checks member names, type, uniqueness, and byte bounds")
-require('name.contains("secret-bot.log")' in runner_test
-        and 'state_text_error' not in runner_test,
-        "log exclusion is member-list exact and the compressed-byte scan is gone")
+require('py.getModule("emu_state_fixture")' in runner_test
+        and '.callAttr("validate_state_archive", stateTar, MARK_STATE, MARK_OPS)' in runner_test
+        and 'Charsets.US_ASCII' in runner_test
+        and 'diagnosticPhase(outcome)' in runner_test,
+        "state validation crosses the bridge once into the debug-only fixture helper")
+require('GZIPInputStream' not in runner_test
+        and 'state_text_error' not in runner_test
+        and 'String(stateTar, Charsets.ISO_8859_1)' not in runner_test,
+        "the compressed-byte scan and JVM-side gunzip are gone")
+fixture_helper = open(os.path.join(
+    HERE, "../app/src/debug/python/emu_state_fixture.py"), encoding="utf-8").read()
+require('tarfile.open(None, "r|"' in fixture_helper
+        and 'gzip.GzipFile' in fixture_helper
+        and 'range' not in fixture_helper
+        and '"secret-bot.log"' in fixture_helper
+        and 'for member in tf' in fixture_helper
+        and 'source.read(_MEMBER_CAP + 1)' in fixture_helper
+        and '_SAFE_MEMBER_RE' in fixture_helper
+        and '_OPS_MEMBER_RE' in fixture_helper
+        and '_MAX_MEMBERS' in fixture_helper
+        and '_EXPANDED_CAP' in fixture_helper
+        and '_COMPRESSED_CAP' in fixture_helper
+        and 'name in seen' in fixture_helper
+        and 'member.isfile()' in fixture_helper,
+        "fixture helper bounds gzip expansion and streams unique regular allowlisted members")
+require('print(' not in fixture_helper
+        and 'logging' not in fixture_helper
+        and 'state_marker' in fixture_helper
+        and 'ops_marker' in fixture_helper
+        and '.encode("ascii")' in fixture_helper,
+        "fixture helper returns fixed ASCII outcomes only - no printed/logged content")
+require('state_helper_error' in runner_test
+        and 'allowedOutcomes' in runner_test
+        and 'nextOutcomes' in runner_test
+        and 'resultBytes.isEmpty()' in runner_test
+        and 'resultBytes.size > 256' in runner_test
+        and 'decoded.distinct().size != decoded.size' in runner_test
+        and 'decoded.last() !in setOf' in runner_test
+        and 'if (terminal && index != decoded.lastIndex)' in runner_test
+        and '.take(16)' not in runner_test,
+        "bridge exceptions and empty, unknown, duplicate, unordered, or nonterminal helper output fail closed")
 
 # ---------------- bounded window-dump classification ----------------
 uidump = (

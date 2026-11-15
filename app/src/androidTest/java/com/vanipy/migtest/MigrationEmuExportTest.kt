@@ -13,10 +13,7 @@ import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.instinct.widget.bot.BotActivity
 import com.instinct.widget.bot.BotService
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.zip.GZIPInputStream
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -47,12 +44,6 @@ class MigrationEmuExportTest {
     private val MARK_PRIV = "EMU-PRIV-MARKER-31c7aa"
     // Stage-6 state-archive validation bounds (fixture archives are a
     // handful of tiny members; the caps only stop a malformed archive).
-    private val STATE_ARCHIVE_COMPRESSED_CAP = 16 * 1024 * 1024
-    private val STATE_MEMBER_READ_CAP = 4 * 1024 * 1024
-    private val STATE_ARCHIVE_EXPANDED_CAP = 16 * 1024 * 1024
-    private val STATE_MEMBER_MAX = 64
-    private val OPS_MEMBER_RE = Regex("^ops-\\d+\\.db$")
-    private val SAFE_MEMBER_RE = Regex("^[A-Za-z0-9._-]+$")
     private val ADDR = "fixture-bot@emu.fixture"
 
     @Test
@@ -300,122 +291,90 @@ class MigrationEmuExportTest {
             // The state blob is a gzip-compressed tar (build_state_tar,
             // migration.py mode "w:gz"): deflate never emits the fixture
             // markers as contiguous plaintext, so scanning the decrypted
-            // bytes proves nothing either way. Open the archive with
-            // Python tarfile IN MEMORY, validate the exact allowlisted
-            // member set, then read only the expected members (bounded)
-            // for their markers. No filesystem extraction; member
-            // contents stay inside the test process. The reference
-            // fixture cases mirroring this logic live in
-            // ci/test_stage6_state_archive.py.
-            // Bound compressed and decompressed bytes before Python's tar
-            // parser sees the archive. This also bounds any extended/PAX
-            // header parsing which tarfile would otherwise read before the
-            // per-member checks. Then use streaming tarfile mode so count,
-            // name, type, and size checks happen member by member.
-            if (stateTar.size > STATE_ARCHIVE_COMPRESSED_CAP) {
-                diagnosticPhase("state_archive_error")
-                org.junit.Assert.fail("state archive compressed input oversized")
-            }
-            val tarfileMod = py.getModule("tarfile")
-            val ioMod = py.getModule("io")
-            val expandedTar = try {
-                GZIPInputStream(ByteArrayInputStream(stateTar)).use { gzip ->
-                    val out = ByteArrayOutputStream()
-                    val buffer = ByteArray(8192)
-                    var total = 0
-                    while (true) {
-                        val remainingPlusOne = STATE_ARCHIVE_EXPANDED_CAP - total + 1
-                        val amount = gzip.read(buffer, 0,
-                            minOf(buffer.size, remainingPlusOne))
-                        if (amount < 0) break
-                        total += amount
-                        if (total > STATE_ARCHIVE_EXPANDED_CAP) {
-                            throw IllegalStateException("state archive expanded input oversized")
-                        }
-                        out.write(buffer, 0, amount)
-                    }
-                    out.toByteArray()
+            // bytes proves nothing either way. The archive is validated
+            // by ONE bounded call into the debug-only fixture helper
+            // (app/src/debug/python/emu_state_fixture.py - Chaquopy
+            // packages each source set's python/ dir, so this ships in
+            // debug builds only, never in release): it opens the tar in
+            // memory, checks the exact allowlisted member set, excludes
+            // the log artifact by member list, and finds each marker in
+            // its own member's content under hard byte/count caps. Only
+            // fixed outcome ids cross the bridge - no member names, no
+            // contents, no error text. ci/test_stage6_state_archive.py
+            // executes the same module against focused fixture archives.
+            val stateOutcomes = try {
+                val resultBytes = py.getModule("emu_state_fixture")
+                    .callAttr("validate_state_archive", stateTar, MARK_STATE, MARK_OPS)
+                    .toJava(ByteArray::class.java)
+                val allowedOutcomes = setOf(
+                    "state_archive_ok", "state_archive_error", "state_logs_clean",
+                    "state_logs_leak", "state_members_ok", "state_members_unexpected",
+                    "state_member_state_missing", "state_member_ops_missing",
+                    "state_mark_state_ok", "state_mark_state_fail",
+                    "state_mark_ops_ok", "state_mark_ops_fail")
+                if (resultBytes.isEmpty() || resultBytes.size > 256 ||
+                    resultBytes.any { (it.toInt() and 0xff) !in
+                        (listOf(44) + (97..122).toList() + listOf(95)) }) {
+                    throw IllegalStateException("invalid state-helper result encoding")
                 }
-            } catch (t: Throwable) {
-                diagnosticPhase("state_archive_error")
-                throw t
-            }
-            val stateArchive = try {
-                tarfileMod.callAttr("open", null, "r|",
-                    ioMod.callAttr("BytesIO", expandedTar))
-            } catch (t: Throwable) {
-                diagnosticPhase("state_archive_error")
-                throw t
-            }
-            diagnosticPhase("state_archive_ok")
-            val memberNames = mutableListOf<String>()
-            val memberContents = mutableMapOf<String, ByteArray>()
-            val seenNames = mutableSetOf<String>()
-            var expandedBytes = 0L
-            try {
-                while (true) {
-                    val member = stateArchive.callAttr("next")
-                    if (member.toString() == "None") break
-                    val name = member.get("name").toString()
-                    if (name.contains("secret-bot.log")) {
-                        diagnosticPhase("state_logs_leak")
-                        org.junit.Assert.fail("state archive includes log artifact")
-                    }
-                    val isAllowed = name == "bot_state.json" || name.matches(OPS_MEMBER_RE)
-                    if (memberNames.size >= STATE_MEMBER_MAX ||
-                        !name.matches(SAFE_MEMBER_RE) || !isAllowed ||
-                        !seenNames.add(name) ||
-                        member.callAttr("isfile").toString() != "True") {
-                        diagnosticPhase("state_members_unexpected")
-                        org.junit.Assert.fail("unexpected, duplicate, or non-file state archive member")
-                    }
-                    val memberSize = member.get("size").toString().toLong()
-                    if (memberSize < 0 || memberSize > STATE_MEMBER_READ_CAP ||
-                        expandedBytes + memberSize > STATE_ARCHIVE_EXPANDED_CAP) {
-                        diagnosticPhase("state_archive_error")
-                        org.junit.Assert.fail("state archive expanded data oversized")
-                    }
-                    expandedBytes += memberSize
-                    val data = stateArchive.callAttr("extractfile", member)
-                        .callAttr("read", STATE_MEMBER_READ_CAP + 1)
-                        .toJava(ByteArray::class.java)
-                    if (data.size.toLong() != memberSize || data.size > STATE_MEMBER_READ_CAP) {
-                        diagnosticPhase("state_archive_error")
-                        org.junit.Assert.fail("state archive member read was incomplete or oversized")
-                    }
-                    memberNames.add(name)
-                    memberContents[name] = data
+                val decoded = String(resultBytes, Charsets.US_ASCII).split(",")
+                val nextOutcomes = mapOf(
+                    "START" to setOf("state_archive_error", "state_archive_ok"),
+                    "state_archive_ok" to setOf("state_archive_error", "state_logs_clean",
+                        "state_logs_leak", "state_members_unexpected"),
+                    "state_logs_clean" to setOf("state_archive_error", "state_members_ok",
+                        "state_members_unexpected"),
+                    "state_members_ok" to setOf("state_archive_error",
+                        "state_member_state_missing", "state_mark_state_fail",
+                        "state_mark_state_ok"),
+                    "state_mark_state_ok" to setOf("state_member_ops_missing",
+                        "state_mark_ops_fail", "state_mark_ops_ok"))
+                if (decoded.size > 7 || decoded.any { it !in allowedOutcomes } ||
+                    decoded.distinct().size != decoded.size) {
+                    throw IllegalStateException("invalid state-helper outcome set")
                 }
+                var previous = "START"
+                decoded.forEachIndexed { index, outcome ->
+                    if (outcome !in nextOutcomes.getValue(previous)) {
+                        throw IllegalStateException("invalid state-helper outcome order")
+                    }
+                    val terminal = outcome in setOf(
+                        "state_archive_error", "state_logs_leak", "state_members_unexpected",
+                        "state_member_state_missing", "state_mark_state_fail",
+                        "state_member_ops_missing", "state_mark_ops_fail", "state_mark_ops_ok")
+                    if (terminal && index != decoded.lastIndex) {
+                        throw IllegalStateException("state-helper output continued after terminal outcome")
+                    }
+                    previous = outcome
+                }
+                if (decoded.last() !in setOf("state_archive_error", "state_logs_leak",
+                        "state_members_unexpected", "state_member_state_missing",
+                        "state_mark_state_fail", "state_member_ops_missing",
+                        "state_mark_ops_fail", "state_mark_ops_ok")) {
+                    throw IllegalStateException("state-helper output has no terminal outcome")
+                }
+                decoded
             } catch (t: Throwable) {
-                // Preserve assertion failures and Python/tarfile errors;
-                // the diagnostic beacon must never replace the cause.
-                if (t !is java.lang.AssertionError) diagnosticPhase("state_archive_error")
+                diagnosticPhase("state_helper_error")
                 throw t
             }
-            // Exact archive exclusion: the excluded runtime log must be
-            // absent from the MEMBER LIST, not merely absent from contents.
-            diagnosticPhase("state_logs_clean")
-            diagnosticPhase("state_members_ok")
-            val opsMembers = memberNames.filter { it.matches(OPS_MEMBER_RE) }
-            if ("bot_state.json" !in memberNames) {
-                diagnosticPhase("state_member_state_missing")
-                org.junit.Assert.fail("state archive missing bot_state.json")
+            var stateFailure: String? = null
+            for (outcome in stateOutcomes) {
+                diagnosticPhase(outcome)
+                stateFailure = when (outcome) {
+                    "state_archive_error" -> "state archive validation failed"
+                    "state_logs_leak" -> "state archive includes log artifact"
+                    "state_members_unexpected" -> "unexpected member in state archive"
+                    "state_member_state_missing" -> "state archive missing bot_state.json"
+                    "state_mark_state_fail" -> "bot_state.json missing fixture state marker"
+                    "state_member_ops_missing" -> "state archive missing ops database members"
+                    "state_mark_ops_fail" -> "ops members missing fixture ops marker"
+                    else -> stateFailure
+                }
             }
-            if (!String(memberContents.getValue("bot_state.json"), Charsets.ISO_8859_1)
-                    .contains(MARK_STATE)) {
-                diagnosticPhase("state_mark_state_fail")
-                org.junit.Assert.fail("bot_state.json missing fixture state marker")
-            } else diagnosticPhase("state_mark_state_ok")
-            if (opsMembers.isEmpty()) {
-                diagnosticPhase("state_member_ops_missing")
-                org.junit.Assert.fail("state archive missing ops database members")
+            if (stateFailure != null) {
+                org.junit.Assert.fail(stateFailure)
             }
-            if (!opsMembers.any {
-                    String(memberContents.getValue(it), Charsets.ISO_8859_1).contains(MARK_OPS)
-                }) {
-                diagnosticPhase("state_mark_ops_fail")
-                org.junit.Assert.fail("ops members missing fixture ops marker")
-            } else diagnosticPhase("state_mark_ops_ok")
             val prefsJson = try {
                 String(mig.callAttr("_decrypt", code,
                     mig.get("PREFS_DOMAIN"), parsed.callAttr("get", "prefs_blob"))
