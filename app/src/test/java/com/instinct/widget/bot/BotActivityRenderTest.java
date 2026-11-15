@@ -125,7 +125,12 @@ public class BotActivityRenderTest {
         assertNotNull(logsHeader);
         assertEquals("Setup & account  ▸", setupHeader.getText().toString());
         assertEquals("Logs  ▸", logsHeader.getText().toString());
-        assertEquals("original 8 controls plus 3 witness controls remain available", 11, countButtons(root));
+        assertEquals("original 8 controls plus 3 witness controls plus the migration export control", 12, countButtons(root));
+        boolean hasExport = false;
+        for (Button b : findButtons(root)) {
+            if ("Export bot + settings".contentEquals(b.getText())) hasExport = true;
+        }
+        assertTrue("migration export control is present", hasExport);
         for (Button button : findButtons(root)) {
             assertTrue("button label uses sentence case: " + button.getText(),
                     button.getText().toString().equals(button.getText().toString().toUpperCase()) == false);
@@ -150,7 +155,12 @@ public class BotActivityRenderTest {
         assertTrue(status.getText().toString().contains("Service: stopped"));
         assertNotNull(setupHeader);
         assertTrue("first-run setup is available", setupHeader.getText().toString().endsWith("▾"));
-        assertEquals("original 8 controls plus 3 witness controls remain available", 11, countButtons(root));
+        assertEquals("original 8 controls plus 3 witness controls plus the migration export control", 12, countButtons(root));
+        boolean hasExport = false;
+        for (Button b : findButtons(root)) {
+            if ("Export bot + settings".contentEquals(b.getText())) hasExport = true;
+        }
+        assertTrue("migration export control is present", hasExport);
         render(activity, "/tmp/intodo-bot-setup-expanded.png");
     }
 
