@@ -2,6 +2,14 @@ plugins { id 'com.android.application'; id 'com.chaquo.python'; id 'org.jetbrain
 android {
     testOptions { unitTests { includeAndroidResources = true } }
     buildFeatures { buildConfig true }
+    // Explicit opt-in test candidate. No change to the existing release identity.
+    def phoneSmoke = project.hasProperty('phoneSmoke')
+    if (phoneSmoke && project.hasProperty('emuAppId')) {
+        throw new GradleException('phoneSmoke and emuAppId are mutually exclusive')
+    }
+    if (phoneSmoke) {
+        sourceSets.main.res.srcDir 'src/phoneSmoke/res'
+    }
     namespace 'com.instinct.widget'
     compileSdk 34
     defaultConfig {
@@ -9,11 +17,12 @@ android {
         // the renamed-side APK from this same tree (the round-trip import
         // leg needs BOTH identities installed on one emulator). Production
         // builds never pass the property and keep the old ID.
-        applicationId project.findProperty('emuAppId') ?: 'com.instinct.widget'
+        applicationId phoneSmoke ? 'com.vanipy.intodo' : (project.findProperty('emuAppId') ?: 'com.instinct.widget')
         // Display name follows the same identity switch: the renamed-side
         // build must not present itself under the old name (launcher,
         // foreground notification). One resource, both builds accurate.
-        resValue 'string', 'app_name', project.findProperty('emuAppId') ? 'Intodo' : 'itdapk'
+        resValue 'string', 'app_name', (phoneSmoke || project.findProperty('emuAppId')) ? 'Intodo' : 'itdapk'
+        manifestPlaceholders = [launcherIcon: phoneSmoke ? '@mipmap/ic_launcher_smoke' : '@mipmap/ic_launcher']
         minSdk 26
         targetSdk 34
         versionCode 25
@@ -29,7 +38,11 @@ android {
         def lp = new Properties()
         def lf = rootProject.file('local.properties')
         if (lf.exists()) lp.load(lf.newInputStream())
-        buildConfigField 'String', 'FEED_URL', '\"' + lp.getProperty('FEED_URL', '') + '\"'
+        buildConfigField 'String', 'FEED_URL', '\"' + (phoneSmoke ? '' : lp.getProperty('FEED_URL', '')) + '\"'
+    }
+    if (phoneSmoke) {
+        defaultConfig.versionCode = 26
+        defaultConfig.versionName = '0.5.11-smoke.1'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     packagingOptions { jniLibs { useLegacyPackaging = true } }

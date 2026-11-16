@@ -3,7 +3,8 @@ name: intodo dcmig2 Android Qualification
 on:
   workflow_dispatch:
   push:
-    branches: ["**"]
+    # The separate-install candidate has its own bounded build workflow.
+    branches-ignore: [qualification/intodo-phone-smoke]
 
 permissions:
   contents: read
