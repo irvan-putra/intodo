@@ -4,6 +4,8 @@ import importlib.util
 import pathlib
 import tempfile
 import unittest
+import subprocess
+import sys
 import zipfile
 from unittest.mock import patch
 
@@ -53,9 +55,41 @@ class VerifyTest(unittest.TestCase):
     def test_signer_mismatch(self):
         self.certs[self.apk] = 'b' * 64
         with self.assertRaises(AssertionError): self.verify()
+    def test_boundary_codes_never_copy_command_failure_text(self):
+        for role in ['candidate', 'reference']:
+            with patch.object(v, 'run', side_effect=RuntimeError('SECRET')):
+                with self.assertRaises(v.VerificationFailure) as caught:
+                    v.signer('apksigner', self.apk, role)
+                self.assertEqual(caught.exception.code, role + '_signature_command')
+            with patch.object(v, 'run', return_value='SECRET malformed cert'):
+                with self.assertRaises(v.VerificationFailure) as caught:
+                    v.signer('apksigner', self.apk, role)
+                self.assertEqual(caught.exception.code, role + '_signature_format')
+        self.certs[self.ref] = 'b' * 64
+        with self.assertRaises(v.VerificationFailure) as caught: self.verify()
+        self.assertEqual(caught.exception.code, 'signer_mismatch')
+    def test_cli_command_failure_is_bounded(self):
+        cli = subprocess.run([sys.executable, str(pathlib.Path(v.__file__)),
+            '/missing/SECRET-aapt', '/missing/SECRET-apksigner',
+            '/missing/SECRET-candidate', '/missing/SECRET-reference'],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertNotEqual(cli.returncode, 0)
+        self.assertEqual(cli.stdout, '')
+        self.assertEqual(cli.stderr, 'apk_verification=badging_command; do not distribute\n')
+    def test_fixed_failure_codes(self):
+        for needle, replacement, code in [
+            ('com.vanipy.intodo', 'com.instinct.widget', 'identity'),
+            ('Intodo', 'itdapk', 'label'), ('arm64-v8a', 'x86', 'badging_abi')]:
+            self.badging = GOOD.replace(needle, replacement)
+            with self.assertRaises(v.VerificationFailure) as caught: self.verify()
+            self.assertEqual(caught.exception.code, code)
+        self.badging = GOOD
+        self.write({'assets/private.txt': b'https://files.instinct.com/synthetic-fixture'})
+        with self.assertRaises(v.VerificationFailure) as caught: self.verify()
+        self.assertEqual(caught.exception.code, 'private_feed_found')
     def test_unsigned_or_multisigner(self):
         for response in ['', ('Signer #1 certificate SHA-256 digest: ' + CERT + '\n') * 2]:
             with patch.object(v, 'run', return_value=response):
-                with self.assertRaises(ValueError): v.signer('apksigner', self.apk)
+                with self.assertRaises(v.VerificationFailure): v.signer('apksigner', self.apk)
 
 if __name__ == '__main__': unittest.main()
