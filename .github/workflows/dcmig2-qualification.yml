@@ -84,8 +84,24 @@ jobs:
         run: |
           mkdir -p app/build/qualification-diagnostics/screenshots
           shopt -s nullglob
+          # Migration UI pixels are local-only, even with fixture data.
+          # Never add /tmp/mig/render-out to this collection or uploads.
           files=(/tmp/intodo-*.png /tmp/integ-bot-*.png)
           if ((${#files[@]})); then cp "${files[@]}" app/build/qualification-diagnostics/screenshots/; fi
+
+      - name: Remove local-only migration UI pixels
+        if: always()
+        shell: bash
+        run: |
+          rm -f /tmp/mig/render-out/bot-setup-screen.png \
+            /tmp/mig/render-out/export-0-confirm.png \
+            /tmp/mig/render-out/export-1-transfer-code.png \
+            /tmp/mig/render-out/export-2-save-step.png \
+            /tmp/mig/render-out/export-3-bundle-saved.png \
+            /tmp/mig/render-out/export-failed.png \
+            /tmp/mig/render-out/import-0-intro.png \
+            /tmp/mig/render-out/import-1-code-entry.png \
+            /tmp/mig/render-out/main-post-import.png
 
       - name: Upload test reports and screenshots even when tests fail
         if: always()

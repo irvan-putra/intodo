@@ -451,6 +451,7 @@ capture_roundtrip_outputs() {
   # (see verify_guest_offline).
   rm -f rt-bundle.dcmig rt-code.txt \
     smoke-instrumentation.txt export-instrumentation.txt import-instrumentation.txt \
+    postlaunch-instrumentation.txt \
     .rt-uidump.xml .rt-probe-*.raw .rt-probe-*.txt .rt-probe-*.status .rt-counter-*.raw .rt-counter-*.txt .rt-filter-*.raw .rt-filter-*.txt
 
   if [ "$original_status" -eq 0 ]; then
@@ -598,6 +599,13 @@ if [ "$mode" = roundtrip ]; then
   record_step stage_handoff adb shell "run-as $NEW_PKG sh -c 'mkdir -p files/emu-in && cp /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt files/emu-in/'"
   record_step clear_tmp adb shell rm -f /data/local/tmp/dcbot-migration.dcmig /data/local/tmp/code.txt
   instrument_leg "$NEW_PKG" com.vanipy.migtest.MigrationEmuImportTest import-instrumentation.txt import
+  # 5. post-import launch: the REAL live service boots over the imported
+  #    account (network still fail-closed), then stops cleanly.
+  #    Containment for UNPROVEN cleanup: this is the FINAL leg - a leg
+  #    failure exits the runner immediately, the EXIT trap performs only
+  #    allowlisted file copies (no DB access), and the emulator is
+  #    ephemeral, so a failure here strands no subsequent DB operation.
+  instrument_leg "$NEW_PKG" com.vanipy.migtest.MigrationEmuPostImportLaunchTest postlaunch-instrumentation.txt postlaunch
   verify_filter_order final_closeout || exit 1
   exit 0
 fi

@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 import com.chaquo.python.Python;
+import com.instinct.widget.R;
 import com.chaquo.python.android.AndroidPlatform;
 import java.io.File;
 import java.io.FileWriter;
@@ -65,13 +66,13 @@ public class BotService extends Service {
         } else {
             getSharedPreferences("bot", MODE_PRIVATE).edit().putString("last_mode", mode).apply();
         }
-        String label = mode.equals("live") ? "itdxdc delivery bot running"
+        String label = mode.equals("live") ? "delivery bot running"
                 : mode.equals("provision") ? "creating bot account"
                 : mode.equals("export") ? "exporting bot + settings"
                 : "offline validation running";
         Notification.Builder nb = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, "bot") : new Notification.Builder(this);
-        Notification n = nb.setContentTitle("itdapk bot")
+        Notification n = nb.setContentTitle(getString(R.string.app_name) + " bot")
                 .setContentText(label)
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
                 .build();

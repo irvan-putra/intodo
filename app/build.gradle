@@ -10,6 +10,10 @@ android {
         // leg needs BOTH identities installed on one emulator). Production
         // builds never pass the property and keep the old ID.
         applicationId project.findProperty('emuAppId') ?: 'com.instinct.widget'
+        // Display name follows the same identity switch: the renamed-side
+        // build must not present itself under the old name (launcher,
+        // foreground notification). One resource, both builds accurate.
+        resValue 'string', 'app_name', project.findProperty('emuAppId') ? 'Intodo' : 'itdapk'
         minSdk 26
         targetSdk 34
         versionCode 25

@@ -113,7 +113,7 @@ class BotImport(
             .setTitle("Import bot backup")
             .setMessage(
                 "Move the existing bot (its Delta Chat identity, chats and " +
-                "per-chat lists) into itdapk from the .dcmig bundle exported by the " +
+                "per-chat lists) into this app from the .dcmig bundle exported by the " +
                 "old app. You will also need the one-time transfer code " +
                 "shown there.\n\nThe bot service stays stopped during the " +
                 "import.")
