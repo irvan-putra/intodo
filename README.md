@@ -84,3 +84,4 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 ## Research notes
 
 - [GitHub as storage has limits](docs/research/github-storage-limits.md) - a brief on current repository-size and bandwidth policies, not a blanket endorsement of GitHub for encrypted storage.
+- [Cloudflare Free plan and a long-lived chat bot](docs/research/cloudflare-free-plan-long-lived-bot.md) - current documented limits and open questions; nothing deployed or tested.
