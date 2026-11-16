@@ -30,7 +30,7 @@ class VerifyTest(unittest.TestCase):
             for name, data in (extra or {}).items(): z.writestr(name, data)
     def run_tool(self, *args):
         if args[0] == 'aapt': return self.badging if args[2] == 'badging' else self.manifest
-        return 'Signer #1 certificate SHA-256 digest: ' + self.certs[pathlib.Path(args[-1])] + '\n'
+        return 'Number of signers: 1\nSigner #1 certificate SHA-256 digest: ' + self.certs[pathlib.Path(args[-1])] + '\n'
     def verify(self):
         with patch.object(v, 'run', self.run_tool):
             return v.verify('aapt', 'apksigner', self.apk, self.ref)
@@ -87,6 +87,22 @@ class VerifyTest(unittest.TestCase):
         self.write({'assets/private.txt': b'https://files.instinct.com/synthetic-fixture'})
         with self.assertRaises(v.VerificationFailure) as caught: self.verify()
         self.assertEqual(caught.exception.code, 'private_feed_found')
+    def test_actual_sdk_format_fixtures(self):
+        for sdk in ['34.0.0', '36.0.0', '37.0.0']:
+            text = pathlib.Path(__file__).with_name('fixtures').joinpath(
+                'apksigner-' + sdk + '.txt').read_text()
+            self.assertEqual(v.parse_signer_output(text), 'a' * 64)
+    def test_strict_signer_formats(self):
+        good = 'Number of signers: 1\nV3.0 Signer: certificate SHA-256 digest: ' + CERT + '\n'
+        for bad in [good.replace('signers: 1', 'signers: 2'),
+                    good.replace('V3.0 Signer:', 'Signer #2'),
+                    good.replace('V3.0 Signer:', 'V3.1 Signer:'),
+                    good.replace('V3.0 Signer:', 'unknown'),
+                    good.replace(CERT, 'bad'), good + good,
+                    good + 'Signer #2 certificate SHA-256 digest: ' + CERT + '\n',
+                    good + 'Source Stamp Signer: certificate SHA-256 digest: ' + CERT + '\n',
+                    good.replace('Number of signers: 1\n', '')]:
+            with self.assertRaises(v.VerificationFailure): v.parse_signer_output(bad)
     def test_unsigned_or_multisigner(self):
         for response in ['', ('Signer #1 certificate SHA-256 digest: ' + CERT + '\n') * 2]:
             with patch.object(v, 'run', return_value=response):

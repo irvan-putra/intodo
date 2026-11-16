@@ -32,11 +32,25 @@ def checked_run(code, *args):
 
 
 def signer(apksigner, path, role='candidate'):
-    output = checked_run(role + '_signature_command', apksigner, 'verify', '--print-certs', str(path))
-    matches = re.findall(r'^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$', output, re.M)
-    if len(matches) != 1:
+    output = checked_run(role + '_signature_command', apksigner,
+                         'verify', '--verbose', '--print-certs', str(path))
+    return parse_signer_output(output, role)
+
+
+def parse_signer_output(output, role='candidate'):
+    # SDK34/36: Signer #1; SDK37: V3.0 Signer:. Do not accept arbitrary
+    # prefixes, rotated identities, extra certificates, or multiple signers.
+    counts = re.findall(r'^Number of signers: (.*)$', output, re.M)
+    digest_lines = [line for line in output.splitlines()
+                    if 'certificate SHA-256 digest:' in line]
+    if counts != ['1'] or len(digest_lines) != 1:
         raise VerificationFailure(role + '_signature_format')
-    return matches[0].lower()
+    match = re.fullmatch(
+        r'(?:Signer #1|V3\.0 Signer:) certificate SHA-256 digest: ([0-9a-fA-F]{64})',
+        digest_lines[0])
+    if match is None:
+        raise VerificationFailure(role + '_signature_format')
+    return match.group(1).lower()
 
 
 def verify(aapt, apksigner, candidate, reference):
