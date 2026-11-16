@@ -80,3 +80,7 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 - Feed sync only fetches the encrypted page; the app does not upload list data for sync. When the optional embedded bot is started, it publishes list data to the DeltaChat chats it serves, through its own bot account.
 - No reminders, todos, pairing keys, or personal endpoints are in this repository.
+
+## Research notes
+
+- [GitHub as storage has limits](docs/research/github-storage-limits.md) - a brief on current repository-size and bandwidth policies, not a blanket endorsement of GitHub for encrypted storage.
