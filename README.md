@@ -83,6 +83,8 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 ## Research notes
 
+- [Can a webxdc app use the Web Crypto API (`crypto.subtle`)?](docs/research/webxdc-secure-context-and-web-crypto.md) - source reading across clients; runtime behavior remains unverified.
+
 - [GitHub as storage has limits](docs/research/github-storage-limits.md) - a brief on current repository-size and bandwidth policies, not a blanket endorsement of GitHub for encrypted storage.
 - [Cloudflare Free plan and a long-lived chat bot](docs/research/cloudflare-free-plan-long-lived-bot.md) - current documented limits and open questions; nothing deployed or tested.
 - [Free hosting for an always-on chat bot](docs/research/free-hosting-for-an-always-on-chat-bot.md) - dated vendor-page comparison; no candidate deployed or tested end to end.
