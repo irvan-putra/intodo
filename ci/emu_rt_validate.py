@@ -582,6 +582,11 @@ POSTLAUNCH_GATES = (
     "account_count", "account_address",
 )
 _POSTLAUNCH_PREFIX = "INSTRUMENTATION_STATUS: emu_postlaunch="
+# AndroidX runner 1.6.2 testStarted emits stream="\n<class>:". API34's
+# default am instrument -w reporter prints that WITHOUT a trailing newline,
+# so the first custom status packet is appended to this exact class prefix.
+# Accept only this fixed, first-event framing; never split arbitrary log text.
+_POSTLAUNCH_CLASS_PREFIX = "com.vanipy.migtest.MigrationEmuPostImportLaunchTest:"
 
 
 def postlaunch_summary(raw):
@@ -600,6 +605,10 @@ def postlaunch_summary(raw):
         "cleanup_lock_absent", "cleanup_lock_present",
         "cleanup_rpc_unavailable", "cleanup_rpc_drained", "cleanup_rpc_remaining"}
     for line in text.splitlines():
+        if line == _POSTLAUNCH_CLASS_PREFIX + _POSTLAUNCH_PREFIX + "gate_precondition":
+            if events:
+                return ("invalid",) + empty
+            line = _POSTLAUNCH_PREFIX + "gate_precondition"
         # Protocol-looking malformed lines must not be silently ignored.
         if line.startswith("INSTRUMENTATION_STATUS:") and "emu_postlaunch" in line:
             if not line.startswith(_POSTLAUNCH_PREFIX):

@@ -520,3 +520,61 @@ runner = open(os.path.join(HERE, "emu_runner.sh")).read()
 require(runner.index('ci/emu_rt_validate.py postlaunch "$log"') <
         runner.index('echo "FATAL: leg failed: $klass"'), "diagnostic collected before failure exit")
 print("postlaunch boundary/cleanup matrix: PASS")
+
+# Android's default (non-raw) am instrument console framing. This models
+# bundles, rather than assuming every callback starts on a fresh line:
+# - AndroidX 1.6.2 InstrumentationResultPrinter.testStarted: stream=\n%s:
+# - API34 Instrument.StatusReporter: stream -> print; other keys -> println
+# Sources: AOSP android-14.0.0_r1 cmds/am/.../Instrument.java and the
+# pinned androidx.test:runner:1.6.2 classes.jar bytecode.
+def am_pretty_status(bundles):
+    output = ""
+    for code, bundle in bundles:
+        if "stream" in bundle:
+            output += bundle["stream"]
+        else:
+            for key in sorted(bundle):
+                output += "INSTRUMENTATION_STATUS: " + key + "=" + bundle[key] + "\n"
+            output += "INSTRUMENTATION_STATUS_CODE: " + str(code) + "\n"
+    return output.encode()
+
+klass = "com.vanipy.migtest.MigrationEmuPostImportLaunchTest"
+for n in range(1, len(all_gates) + 1):
+    for body in (["body_failed", "body_passed"] if n == len(all_gates) else ["body_failed"]):
+        events = all_gates[:n] + [body, "cleanup_started", "cleanup_worker_terminated",
+                                 "cleanup_lock_absent", "cleanup_rpc_drained", "cleanup_passed"]
+        formatted = am_pretty_status([(1, {"stream": "\n" + klass + ":"})]
+            + [(100, {"emu_postlaunch": event}) for event in events]
+            + [(-2 if body == "body_failed" else 0,
+                {"stream": "\nError in fixture\n" if body == "body_failed" else "."})])
+        require(validator.postlaunch_summary(formatted) ==
+                validator.postlaunch_summary(postlaunch_events(*events)),
+                "pretty-mode class prefix preserves every gate and body result")
+        require(validator.postlaunch_summary(formatted.replace(b"\n", b"\r\n")) ==
+                validator.postlaunch_summary(formatted), "pretty CRLF")
+
+# Do not turn the correction into arbitrary-prefix stripping or a resync.
+for extra in [b"SECRET:", b"unrelated.Class:", (klass + ": ").encode()]:
+    require(validator.postlaunch_summary(extra + full)[0] == "invalid",
+            "only the exact known class framing may precede the first gate")
+require(validator.postlaunch_summary(postlaunch_events("gate_precondition") +
+        (klass + ":").encode() + full)[0] == "invalid", "framed duplicate rejected")
+require(validator.postlaunch_summary((klass + ":").encode() +
+        postlaunch_events("gate_fixture_setup"))[0] == "incomplete",
+        "class prefix cannot authorize a missing initial gate")
+with tempfile.TemporaryDirectory() as d:
+    path = os.path.join(d, "pretty.txt")
+    events = all_gates[:5] + ["body_failed", "cleanup_started", "cleanup_worker_unproven",
+                             "cleanup_lock_absent", "cleanup_rpc_unavailable", "cleanup_unproven"]
+    raw = am_pretty_status([(1, {"stream": "\n" + klass + ":"})] +
+                          [(100, {"emu_postlaunch": e}) for e in events])
+    with open(path, "wb") as f: f.write(raw + b"\nSECRET-stack-payload\n")
+    cli = subprocess.run([sys.executable, os.path.join(HERE, "emu_rt_validate.py"),
+                          "postlaunch", path], text=True, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    require(cli.returncode == 0 and "emu_postlaunch_diagnostics=complete" in cli.stdout
+            and "emu_postlaunch_last_gate=ready" in cli.stdout
+            and "emu_postlaunch_body=failed" in cli.stdout
+            and "emu_postlaunch_cleanup_rpc=unavailable" in cli.stdout
+            and "SECRET" not in cli.stdout and not cli.stderr, "pretty-mode CLI regression")
+print("postlaunch Android pretty-console framing: PASS")
