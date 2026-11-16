@@ -567,6 +567,11 @@ if [ "$mode" = roundtrip ]; then
       # the JUnit summary gate above is unchanged and raw output stays local.
       python3 ci/emu_rt_validate.py phases "$log" >> "$PRETEST" || true
     fi
+    if [ "$label" = postlaunch ]; then
+      # Seven bounded fixed-enum fields only, no new app-file capture.
+      # Raw instrumentation remains runner-local and is wiped on EXIT.
+      python3 ci/emu_rt_validate.py postlaunch "$log" >> "$PRETEST" || true
+    fi
     if [ "$verdict" != ok ]; then
       echo "FATAL: leg failed: $klass" >&2
       exit 1

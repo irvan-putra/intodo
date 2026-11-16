@@ -6,6 +6,7 @@ import android.os.Process
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.runner.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.instinct.widget.bot.BotActivity
@@ -135,7 +136,19 @@ class MigrationEmuPostImportLaunchTest {
         var scenario: ActivityScenario<BotActivity>? = null
         var primary: Throwable? = null
         var workerObservedLive = false
+        // Fixed vocabulary only: never put Throwable messages, addresses,
+        // paths, PIDs or app data onto the instrumentation status channel.
+        fun diagnostic(event: String) {
+            try {
+                InstrumentationRegistry.getInstrumentation().sendStatus(100,
+                    android.os.Bundle().apply { putString("emu_postlaunch", event) })
+            } catch (_: Throwable) {
+                // A missing beacon never changes an assertion or outcome.
+            }
+        }
+        fun gate(name: String) { diagnostic("gate_" + name) }
         try {
+            gate("precondition")
             // ---- 0. imported state present, no runtime active ----
             val st = JSONObject(File(files, "bot_state.json").readText())
             report.put("stateProvisioned", st.optBoolean("provisioned"))
@@ -149,6 +162,7 @@ class MigrationEmuPostImportLaunchTest {
             // at entry anyway - remove defensively and record.
             report.put("staleStopCleared", stopFlag.delete() || !stopFlag.exists())
 
+            gate("fixture_setup")
             if (!Python.isStarted()) Python.start(AndroidPlatform(ctx))
             val py = Python.getInstance()
             val fixture = py.getModule("emu_fixture")
@@ -161,6 +175,7 @@ class MigrationEmuPostImportLaunchTest {
             // Freshness offset: the boot beacon must be written AFTER
             // this point - bot.log persists across runs.
             val bootLogMark = if (logFile.isFile) logFile.length() else 0L
+            gate("service_start")
             scenario = ActivityScenario.launch(BotActivity::class.java)
             ctx.startService(
                 Intent(ctx, BotService::class.java).putExtra("mode", "live"))
@@ -168,6 +183,7 @@ class MigrationEmuPostImportLaunchTest {
             // ---- 2. boot: the runtime writes RUNNING itself; the lock
             // pid must be this very process (in-process python) ----
             phase = "boot-wait"
+            gate("lock")
             val booted = waitFor(BOOT_BUDGET_MS) { running.exists() }
             report.put("runningAppeared", booted)
             assertTrue("runtime lock absent after ${BOOT_BUDGET_MS}ms - boot failed", booted)
@@ -182,6 +198,7 @@ class MigrationEmuPostImportLaunchTest {
             // boot before rpc open, account lookup, start_io and setup,
             // and a stale beacon from an earlier run proves nothing ----
             phase = "ready-wait"
+            gate("ready")
             val ready = waitFor(READY_BUDGET_MS) {
                 logContainsBeyond(logFile, bootLogMark, READY_BEACON)
             }
@@ -193,7 +210,9 @@ class MigrationEmuPostImportLaunchTest {
             // seeing it non-null here is what makes a null accessor
             // during teardown mean "terminated" rather than "the async
             // start callback never landed".
+            gate("worker_accessor")
             val liveWorker = activeWorker()
+            gate("worker_live")
             report.put("workerObservedLive", liveWorker != null && liveWorker.isAlive)
             assertTrue("no live BotService worker observable while RUNNING " +
                 "- the start lifecycle is untracked, so teardown nulls would " +
@@ -202,11 +221,14 @@ class MigrationEmuPostImportLaunchTest {
 
             // The DeltaChat RPC server is exactly one child of this
             // process with argv[0] == <nativeLibraryDir>/librpcsrv.so.
+            gate("rpc_live_inspection")
             val liveScan = settledRpcChildScan(rpcServerPath)
             report.put("rpcChildScanUnavailable", !liveScan.complete)
             report.put("rpcChildCountLive", liveScan.children.size)
+            gate("rpc_live_available")
             assertTrue("rpc child scan unavailable after retries - " +
                 "inspection cannot be trusted, failing closed", liveScan.complete)
+            gate("rpc_live_count")
             assertEquals("expected exactly one librpcsrv.so child of this " +
                 "process while live, found " + liveScan.children.size,
                 1, liveScan.children.size)
@@ -214,6 +236,7 @@ class MigrationEmuPostImportLaunchTest {
             // ---- 4. observation window: sample for premature exit only.
             // This does not measure event-loop progress. ----
             phase = "observe"
+            gate("observe")
             val t0 = System.currentTimeMillis()
             var vanishedWithoutStop = false
             while (System.currentTimeMillis() - t0 < OBSERVE_WINDOW_MS) {
@@ -226,6 +249,7 @@ class MigrationEmuPostImportLaunchTest {
                 "on ANY exit)", vanishedWithoutStop)
             // Informational only: offline non-fatal paths log tracebacks.
             report.put("tracebackSeenInLogTail", logTail(logFile).contains("Traceback"))
+            gate("state_live")
             val stLive = JSONObject(File(files, "bot_state.json").readText())
             report.put("stateProvisionedLive", stLive.optBoolean("provisioned"))
             assertTrue("state lost provisioned mid-run",
@@ -236,30 +260,36 @@ class MigrationEmuPostImportLaunchTest {
             // away AND the exact RPC child drained - all required before
             // the account recheck opens the DB again ----
             phase = "stop"
+            gate("stop_lock")
             val stopLogMark = if (logFile.isFile) logFile.length() else 0L
             stopFlag.writeText("stop")
             val stopped = waitFor(STOP_BUDGET_MS) { !running.exists() }
             report.put("cleanStopCompleted", stopped)
             assertTrue("runtime did not stop within ${STOP_BUDGET_MS}ms", stopped)
+            gate("stop_watchdog")
             val watchdogProcessed = logContainsBeyond(logFile, stopLogMark, WATCHDOG_BEACON)
             report.put("watchdogProcessedStop", watchdogProcessed)
             assertTrue("watchdog beacon absent after the stop - the lock " +
                 "disappeared without the watchdog processing the flag",
                 watchdogProcessed)
+            gate("rpc_stop_inspection")
             val drainScan = waitForScan(CHILD_DRAIN_BUDGET_MS, rpcServerPath) {
                 it.children.isEmpty()
             }
             report.put("rpcChildDrainScanUnavailable", !drainScan.complete)
             report.put("rpcChildDrainedBeforeRecheck",
                 drainScan.complete && drainScan.children.isEmpty())
+            gate("rpc_stop_available")
             assertTrue("rpc child scan unavailable after the stop - " +
                 "cannot prove non-overlap, failing closed", drainScan.complete)
+            gate("rpc_stop_empty")
             assertTrue("librpcsrv.so child still alive after lock removal " +
                 "- a DB recheck would overlap it", drainScan.children.isEmpty())
 
             // Worker thread terminated too (observed live above, so a
             // null/dead accessor here is genuine termination): the DB
             // recheck must not overlap even a dying worker.
+            gate("worker_stopped")
             val workerGone = waitFor(STOP_BUDGET_MS) { activeWorkerTerminated() }
             report.put("workerTerminatedAfterStop", workerGone)
             assertTrue("BotService worker not terminated after the stop - " +
@@ -268,9 +298,11 @@ class MigrationEmuPostImportLaunchTest {
             // ---- 6. the imported account survived the live cycle, read
             // only after the rpc server is provably gone ----
             phase = "account-after"
+            gate("account_count")
             val countAfter = fixture.callAttr("count_configured", nativeLib, filesPath).toInt()
             report.put("accountCountAfter", countAfter)
             assertEquals(1, countAfter)
+            gate("account_address")
             val addrs = org.json.JSONArray(
                 fixture.callAttr("configured_addrs", nativeLib, filesPath).toString())
             report.put("addrMatchesAfter",
@@ -280,12 +312,15 @@ class MigrationEmuPostImportLaunchTest {
 
             phase = "done"
             File(outDir, "postlaunch-report.json").writeText(report.toString())
+            diagnostic("body_passed")
         } catch (t: Throwable) {
+            diagnostic("body_failed")
             primary = t
         }
 
         // ---- unconditional verified teardown (every exit path) ----
         var teardownError: String? = null
+        diagnostic("cleanup_started")
         try {
             // Always request the stop and clear the persisted mode, even
             // if the lock never appeared or already vanished: a child
@@ -327,14 +362,18 @@ class MigrationEmuPostImportLaunchTest {
                         "leg, runner exits, ephemeral emulator)"
                 }
             }
+            diagnostic(if (workerGone) "cleanup_worker_terminated" else "cleanup_worker_unproven")
             report.put("cleanupWorkerTerminated", workerGone)
             // THEN recheck lock and child - verification after worker
             // death, not a single instant a pending worker can undo.
             val lockGone = waitFor(STOP_BUDGET_MS) { !running.exists() }
+            diagnostic(if (lockGone) "cleanup_lock_absent" else "cleanup_lock_present")
             report.put("cleanupLockAbsent", lockGone)
             val drain = waitForScan(CHILD_DRAIN_BUDGET_MS, rpcServerPath) {
                 it.children.isEmpty()
             }
+            diagnostic(if (!drain.complete) "cleanup_rpc_unavailable" else
+                if (drain.children.isEmpty()) "cleanup_rpc_drained" else "cleanup_rpc_remaining")
             report.put("cleanupRpcChildScanUnavailable", !drain.complete)
             report.put("cleanupRpcChildDrained", drain.complete && drain.children.isEmpty())
             if (!workerGone) teardownError = "BotService worker thread still alive after teardown"
@@ -346,6 +385,7 @@ class MigrationEmuPostImportLaunchTest {
                     "children=${drain.children.size})"
             }
         } catch (t: Throwable) {
+            diagnostic("cleanup_exception")
             teardownError = (teardownError?.plus("; ") ?: "") +
                 "teardown threw: ${t.message}"
         }
@@ -360,6 +400,7 @@ class MigrationEmuPostImportLaunchTest {
         } catch (_: Exception) {
             // never mask the outcome with report-write trouble
         }
+        diagnostic(if (teardownError == null) "cleanup_passed" else "cleanup_unproven")
         if (teardownError != null) {
             val e = AssertionError("postlaunch teardown incomplete: $teardownError")
             if (primary != null) primary!!.addSuppressed(e) else primary = e

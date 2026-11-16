@@ -420,3 +420,103 @@ require(validator.window_dump_summary("x" * (validator.WINDOW_DUMP_MAX_BYTES + 1
         == "oversize", "window XML input must be bounded")
 
 print("emu_rt_validate parser fixtures: PASS")
+# ---------------- bounded postlaunch protocol diagnostics ----------------
+def postlaunch_events(*events):
+    return ("\n".join("INSTRUMENTATION_STATUS: emu_postlaunch=" + e
+                      for e in events) + "\n").encode()
+
+all_gates = ["gate_" + g for g in validator.POSTLAUNCH_GATES]
+full = postlaunch_events(*(all_gates + ["body_passed", "cleanup_started",
+    "cleanup_worker_terminated", "cleanup_lock_absent", "cleanup_rpc_drained", "cleanup_passed"]))
+require(validator.postlaunch_summary(full) ==
+        ("complete", "account_address", "passed", "passed", "terminated", "absent", "drained"), "full gate summary")
+failed = postlaunch_events(*(all_gates[:5] + ["body_failed", "cleanup_started",
+    "cleanup_worker_unproven", "cleanup_lock_absent", "cleanup_rpc_unavailable", "cleanup_unproven"]))
+require(validator.postlaunch_summary(failed) ==
+        ("complete", "ready", "failed", "unproven", "unproven", "absent", "unavailable"), "failed ready not a cause guess")
+inspection = postlaunch_events(*(all_gates[:8] + ["body_failed", "cleanup_started",
+                              "cleanup_exception", "cleanup_unproven"]))
+require(validator.postlaunch_summary(inspection) ==
+        ("complete", "rpc_live_inspection", "failed", "exception", "unknown", "unknown", "unknown"), "cleanup exception distinct")
+require(validator.postlaunch_summary(postlaunch_events(*all_gates[:4])) ==
+        ("incomplete", "lock", "unknown", "unknown", "unknown", "unknown", "unknown"), "missing terminal stays incomplete")
+require(validator.postlaunch_summary(b"arbitrary secret stack\n") ==
+        ("incomplete", "none", "unknown", "unknown", "unknown", "unknown", "unknown"), "no protocol means no inference")
+invalid_streams = [
+    postlaunch_events("gate_SECRET_TOKEN"),
+    postlaunch_events("gate_precondition", "gate_precondition"),
+    postlaunch_events("gate_ready"),
+    postlaunch_events("gate_precondition", "body_passed"),
+    postlaunch_events("gate_precondition", "body_failed", "body_failed"),
+    postlaunch_events("gate_precondition", "cleanup_started"),
+    postlaunch_events("gate_precondition", "body_failed", "cleanup_started",
+                      "cleanup_exception", "cleanup_passed"),
+    postlaunch_events("gate_precondition", "body_failed", "cleanup_started",
+                      "cleanup_passed", "gate_ready"),
+    postlaunch_events("gate_precondition", "body_failed", "cleanup_started",
+                      "cleanup_passed", "cleanup_passed"),
+    b"INSTRUMENTATION_STATUS: emu_postlaunch=gate_precondition SECRET\n",
+    b"INSTRUMENTATION_STATUS: emu_postlaunch =gate_precondition\n",
+    b"INSTRUMENTATION_STATUS: arbitrary=emu_postlaunch_SECRET\n",
+    postlaunch_events(*(["gate_precondition"] * 30)),
+]
+for raw in invalid_streams:
+    require(validator.postlaunch_summary(raw) ==
+            ("invalid", "none", "unknown", "unknown", "unknown", "unknown", "unknown"), "bad protocol rejected without data")
+require(validator.postlaunch_summary(b"s" * (validator.POSTLAUNCH_MAX_BYTES + 1)) ==
+        ("oversize", "none", "unknown", "unknown", "unknown", "unknown", "unknown"), "bounded byte read")
+with tempfile.TemporaryDirectory() as d:
+    path = os.path.join(d, "instrumentation.txt")
+    for raw, status in [(full, "complete"), (failed, "complete"),
+                        (invalid_streams[0], "invalid"),
+                        (b"SECRET" * validator.POSTLAUNCH_MAX_BYTES, "oversize")]:
+        with open(path, "wb") as f: f.write(raw)
+        cli = subprocess.run([sys.executable, os.path.join(HERE, "emu_rt_validate.py"),
+                              "postlaunch", path], text=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        require(cli.returncode == 0 and len(cli.stdout) < 450 and not cli.stderr,
+                "bounded seven-field CLI; diagnostic not JUnit verdict")
+        require("SECRET" not in cli.stdout and
+                "emu_postlaunch_diagnostics=" + status in cli.stdout,
+                "untrusted content never echoed")
+    missing = validator.postlaunch_file_summary(os.path.join(d, "missing"))
+    require(missing == ("unavailable", "none", "unknown", "unknown", "unknown", "unknown", "unknown"), "absent input")
+print("postlaunch diagnostic fixtures: PASS")
+
+# Every body gate can be the last observed gate; the parser does not
+# interpret that observation as an exception type or root cause.
+for n, gate in enumerate(validator.POSTLAUNCH_GATES, 1):
+    raw = postlaunch_events(*(all_gates[:n] + ["body_failed", "cleanup_started",
+        "cleanup_worker_terminated", "cleanup_lock_absent", "cleanup_rpc_drained", "cleanup_passed"]))
+    require(validator.postlaunch_summary(raw) ==
+            ("complete", gate, "failed", "passed", "terminated", "absent", "drained"),
+            "each failure boundary survives independently of cleanup success")
+require(validator.postlaunch_summary(full.replace(b"\n", b"\r\n")) ==
+        validator.postlaunch_summary(full), "adb CRLF supported")
+for checks in [[], ["cleanup_worker_terminated"],
+               ["cleanup_worker_terminated", "cleanup_lock_absent"]]:
+    raw = postlaunch_events(*(all_gates[:1] + ["body_failed", "cleanup_started"]
+                             + checks + ["cleanup_exception", "cleanup_unproven"]))
+    summary = validator.postlaunch_summary(raw)
+    require(summary[0] == "complete" and summary[3] == "exception", "partial cleanup exception")
+for worker in ["terminated", "unproven"]:
+    for lock in ["absent", "present"]:
+        for rpc in ["drained", "remaining", "unavailable"]:
+            passed = (worker, lock, rpc) == ("terminated", "absent", "drained")
+            raw = postlaunch_events(*(all_gates + ["body_passed", "cleanup_started",
+                "cleanup_worker_" + worker, "cleanup_lock_" + lock, "cleanup_rpc_" + rpc,
+                "cleanup_passed" if passed else "cleanup_unproven"]))
+            require(validator.postlaunch_summary(raw) ==
+                ("complete", "account_address", "passed", "passed" if passed else "unproven",
+                 worker, lock, rpc), "cleanup outcomes independent of body")
+
+# Keep the emitting protocol and parser in sync, without an emulator.
+import re
+source = open(os.path.join(HERE, "../app/src/androidTest/java/com/vanipy/migtest/"
+                         "MigrationEmuPostImportLaunchTest.kt")).read()
+require(tuple(re.findall(r'gate\("([a-z_]+)"\)', source)) == validator.POSTLAUNCH_GATES,
+        "Kotlin gate vocabulary/order matches parser")
+runner = open(os.path.join(HERE, "emu_runner.sh")).read()
+require(runner.index('ci/emu_rt_validate.py postlaunch "$log"') <
+        runner.index('echo "FATAL: leg failed: $klass"'), "diagnostic collected before failure exit")
+print("postlaunch boundary/cleanup matrix: PASS")

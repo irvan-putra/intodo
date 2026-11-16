@@ -63,6 +63,11 @@ Three modes:
       count and a fixed category derived only from exact JUnit/runner fields;
       never prints raw exception, result or arbitrary instrumentation text.
 
+  emu_rt_validate.py postlaunch <path>
+      Bound the runner-local instrumentation read to 1 MiB and emit only
+      seven fixed-enum gate/body/cleanup fields. No raw content leaves the
+      runner. Invalid or incomplete diagnostics do not override JUnit.
+
   emu_rt_validate.py drop-delta <before> <after>
       Require numeric-only packet-count files (one nonnegative integer
       each) and a strict increase; prints nothing and exits 1 otherwise.
@@ -565,6 +570,98 @@ def check_drop_delta(before_path, after_path):
     return before is not None and after is not None and after > before
 
 
+# Postlaunch diagnostics are metadata, never a test-success oracle.
+# The independent JUnit verdict and network checks still own pass/fail.
+POSTLAUNCH_MAX_BYTES = 1024 * 1024
+POSTLAUNCH_GATES = (
+    "precondition", "fixture_setup", "service_start", "lock", "ready",
+    "worker_accessor", "worker_live", "rpc_live_inspection",
+    "rpc_live_available", "rpc_live_count", "observe", "state_live",
+    "stop_lock", "stop_watchdog", "rpc_stop_inspection",
+    "rpc_stop_available", "rpc_stop_empty", "worker_stopped",
+    "account_count", "account_address",
+)
+_POSTLAUNCH_PREFIX = "INSTRUMENTATION_STATUS: emu_postlaunch="
+
+
+def postlaunch_summary(raw):
+    """Return fixed enums only. Reject malformed/duplicate/out-of-order
+    protocol fields and cap input, events and output. Other log text is
+    ignored, never copied or used to guess an exception's meaning."""
+    empty = ("none", "unknown", "unknown", "unknown", "unknown", "unknown")
+    if len(raw) > POSTLAUNCH_MAX_BYTES:
+        return ("oversize",) + empty
+    text = raw.decode("utf-8", errors="replace")
+    events = []
+    valid = {"gate_" + g for g in POSTLAUNCH_GATES} | {
+        "body_passed", "body_failed", "cleanup_started",
+        "cleanup_exception", "cleanup_passed", "cleanup_unproven",
+        "cleanup_worker_terminated", "cleanup_worker_unproven",
+        "cleanup_lock_absent", "cleanup_lock_present",
+        "cleanup_rpc_unavailable", "cleanup_rpc_drained", "cleanup_rpc_remaining"}
+    for line in text.splitlines():
+        # Protocol-looking malformed lines must not be silently ignored.
+        if line.startswith("INSTRUMENTATION_STATUS:") and "emu_postlaunch" in line:
+            if not line.startswith(_POSTLAUNCH_PREFIX):
+                return ("invalid",) + empty
+            event = line[len(_POSTLAUNCH_PREFIX):]
+            if event not in valid or len(events) >= len(POSTLAUNCH_GATES) + 8:
+                return ("invalid",) + empty
+            events.append(event)
+    index = 0
+    last = "none"
+    body = "unknown"
+    cleanup = "unknown"
+    state = "gates"
+    cleanup_exception = False
+    checks = []
+    for event in events:
+        if event.startswith("gate_"):
+            if (state != "gates" or index >= len(POSTLAUNCH_GATES)
+                    or event != "gate_" + POSTLAUNCH_GATES[index]):
+                return ("invalid",) + empty
+            last = POSTLAUNCH_GATES[index]
+            index += 1
+        elif event in {"body_passed", "body_failed"}:
+            if state != "gates" or index == 0:
+                return ("invalid",) + empty
+            if event == "body_passed" and index != len(POSTLAUNCH_GATES):
+                return ("invalid",) + empty
+            body = "passed" if event == "body_passed" else "failed"
+            state = "body"
+        elif event == "cleanup_started":
+            if state != "body":
+                return ("invalid",) + empty
+            state = "cleanup"
+        elif event.startswith(("cleanup_worker_", "cleanup_lock_", "cleanup_rpc_")):
+            group = ("worker", "lock", "rpc")[len(checks)] if len(checks) < 3 else "none"
+            if state != "cleanup" or cleanup_exception or not event.startswith("cleanup_" + group + "_"):
+                return ("invalid",) + empty
+            checks.append(event.split("_", 2)[2])
+        elif event == "cleanup_exception":
+            if state != "cleanup" or cleanup_exception:
+                return ("invalid",) + empty
+            cleanup_exception = True
+        elif event in {"cleanup_passed", "cleanup_unproven"}:
+            if (state != "cleanup" or (not cleanup_exception and len(checks) != 3)
+                    or (event == "cleanup_passed" and
+                        (cleanup_exception or checks != ["terminated", "absent", "drained"]))):
+                return ("invalid",) + empty
+            cleanup = ("exception" if cleanup_exception else
+                       "passed" if event == "cleanup_passed" else "unproven")
+            state = "done"
+    return (("complete" if state == "done" else "incomplete", last, body, cleanup)
+            + tuple(checks + ["unknown"] * (3 - len(checks))))
+
+
+def postlaunch_file_summary(path):
+    try:
+        with open(path, "rb") as f:
+            return postlaunch_summary(f.read(POSTLAUNCH_MAX_BYTES + 1))
+    except OSError:
+        return ("unavailable", "none", "unknown", "unknown", "unknown", "unknown", "unknown")
+
+
 def main():
     if len(sys.argv) == 4 and sys.argv[1] == "json":
         ok = check_json(sys.argv[2], sys.argv[3])
@@ -603,6 +700,16 @@ def main():
         print("window_strings=%s" % (",".join(strings) if strings else "none"))
         print("window_nodes=%d" % count)
         ok = True
+    elif len(sys.argv) == 3 and sys.argv[1] == "postlaunch":
+        status, gate, body, cleanup, worker, lock, rpc = postlaunch_file_summary(sys.argv[2])
+        print("emu_postlaunch_diagnostics=%s" % status)
+        print("emu_postlaunch_last_gate=%s" % gate)
+        print("emu_postlaunch_body=%s" % body)
+        print("emu_postlaunch_cleanup=%s" % cleanup)
+        print("emu_postlaunch_cleanup_worker=%s" % worker)
+        print("emu_postlaunch_cleanup_lock=%s" % lock)
+        print("emu_postlaunch_cleanup_rpc=%s" % rpc)
+        ok = True  # diagnostic only; never changes the JUnit gate
     elif len(sys.argv) == 3 and sys.argv[1] == "phases":
         _text = open(sys.argv[2]).read()
         phases, unknown = extract_phases(_text)
