@@ -45,3 +45,10 @@ One encryption caveat to design around: end-to-end encryption ends at the bot. D
 
 - [deltachat-rpc-server on PyPI, with the Android packages](https://pypi.org/project/deltachat-rpc-server/) · [DeltaChat JSON-RPC reference](https://py.delta.chat/jsonrpc/reference.html) · [webxdc spec](https://webxdc.org/docs/spec/messenger.html)
 - [Turso SQL over HTTP reference](https://docs.turso.tech/sdk/http/reference)
+
+
+## Architecture illustration
+
+![Illustration of a phone passing notes to a database.](../../assets/illustrations/phone-cloud-bridge.png)
+
+*Illustration only. This is not a screenshot or evidence that the proposed integration has been deployed.*
