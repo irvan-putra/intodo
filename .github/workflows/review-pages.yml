@@ -34,16 +34,16 @@
 # served source. The fetch-then-compare tip check below still aborts the
 # run if the staged gh-pages checkout moved mid-run.
 #
-# What it does, on every push to main that touches itdweb/review/ (or a
-# manual dispatch from main - the job guard refuses other refs):
-#   1. Builds the static bundle (itdweb/review/build.sh, fingerprinted assets).
+# What it does, on every push to main that touches itdweb/review/ or the
+# shared-list simulation (or a manual dispatch from main - the job guard
+# refuses other refs):
+#   1. Builds the static review-canvas bundle (itdweb/review/build.sh).
 #   2. Checks out the full current site from gh-pages and stages the bundle
 #      via tools/release/stage_pages.sh, which refuses a wrong origin, a
-#      wrong branch, a dirty tree, or any change outside review/ - the demo
-#      page, photos/ and everything else are always preserved.
-#   3. Deploys the staged site through the Pages artifact API.
-#   4. Verifies the live page serves the exact build bytes - a green check
-#      means LIVE, not just deployed.
+#      wrong branch, a dirty tree, or any change outside review/.
+#   3. Stages the additive shared-list simulation under its own approved
+#      directory; it does not replace the root demo, photos/ or review/.
+#   4. Deploys the staged full site through the Pages artifact API.
 
 name: publish review canvas
 
@@ -52,6 +52,7 @@ on:
     branches: [main]
     paths:
       - 'itdweb/review/**'
+      - 'demos-shared-list-simulation/**'
       - 'tools/release/**'
       - '.github/workflows/review-pages.yml'
   workflow_dispatch:
@@ -101,6 +102,9 @@ jobs:
             exit 1
           fi
           sh source/tools/release/stage_pages.sh "$PWD/dist" "$PWD/site"
+
+      - name: Stage the shared-list simulation without replacing other pages
+        run: sh source/tools/release/stage-demo-pages.sh source/demos-shared-list-simulation "$PWD/site"
 
       - name: Drop git metadata from the artifact
         run: rm -rf site/.git

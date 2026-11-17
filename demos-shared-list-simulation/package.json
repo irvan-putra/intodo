@@ -1,0 +1,1 @@
+{"private":true,"scripts":{"build":"esbuild entry.tsx --bundle --minify --outfile=bundle.js --loader:.zip=file"},"dependencies":{"react":"19.2.0","react-dom":"19.2.0"},"devDependencies":{"esbuild":"0.25.12"}}

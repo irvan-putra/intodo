@@ -93,6 +93,28 @@ sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" >/dev/null || fail "re-stage over sta
 ok "staging replaces stale content inside review/ (deletion allowed there)"
 git -C "$PAGES" checkout -q -- .
 
+# 4f. stage the additive simulation under a dedicated allowed path
+DEMO="$WORK/demo"
+mkdir -p "$DEMO"
+printf '%s\\n' '<html>simulation</html>' > "$DEMO/index.html"
+printf '%s\\n' 'bundle' > "$DEMO/bundle.js"
+sh "$HERE/stage-demo-pages.sh" "$DEMO" "$PAGES" >/dev/null || fail "clean simulation stage rejected"
+[ -f "$PAGES/shared-list-simulation/index.html" ] || fail "simulation page not staged"
+[ -f "$PAGES/shared-list-simulation/bundle.js" ] || fail "simulation bundle not staged"
+git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(review/|shared-list-simulation/)' | grep . && fail "unexpected change outside approved paths"
+ok "simulation staged under its own path without changing other Pages content"
+git -C "$PAGES" add -A && git -C "$PAGES" commit -qm demo
+
+# 4g. wrong branch is rejected by the additive simulation stage
+git -C "$PAGES" checkout -qb main
+if sh "$HERE/stage-demo-pages.sh" "$DEMO" "$PAGES" 2>"$WORK/err5"; then
+    fail "simulation staging on main branch was accepted"
+fi
+grep -q 'expected gh-pages' "$WORK/err5" || fail "simulation wrong-branch rejection missing"
+git -C "$PAGES" checkout -q --detach
+git -C "$PAGES" branch -qD main 2>/dev/null || true
+ok "simulation staging refused on a branch other than gh-pages"
+
 # 5. verify_live passes when the stub serves the new build
 SITE="$WORK/site"
 mkdir -p "$SITE"

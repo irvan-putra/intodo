@@ -81,7 +81,11 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 - Feed sync only fetches the encrypted page; the app does not upload list data for sync. When the optional embedded bot is started, it publishes list data to the DeltaChat chats it serves, through its own bot account.
 - No reminders, todos, pairing keys, or personal endpoints are in this repository.
 
-## Research notes
+## Browser simulation demos
+
+- [Two-phone shared-list simulation](https://vanipy.com/intodo/shared-list-simulation/) - a browser-local, invented-data demo of the original merge engine. It does not connect to DeltaChat or any real phone. Its controls do not generate a same-field conflict; see the limitations on the page and in the [source README](demos-shared-list-simulation/README.md). The archive download is historical v0.4, not a current release or an upgrade to an existing list.
+
+
 
 - [Can a webxdc app use the Web Crypto API (`crypto.subtle`)?](docs/research/webxdc-secure-context-and-web-crypto.md) - source reading across clients; runtime behavior remains unverified.
 
