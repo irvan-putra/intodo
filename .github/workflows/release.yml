@@ -44,7 +44,11 @@ jobs:
           python-version: '3.10'
 
       - name: Prepare version-badge generator
-        run: python -m pip install Pillow==11.3.0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu-core
+          echo 'd1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b  /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' | sha256sum --check
+          python -m pip install Pillow==12.3.0
 
       - name: Validate and stamp version (inputs via env, never interpolated into the shell)
         env:
@@ -164,4 +168,4 @@ jobs:
           gh release create "v$IN_NAME" "itdapk-v$IN_NAME.apk" SHA256SUMS \
             --target "$STAMP_SHA" \
             --title "itdapk v$IN_NAME" \
-            --notes "Built from commit $STAMP_SHA with version v$IN_NAME stamped into the source at that tag, so checking out the tag reproduces this binary. Unconfigured public build: enter your feed address in the app after install. Current package com.vanipy.intodo, launcher label itdapk. Same-signer updates keep existing data for this package, including the prior new-ID candidate. Separate install from old com.instinct.widget; old app and data are unchanged. No migration or data reset. Existing new-ID home-screen widgets/shortcuts may need re-adding because Android component class names changed; do not clear app data. Unconfigured first install: create a pairing key, share only its public key with your feed publisher, then enter the encrypted feed address. Checks completed in CI are build and host checks, not a claim of phone runtime verification."
+            --notes ""
