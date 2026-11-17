@@ -79,8 +79,8 @@ jobs:
           sed -i "s/versionCode .*/versionCode $IN_CODE/" app/build.gradle
           grep -n "versionName\|versionCode" app/build.gradle
           # commit the stamp BEFORE tagging so every tag's source reproduces its binary
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "irvan-putra"
+          git config user.email "irvan.putra@gmail.com"
           python3 tools/version_icons.py
           git add app/build.gradle app/src/main/res/mipmap-*/ic_launcher.png
           git commit -m "release: stamp v$IN_NAME ($IN_CODE)"
