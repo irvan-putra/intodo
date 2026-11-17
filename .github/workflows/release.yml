@@ -45,9 +45,7 @@ jobs:
 
       - name: Prepare version-badge generator
         run: |
-          sudo apt-get update
-          sudo apt-get install -y fonts-dejavu-core
-          echo 'd1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b  /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' | sha256sum --check
+          echo 'd1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b  tools/assets/fonts/DejaVuSans-Bold.ttf' | sha256sum --check
           python -m pip install Pillow==12.3.0
 
       - name: Validate and stamp version (inputs via env, never interpolated into the shell)

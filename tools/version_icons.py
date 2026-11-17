@@ -5,7 +5,7 @@ Deterministic. Same version in, same PNGs out. Inputs are pinned: Pillow
 PILLOW_PIN and DejaVu Sans Bold with sha256 FONT_SHA256. The script fails
 instead of falling back to another font or Pillow version, because a
 different rasterizer or font changes the pixels.
-    pip install pillow==12.3.0   (fonts-dejavu-core provides the font)
+    pip install pillow==12.3.0   (the pinned font is included in tools/assets/fonts)
 
 Badge: numbers only, a full-width strip across the bottom 24% of the icon.
 Picture safety: every picture pixel is checked to lie inside the circle that
@@ -17,7 +17,7 @@ import PIL
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 PILLOW_PIN = "12.3.0"
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "DejaVuSans-Bold.ttf")
 FONT_SHA256 = "d1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b"
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 S = 768
