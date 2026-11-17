@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MergeDoc, MERGE_DELETED } from './engine';
-import xdcZip from './itdxdc-v0.4.zip';
+const xdcZip = './itdxdc-v0.4.zip';
 
 // Demo transport: simulates what Delta Chat does for a real webxdc mini app -
 // every update one phone sends is delivered to every phone in the chat.
