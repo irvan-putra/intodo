@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Run render tests (Robolectric native graphics)
-        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.instinct.widget.bot.BotActivityRenderTest' --tests 'com.instinct.widget.bot.PublishDialogRenderTest'
+        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.bot.BotActivityRenderTest' --tests 'com.vanipy.intodo.bot.PublishDialogRenderTest'
       - name: Collect renders (hard-fail when an expected render is absent)
         run: |
           set -euo pipefail

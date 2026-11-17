@@ -2,14 +2,14 @@ plugins { id 'com.android.application'; id 'com.chaquo.python'; id 'org.jetbrain
 android {
     testOptions { unitTests { includeAndroidResources = true } }
     buildFeatures { buildConfig true }
-    namespace 'com.instinct.widget'
+    namespace 'com.vanipy.intodo'
     compileSdk 34
     defaultConfig {
-        applicationId 'com.instinct.widget'
+        applicationId 'com.vanipy.intodo'
         minSdk 26
         targetSdk 34
-        versionCode 25
-        versionName '0.5.10'
+        versionCode 27
+        versionName '0.5.12'
         // Bot runtime (DeltaChat core) is bundled for arm64-v8a only, same
         // constraint as the scratch bot builds; librpcsrv.so exists for no
         // other ABI yet.
@@ -45,5 +45,6 @@ dependencies {
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'androidx.work:work-testing:2.9.1'
+    testImplementation 'androidx.room:room-runtime:2.6.1' // inspect persisted WorkSpec in upgrade regression
     testImplementation 'org.robolectric:robolectric:4.11.1'
 }

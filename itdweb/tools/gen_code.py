@@ -21,7 +21,7 @@ COMMIT = args.commit or subprocess.check_output(
     ['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip()
 SHORT = COMMIT[:7]
 
-J = 'app/src/main/java/com/instinct/widget/'
+J = 'app/src/main/java/com/vanipy/intodo/'
 P = 'app/src/main/python/'
 W = 'webxdc/'
 R = 'itdweb/'

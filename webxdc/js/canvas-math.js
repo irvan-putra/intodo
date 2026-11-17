@@ -2,7 +2,7 @@
 // Port of the itdweb React canvas math (itdweb/src/App.tsx) with no DOM or
 // framework dependencies, so the exact same code runs in webxdc webviews and
 // in Node for tests. Mirror of the Android port
-// (app/src/main/java/com/instinct/widget/canvas/CanvasMath.java) -
+// (app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java) -
 // divergence between the two is a bug.
 //
 // Camera model: cam = { x, y, z } is the world point at the viewport center

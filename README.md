@@ -10,10 +10,18 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 
 Active test builds, published on this repository's Releases page. Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
 
-- **itdapk**: latest release **v0.5.7** (public, unconfigured APK: enter your feed address in the app after install).
+- **itdapk**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.intodo`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
 - **itdxdc**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
 - **itdweb**: review canvas published through GitHub Pages Actions.
 - Branch `unfinished/log-access-v3` holds a partial, unfinished step in the wider log-access work: selectable bot-log text, nested scrolling that preserves vertical drags, and opening at the newest lines. It has been compiled but not run on a device, and is not part of any release - see `UNFINISHED-log-access-v3.md` on that branch.
+
+## Android identity and fresh setup
+
+Current source uses `com.vanipy.intodo` for the application ID, namespace and Android source packages. Display names stay unchanged. It is separate from old `com.instinct.widget` installs, whose source remains in Git history. No export/import bridge or automatic data migration is added. Existing background feed work is updated to the current worker class without clearing app data. A home-screen widget added from the earlier new-ID candidate may need to be removed from the home screen and added again because its provider class name changed; the old app's widgets are separate and unchanged. Recreate an existing new-ID launcher shortcut as well if the launcher retains its old activity component. This does not require clearing app data. Keep an old installation and its data unless you choose otherwise.
+
+A first installation starts empty. If `com.vanipy.intodo` is already installed (including the earlier side-by-side candidate), a same-signer update keeps that installation's existing data; it does not reset it. Do not clear data or uninstall as part of setup. Create a pairing key only if the app is unpaired, share only its public key with your feed publisher, enter the resulting encrypted feed address and sync. The optional bot connection is set up separately; never run two copies against the same bot account.
+
+The existing release naming (`itdapk-v<version>.apk`) and in-app update path remain. The installer checks this app's package name and signing certificate before offering Android installation. Older-ID apps refuse a new-ID APK rather than replacing themselves.
 
 ## What is verified
 
@@ -66,7 +74,7 @@ Requires JDK 17, Android SDK (platform 34), and Gradle 8.5.
 gradle assembleDebug
 ```
 
-The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Public, unconfigured release APKs are attached to each GitHub release; they are signed with the project keystore (same signer across releases), so installing a newer version over an older one keeps app data (pairing key and cached list).
+The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Public, unconfigured release APKs are attached to each GitHub release; they are signed with the project keystore (same signer across releases), so an update with the same package ID keeps that installation's data (pairing key and cached list). The package-ID change to `com.vanipy.intodo` is a separate install from the older ID, not an in-place upgrade.
 
 ## Known limits
 

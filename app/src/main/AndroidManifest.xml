@@ -39,7 +39,7 @@
         </receiver>
         <receiver android:name=".InstallStatusReceiver" android:exported="false">
             <intent-filter>
-                <action android:name="com.instinct.widget.INSTALL_STATUS" />
+                <action android:name="com.vanipy.intodo.INSTALL_STATUS" />
             </intent-filter>
         </receiver>
     </application>

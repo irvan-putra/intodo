@@ -6,6 +6,8 @@ tests, code review or local harnesses. See README.md "What is verified".
 
 ## itdapk (Android app + home-screen widget)
 
+- **v0.5.12 (source preparation, not yet released)** - Use `com.vanipy.intodo` consistently for the current Android application ID, namespace and source/test packages. Fresh-start install beside the old app, no migration or reset. Keep existing app names, versioned downloads and same-package/signer update checks. Update active CI selectors/source generators and the icon version. Refresh persisted background sync to the renamed worker without resetting its schedule. Existing home-screen widgets from the earlier new-ID candidate may need re-adding because their provider class changed. Previous source remains in Git history.
+
 - **v0.5.7** - Fix widget host inflation and list copying.
 - **v0.5.6** - List view fills the app and the widget.
 - **v0.5.5** - Remove "Instinct" wording from visible app copy.
