@@ -16,7 +16,7 @@ import static org.junit.Assert.*;
 
 /** Synthetic sizing regression; combined launcher hosting is a separate check. */
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk=32)
+@Config(sdk=32, qualifiers="w360dp-h800dp-mdpi")
 public class WidgetCompactTest {
     @Test public void compactRemoteViewsKeepEveryItemAndReadableRow() {
         Context c=RuntimeEnvironment.getApplication();
@@ -42,7 +42,7 @@ public class WidgetCompactTest {
         assertEquals(1,title.getMaxLines());
         assertEquals(1,note.getMaxLines());
         row.measure(View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
-        assertTrue("one-row content fits minimum minus padding",row.getMeasuredHeight()<=40*c.getResources().getDisplayMetrics().density);
+        assertTrue("compact row measured="+row.getMeasuredHeight()+"px density="+c.getResources().getDisplayMetrics().density+" scaled="+c.getResources().getDisplayMetrics().scaledDensity, row.getMeasuredHeight()<=40*c.getResources().getDisplayMetrics().density);
         opts.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,180);
         AppWidgetManager.getInstance(c).updateAppWidgetOptions(id,opts);
         assertFalse(f.compact());
