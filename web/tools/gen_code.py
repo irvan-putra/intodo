@@ -70,7 +70,7 @@ CONFIG = [
       principal=J+'bot/BotService.java',
       files=[J+'bot/BotService.java', J+'bot/BotActivity.java',
              J+'bot/BootReceiver.java', J+'bot/BotImport.kt',
-             J+'bot/PublishErrors.java', J+'bot/XdcFetch.java'],
+             J+'bot/PublishErrors.java', J+'bot/DisplayNames.java', J+'bot/XdcFetch.java'],
       sections=['bot-app']),
  dict(id='cp-bot-bridge', container='c-app', name='Bot bridge & control',
       tech='Python (Chaquopy) - deltachat-rpc-client',
