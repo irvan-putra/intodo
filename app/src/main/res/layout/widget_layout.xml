@@ -4,7 +4,7 @@
      in the app or the scheduled worker. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="#F2101828" android:padding="10dp">
+    android:orientation="vertical" android:background="#F2101828" android:padding="4dp">
 
     <!-- wrap_content so the collection only covers real rows (verified: 3 rows in
          700px -> list 146px + filler 554px; 40 rows -> list fills, filler 0) -->

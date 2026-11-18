@@ -1,6 +1,7 @@
 package com.vanipy.intodo;
 
 import android.content.Context;
+import android.appwidget.AppWidgetManager;
 import android.content.Intent;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -11,13 +12,20 @@ import java.util.List;
 public class WidgetService extends RemoteViewsService {
     @Override
     public RemoteViewsFactory onGetViewFactory(Intent intent) {
-        return new Factory(getApplicationContext());
+        return new Factory(getApplicationContext(), intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID));
     }
 
     static class Factory implements RemoteViewsService.RemoteViewsFactory {
         private final Context context;
         private List<Object> rows = new ArrayList<>();
-        Factory(Context c) { context = c; }
+        private final int widgetId;
+        Factory(Context c) { this(c, AppWidgetManager.INVALID_APPWIDGET_ID); }
+        Factory(Context c, int id) { context = c; widgetId = id; }
+        boolean compact() {
+            if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return false;
+            return AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+                    .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 48) <= 110;
+        }
 
         @Override public void onCreate() { }
         @Override public void onDestroy() { }
@@ -45,7 +53,7 @@ public class WidgetService extends RemoteViewsService {
         @Override
         public RemoteViews getViewAt(int i) {
             FeedParser.Item item = (FeedParser.Item) rows.get(i);
-            RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.widget_item);
+            RemoteViews v = new RemoteViews(context.getPackageName(), compact() ? R.layout.widget_item_compact : R.layout.widget_item);
             String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
             v.setTextViewText(R.id.item_title, item.title + suffix);
             if (item.note != null && !item.note.isEmpty()) {

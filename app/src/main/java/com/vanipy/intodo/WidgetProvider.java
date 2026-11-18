@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -16,6 +17,30 @@ public class WidgetProvider extends AppWidgetProvider {
     public void onUpdate(Context context, AppWidgetManager awm, int[] ids) {
         FeedSyncScheduler.schedule(context);
         for (int id : ids) updateOne(context, awm, id);
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager awm, int id, Bundle options) {
+        super.onAppWidgetOptionsChanged(context, awm, id, options);
+        updateOne(context, awm, id);
+        awm.notifyAppWidgetViewDataChanged(id, R.id.widget_list);
+    }
+
+    static boolean summaryForSize(int widthDp, int heightDp) {
+        return widthDp < 160 && heightDp <= 110;
+    }
+
+    static int itemCount(String json) {
+        if (json == null) return 0;
+        try {
+            int n = 0;
+            for (FeedParser.Section section : FeedParser.parse(json).sections) n += section.items.size();
+            return n;
+        } catch (Exception ignored) { return 0; }
+    }
+
+    static int paddingDpForHeight(int heightDp) {
+        return heightDp > 110 ? 10 : 4;
     }
 
     /** Refreshes list contents and footer on every widget; used after background syncs. */
@@ -34,7 +59,22 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     static void updateOne(Context context, AppWidgetManager awm, int id) {
+        Bundle options = awm.getAppWidgetOptions(id);
+        int heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 48);
+        int widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 48);
+        if (summaryForSize(widthDp, heightDp)) {
+            RemoteViews summary = new RemoteViews(context.getPackageName(), R.layout.widget_summary);
+            int count = itemCount(Prefs.feed(context));
+            summary.setTextViewText(R.id.widget_summary_count, count > 999 ? "999+" : String.valueOf(count));
+            summary.setContentDescription(R.id.widget_summary_root, "itdapk: " + count + " items. Tap for full list.");
+            summary.setOnClickPendingIntent(R.id.widget_summary_root, PendingIntent.getActivity(context,
+                    id * 2 + 2, new Intent(context, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+            awm.updateAppWidget(id, summary);
+            return;
+        }
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
+        int paddingPx = Math.round(paddingDpForHeight(heightDp) * context.getResources().getDisplayMetrics().density);
+        views.setViewPadding(R.id.widget_root, paddingPx, paddingPx, paddingPx, paddingPx);
         Intent svc = new Intent(context, WidgetService.class);
         svc.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
         svc.setData(android.net.Uri.parse("instinctwidget://widget/" + id));
