@@ -18,6 +18,7 @@ public class WidgetService extends RemoteViewsService {
     static class Factory implements RemoteViewsService.RemoteViewsFactory {
         private final Context context;
         private volatile List<Object> rows = new ArrayList<>();
+        private long rowEpoch = -1;
         private final int widgetId;
         Factory(Context c) { this(c, AppWidgetManager.INVALID_APPWIDGET_ID); }
         Factory(Context c, int id) { context = c; widgetId = id; }
@@ -32,6 +33,7 @@ public class WidgetService extends RemoteViewsService {
 
         @Override
         public void onDataSetChanged() {
+            rowEpoch = Prefs.modeEpoch(context);
             List<Object> next = new ArrayList<>();
             String json = Prefs.feed(context);
             if (json == null) { rows = next; return; }
@@ -45,7 +47,7 @@ public class WidgetService extends RemoteViewsService {
             rows = next;
         }
 
-        @Override public int getCount() { return rows.size(); }
+        @Override public int getCount() { return rowEpoch == Prefs.modeEpoch(context) ? rows.size() : 0; }
         @Override public int getViewTypeCount() { return 2; }
         @Override public long getItemId(int i) { return i; }
         @Override public boolean hasStableIds() { return true; }
@@ -53,6 +55,7 @@ public class WidgetService extends RemoteViewsService {
 
         @Override
         public RemoteViews getViewAt(int i) {
+            if (rowEpoch != Prefs.modeEpoch(context)) return null;
             List<Object> snapshot = rows;
             if (i < 0 || i >= snapshot.size()) return null;
             FeedParser.Item item = (FeedParser.Item) snapshot.get(i);
@@ -63,7 +66,7 @@ public class WidgetService extends RemoteViewsService {
     static RemoteViews itemView(Context context, FeedParser.Item item, boolean compact) {
             RemoteViews v = new RemoteViews(context.getPackageName(), compact ? R.layout.widget_item_compact : R.layout.widget_item);
             String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
-            v.setTextViewText(R.id.item_title, item.title + suffix);
+            v.setTextViewText(R.id.item_title, (Prefs.isDemo(context) ? "DEMO: " : "") + item.title + suffix);
             if (item.note != null && !item.note.isEmpty()) {
                 v.setTextViewText(R.id.item_note, item.note);
                 v.setViewVisibility(R.id.item_note, View.VISIBLE);

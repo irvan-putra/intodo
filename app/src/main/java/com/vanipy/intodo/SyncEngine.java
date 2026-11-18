@@ -81,7 +81,8 @@ public class SyncEngine {
     }
 
     public static void run(Context context, Callback cb) {
-        final String feedUrl = effectiveFeedUrl(context);
+        final Context feedContext = Prefs.captureFeed(context);
+        final String feedUrl = effectiveFeedUrl(feedContext);
         if (feedUrl == null || feedUrl.isEmpty()) {
             Prefs.saveStatus(context, "sync failed: feed URL not configured");
             cb.onDone(false, "feed URL not configured");
@@ -101,7 +102,7 @@ public class SyncEngine {
             cm.setAcceptThirdPartyCookies(web, false);
             web.clearCache(true);
 
-            Runnable timeout = () -> finish(web, finished, found, context, cb, "timed out");
+            Runnable timeout = () -> finish(web, finished, found, feedContext, cb, "timed out");
             main.postDelayed(timeout, TIMEOUT_MS);
             final boolean[] settleScheduled = {false};
 
@@ -137,7 +138,7 @@ public class SyncEngine {
                 @Override
                 public void onPageFinished(WebView view, String url) {
                     // subresources (the payload bundle) can still be in flight; allow a real window
-                    main.postDelayed(() -> finish(view, finished, found, context, cb, "payload not found on page"), 15000);
+                    main.postDelayed(() -> finish(view, finished, found, feedContext, cb, "payload not found on page"), 15000);
                 }
             });
             web.loadUrl(feedUrl);
@@ -242,6 +243,7 @@ public class SyncEngine {
         finished[0] = true;
         web.stopLoading();
         web.destroy();
+        if (!Prefs.isCurrentFeed(context)) { cb.onDone(false, "feed mode changed; old response ignored"); return; }
         String payload = found[0];
         if ("AWAITING".equals(payload)) {
             Prefs.saveCheckFailure(context, "not published yet");
@@ -259,6 +261,12 @@ public class SyncEngine {
             String priv = Prefs.privateKey(context);
             if (priv == null) { cb.onDone(false, "not paired yet"); return; }
             String json = Crypto.decrypt(payload, Crypto.decodePrivate(priv));
+            if (Prefs.isDemo(context) && !DemoFeed.isSynthetic(json)) {
+                Prefs.saveCheckFailure(context, "not a labeled synthetic demo feed");
+                Prefs.saveStatus(context, "demo refused: choose a labeled synthetic feed");
+                cb.onDone(false, "Demo feed refused: synthetic labels are missing");
+                return;
+            }
             String genAt = FeedParser.parse(json).generatedAt;
             switch (Freshness.compare(genAt, Prefs.feedGen(context))) {
                 case SAME:

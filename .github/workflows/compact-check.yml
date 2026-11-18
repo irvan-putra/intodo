@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Verify compact and existing RemoteViews
-        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.WidgetCompactTest' --tests 'com.vanipy.intodo.WidgetRemoteApplyTest'
+        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.WidgetCompactTest' --tests 'com.vanipy.intodo.WidgetRemoteApplyTest' --tests 'com.vanipy.intodo.DualFeedTest' --tests 'com.vanipy.intodo.DualFeedRenderTest'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -27,6 +27,7 @@ jobs:
             /tmp/intodo-compact-row.png
             /tmp/intodo-onecell-counter.png
             /tmp/intodo-span-*.png
+            /tmp/dual-*.png
           if-no-files-found: warn
       - name: Build debug-only host fixture (not a signed public release)
         run: ./gradlew assembleDebug --no-daemon

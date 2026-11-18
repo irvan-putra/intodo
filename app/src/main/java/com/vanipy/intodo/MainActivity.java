@@ -79,6 +79,8 @@ public class MainActivity extends Activity {
         installMenuAccess(empty);
         installMenuAccess(findViewById(R.id.pairingPane));
 
+        findViewById(R.id.demoMode).setOnClickListener(v -> switchFeedMode());
+        findViewById(R.id.configureFeeds).setOnClickListener(v -> configureFeedDialog());
         Button generate = findViewById(R.id.generateKey);
         findViewById(R.id.openCanvas).setOnClickListener(v ->
                 startActivity(new android.content.Intent(this, com.vanipy.intodo.canvas.ReviewCanvasActivity.class)));
@@ -89,7 +91,7 @@ public class MainActivity extends Activity {
         EditText feedUrlInput = findViewById(R.id.feedUrlInput);
         // The feed-address field only matters on public builds with no built-in address;
         // hide it where build config already provides one so behavior stays unambiguous.
-        boolean unconfigured = SyncEngine.FEED_URL == null || SyncEngine.FEED_URL.isEmpty();
+        boolean unconfigured = !Prefs.dualConfigured(this) && (SyncEngine.FEED_URL == null || SyncEngine.FEED_URL.isEmpty());
         feedUrlInput.setVisibility(unconfigured ? View.VISIBLE : View.GONE);
         findViewById(R.id.saveFeedUrl).setVisibility(unconfigured ? View.VISIBLE : View.GONE);
         feedUrlInput.setText(Prefs.feedUrl(this));
@@ -269,6 +271,70 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void switchFeedMode() {
+        if (Prefs.isDemo(this)) {
+            new android.app.AlertDialog.Builder(this).setTitle("Show real reminders?")
+                    .setMessage("Your real items will be visible in the app and widgets.")
+                    .setPositiveButton("Show real feed", (d,w) -> applyFeedSwitch())
+                    .setNegativeButton("Stay in Demo", null).show();
+            return;
+        }
+        applyFeedSwitch();
+    }
+    private void applyFeedSwitch() {
+        if (!Prefs.dualConfigured(this)) { configureFeedDialog(); return; }
+        // Remove visible rows before changing mode, including a launcher's old snapshot.
+        adapter.setRows(new ArrayList<>());
+        WidgetProvider.blankAll(this);
+        ++syncGen;
+        syncRunning = false;
+        findViewById(R.id.syncProgress).setVisibility(View.GONE);
+        syncNow.setEnabled(true);
+        Prefs.setDemo(this, !Prefs.isDemo(this));
+        reload(); refreshStatus();
+        WidgetProvider.refreshAll(this);
+        // Keep cached data available offline. Fetch never merges the two lists.
+        sync();
+    }
+
+    private void configureFeedDialog() {
+        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
+        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = (int)(20 * getResources().getDisplayMetrics().density);
+        form.setPadding(pad, pad, pad, pad);
+        TextView note = new TextView(this);
+        note.setText("One-time setup. Both feeds stay online and use this phone's existing key. Real and demo lists stay separate. Confirm which feed is currently saved before assigning it.");
+        form.addView(note);
+        boolean legacyDemo = !Prefs.dualConfigured(this) && DemoFeed.isSynthetic(Prefs.feed(this));
+        String current = SyncEngine.effectiveFeedUrl(this);
+        EditText real = new EditText(this); real.setSingleLine(true); real.setHint("Real feed HTTPS address");
+        real.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        real.setText(Prefs.dualConfigured(this) ? Prefs.realUrl(this) : legacyDemo ? "" : current);
+        form.addView(real);
+        EditText demo = new EditText(this); demo.setSingleLine(true); demo.setHint("Synthetic demo feed HTTPS address");
+        demo.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        demo.setText(Prefs.dualConfigured(this) ? Prefs.demoUrl(this) : legacyDemo ? current : "");
+        form.addView(demo);
+        android.widget.CheckBox oldDemo = new android.widget.CheckBox(this);
+        oldDemo.setText("The previously saved feed is the demo"); oldDemo.setChecked(legacyDemo);
+        oldDemo.setVisibility(Prefs.dualConfigured(this) ? View.GONE : View.VISIBLE); form.addView(oldDemo);
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Set up real and demo feeds")
+                .setView(form).setPositiveButton("Save feeds", null).setNegativeButton("Cancel", null).create();
+        dialog.setOnShowListener(d -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String r = SyncEngine.canonicalFeedUrl(real.getText().toString());
+            String m = SyncEngine.canonicalFeedUrl(demo.getText().toString());
+            if (!r.startsWith("https://files.instinct.com/") || !m.startsWith("https://files.instinct.com/") || r.equals(m)) {
+                demo.setError("Use two different HTTPS Files feed addresses"); return;
+            }
+            adapter.setRows(new ArrayList<>()); WidgetProvider.blankAll(this);
+            ++syncGen; syncRunning = false; syncNow.setEnabled(true);
+            findViewById(R.id.syncProgress).setVisibility(View.GONE);
+            Prefs.configureFeeds(this, r, m, oldDemo.isChecked());
+            reload(); refreshStatus(); WidgetProvider.refreshAll(this); dialog.dismiss();
+        }));
+        dialog.show();
+    }
+
     private void sync() {
         if (!Prefs.isPaired(this)) { swipeRefresh.setRefreshing(false); return; }
         if (syncRunning) { swipeRefresh.setRefreshing(false); return; }
@@ -338,6 +404,10 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
+        ((TextView)findViewById(R.id.demoMode)).setText(Prefs.isDemo(this) ? "Back to real feed" : "Demo");
+        findViewById(R.id.openCanvas).setVisibility(Prefs.isDemo(this) ? View.GONE : View.VISIBLE);
+        findViewById(R.id.openBot).setVisibility(Prefs.isDemo(this) ? View.GONE : View.VISIBLE);
+        ((TextView)findViewById(R.id.feedMode)).setText(Prefs.isDemo(this) ? "DEMO - synthetic items only" : "Real feed");
         lastSync.setText(SyncStatusText.build(this, Prefs.status(this)));
     }
 

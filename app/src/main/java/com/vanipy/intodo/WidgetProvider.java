@@ -53,6 +53,16 @@ public class WidgetProvider extends AppWidgetProvider {
         updateAll(context);
     }
 
+    /** Blank each launcher snapshot before a privacy-sensitive mode switch. */
+    public static void blankAll(Context c) {
+        AppWidgetManager awm = AppWidgetManager.getInstance(c);
+        for (int id : awm.getAppWidgetIds(new ComponentName(c, WidgetProvider.class))) {
+            RemoteViews blank = new RemoteViews(c.getPackageName(), R.layout.widget_summary);
+            blank.setTextViewText(R.id.widget_summary_count, "...");
+            awm.updateAppWidget(id, blank);
+        }
+    }
+
     public static void updateAll(Context context) {
         AppWidgetManager awm = AppWidgetManager.getInstance(context);
         int[] ids = awm.getAppWidgetIds(new ComponentName(context, WidgetProvider.class));
@@ -66,7 +76,7 @@ public class WidgetProvider extends AppWidgetProvider {
         if (summaryForSize(widthDp, heightDp)) {
             RemoteViews summary = new RemoteViews(context.getPackageName(), R.layout.widget_summary);
             int count = itemCount(Prefs.feed(context));
-            summary.setTextViewText(R.id.widget_summary_count, count > 999 ? "999+" : String.valueOf(count));
+            summary.setTextViewText(R.id.widget_summary_count, (Prefs.isDemo(context) ? "D " : "") + (count > 999 ? "999+" : String.valueOf(count)));
             summary.setContentDescription(R.id.widget_summary_root, "intodo: " + count + " items. Tap for full list.");
             summary.setOnClickPendingIntent(R.id.widget_summary_root, PendingIntent.getActivity(context,
                     id * 2 + 2, new Intent(context, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
@@ -96,10 +106,11 @@ public class WidgetProvider extends AppWidgetProvider {
         } else {
             Intent svc = new Intent(context, WidgetService.class);
             svc.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
-            svc.setData(android.net.Uri.parse("intodo://widget/" + id + "/" + (heightDp <= 110 ? "compact" : "full")));
+            svc.setData(android.net.Uri.parse("intodo://widget/" + id + "/" + (heightDp <= 110 ? "compact" : "full") + "/" + Prefs.modeEpoch(context)));
             views.setRemoteAdapter(R.id.widget_list, svc);
         }
 
+        views.setTextViewText(R.id.widget_empty, Prefs.isDemo(context) ? "DEMO - no synthetic items synced" : "No items synced yet");
         boolean hasData = Prefs.feed(context) != null;
         views.setViewVisibility(R.id.widget_empty, hasData ? View.GONE : View.VISIBLE);
         // no chrome left to tap: the empty view itself opens the app

@@ -66,6 +66,12 @@
     <LinearLayout android:id="@+id/drawerPane" android:layout_width="300dp" android:layout_height="match_parent"
         android:layout_gravity="start" android:orientation="vertical" android:background="#1D2939"
         android:padding="16dp">
+        <TextView android:id="@+id/feedMode" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Real feed" android:textStyle="bold" android:textColor="#475467" android:paddingBottom="8dp" />
+        <Button android:id="@+id/demoMode" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Demo" android:minHeight="48dp" />
+        <TextView android:id="@+id/configureFeeds" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Set up real and demo feeds" android:minHeight="48dp" android:gravity="center_vertical" android:focusable="true" />
         <TextView android:id="@+id/lastSync" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textColor="#98A2B3" android:textSize="12sp" />
         <Button android:id="@+id/syncNow" android:layout_width="match_parent" android:layout_height="wrap_content"
