@@ -1,8 +1,8 @@
 # intodo
 
-Personal reminder/todo tooling: **itdapk** (Android app + home-screen widget, `app/`), **itdxdc** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **itdweb** (hosted review-canvas page source, `itdweb/`).
+Personal reminder/todo tooling: **intodo for Android** (Android app + home-screen widget, `app/`), **intodo for DeltaChat** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **intodo for web** (hosted review-canvas page source, `itdweb/`).
 
-## itdapk - Android widget
+## intodo - Android widget
 
 A home-screen widget and companion app that shows my Instinct reminders and todos on my phone. The list syncs through an encrypted page that only the paired phone can read.
 
@@ -10,9 +10,9 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 
 Active test builds, published on this repository's Releases page. Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
 
-- **itdapk**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.intodo`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
-- **itdxdc**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
-- **itdweb**: review canvas published through GitHub Pages Actions.
+- **intodo for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.intodo`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
+- **intodo for DeltaChat**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
+- **intodo for web**: review canvas published through GitHub Pages Actions.
 - Branch `unfinished/log-access-v3` holds a partial, unfinished step in the wider log-access work: selectable bot-log text, nested scrolling that preserves vertical drags, and opening at the newest lines. It has been compiled but not run on a device, and is not part of any release - see `UNFINISHED-log-access-v3.md` on that branch.
 
 ## Android identity and fresh setup
@@ -102,3 +102,7 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 - [Free hosting for an always-on chat bot](docs/research/free-hosting-for-an-always-on-chat-bot.md) - dated vendor-page comparison; no candidate deployed or tested end to end.
 - [Third-party licence notices for an Android app that bundles Python and a native Rust library](docs/research/third-party-notices-for-android-python-and-native-rpc.md) - a dated checklist, not a release inventory or legal minimum.
 - [Upgrading a webxdc app and its state](docs/research/upgrading-a-webxdc-app-and-its-state.md) - forum reports and open questions; no Delta Chat version tested.
+
+## Family naming and compatibility
+
+Current display name across Android, webxdc and web is **intodo**. Android remains `com.vanipy.intodo`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `intodo-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.

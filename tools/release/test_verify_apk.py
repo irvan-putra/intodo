@@ -12,7 +12,7 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('verifier', pathlib.Path(__file__).with_name('verify_apk.py'))
 v = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(v)
-GOOD = "package: name='com.vanipy.intodo' versionCode='27' versionName='0.5.12'\napplication-label:'itdapk'\nnative-code: 'arm64-v8a'\n"
+GOOD = "package: name='com.vanipy.intodo' versionCode='27' versionName='0.5.12'\napplication-label:'intodo'\nnative-code: 'arm64-v8a'\n"
 CERT = 'a' * 64
 
 class VerifyTest(unittest.TestCase):
@@ -36,7 +36,7 @@ class VerifyTest(unittest.TestCase):
             return v.verify('aapt', 'apksigner', self.apk, self.ref, '0.5.12', '27')
     def test_good(self): self.assertEqual(len(self.verify()), 64)
     def test_identity_label_version(self):
-        for a,b in [('com.vanipy.intodo','com.example.other'), ('itdapk','Other App'),
+        for a,b in [('com.vanipy.intodo','com.example.other'), ("application-label:'intodo'","application-label:'Other App'"),
                     ("versionCode='27'","versionCode='25'"), ('0.5.12','0.5.10')]:
             self.badging = GOOD.replace(a,b)
             with self.assertRaises(AssertionError): self.verify()
@@ -79,7 +79,7 @@ class VerifyTest(unittest.TestCase):
     def test_fixed_failure_codes(self):
         for needle, replacement, code in [
             ('com.vanipy.intodo', 'com.example.other', 'identity'),
-            ('itdapk', 'Other App', 'label'), ('arm64-v8a', 'x86', 'badging_abi')]:
+            ("application-label:'intodo'", "application-label:'Other App'", 'label'), ('arm64-v8a', 'x86', 'badging_abi')]:
             self.badging = GOOD.replace(needle, replacement)
             with self.assertRaises(v.VerificationFailure) as caught: self.verify()
             self.assertEqual(caught.exception.code, code)

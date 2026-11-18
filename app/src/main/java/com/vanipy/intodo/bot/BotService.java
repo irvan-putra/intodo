@@ -37,13 +37,13 @@ public class BotService extends Service {
         } else {
             getSharedPreferences("bot", MODE_PRIVATE).edit().putString("last_mode", mode).apply();
         }
-        String label = mode.equals("live") ? "itdxdc delivery bot running"
+        String label = mode.equals("live") ? "intodo delivery bot running"
                 : mode.equals("provision") ? "creating bot account"
-                : mode.equals("export") ? "exporting bot for itdapk"
+                : mode.equals("export") ? "exporting bot for intodo"
                 : "offline validation running";
         Notification.Builder nb = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, "bot") : new Notification.Builder(this);
-        Notification n = nb.setContentTitle("itdapk bot")
+        Notification n = nb.setContentTitle("intodo bot")
                 .setContentText(label)
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
                 .build();

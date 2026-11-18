@@ -9,10 +9,13 @@ set -e
 cd "$(dirname "$0")"
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' manifest.toml)
 test -n "$VERSION" || { echo "no version in manifest.toml" >&2; exit 1; }
-rm -f "itdxdc-v${VERSION}.xdc"
-zip -X "itdxdc-v${VERSION}.xdc" \
+rm -f "intodo-v${VERSION}.xdc"
+zip -X "intodo-v${VERSION}.xdc" \
   manifest.toml icon.png index.html canvas.html \
   js/mergedoc.js js/canvas-math.js js/canvas.js \
   js/digest.js js/seedfix.js js/restoregen.js js/app.js js/webxdc-mock.js \
   >/dev/null
-unzip -l "itdxdc-v${VERSION}.xdc"
+unzip -l "intodo-v${VERSION}.xdc"
+
+# Keep the previous download name usable for existing bot versions.
+cp "intodo-v${VERSION}.xdc" "itdxdc-v${VERSION}.xdc"

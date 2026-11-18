@@ -67,7 +67,7 @@ public class WidgetProvider extends AppWidgetProvider {
             RemoteViews summary = new RemoteViews(context.getPackageName(), R.layout.widget_summary);
             int count = itemCount(Prefs.feed(context));
             summary.setTextViewText(R.id.widget_summary_count, count > 999 ? "999+" : String.valueOf(count));
-            summary.setContentDescription(R.id.widget_summary_root, "itdapk: " + count + " items. Tap for full list.");
+            summary.setContentDescription(R.id.widget_summary_root, "intodo: " + count + " items. Tap for full list.");
             summary.setOnClickPendingIntent(R.id.widget_summary_root, PendingIntent.getActivity(context,
                     id * 2 + 2, new Intent(context, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
             awm.updateAppWidget(id, summary);

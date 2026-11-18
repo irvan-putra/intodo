@@ -44,7 +44,7 @@ public class XdcFetch {
             java.util.Arrays.asList("github.com", "release-assets.githubusercontent.com",
                     "objects.githubusercontent.com"));
     private static final Pattern ASSET_NAME =
-            Pattern.compile("^itdxdc-v(\\d+\\.\\d+\\.\\d+).*\\.xdc$");
+            Pattern.compile("^(?:intodo|itdxdc)-v(\\d+\\.\\d+\\.\\d+).*\\.xdc$");
     private static final long TIMEOUT_MS = 30000;
     private static final long MAX_BYTES = 5L * 1024 * 1024; // an .xdc is tens of KB
 
@@ -116,7 +116,7 @@ public class XdcFetch {
             conn.setReadTimeout((int) TIMEOUT_MS);
             conn.setInstanceFollowRedirects(false); // api.github.com must answer directly
             conn.setRequestProperty("Accept", "application/vnd.github+json");
-            conn.setRequestProperty("User-Agent", "itdapk-xdc-fetch");
+            conn.setRequestProperty("User-Agent", "intodo-xdc-fetch");
             int code = conn.getResponseCode();
             if (code != 200) throw new FetchException(
                     "GitHub did not answer the release list (HTTP " + code
@@ -175,7 +175,7 @@ public class XdcFetch {
             String version = manifestVersion(part);
             if (version == null) throw new Resumable.Refused(
                     "The fetched file has no version number inside (manifest.toml). It would be refused at publish time.");
-            if (!f.name.startsWith("itdxdc-v" + version)) throw new Resumable.Refused(
+            if (!(f.name.startsWith("intodo-v" + version) || f.name.startsWith("itdxdc-v" + version))) throw new Resumable.Refused(
                     "The fetched file's name (" + f.name + ") does not match the version inside it ("
                     + version + "). Not using it.");
         };

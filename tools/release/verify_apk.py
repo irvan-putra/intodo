@@ -58,7 +58,7 @@ def verify(aapt, apksigner, candidate, reference, version, code):
     require(re.fullmatch(r"[1-9][0-9]*", code), "code_input")
     text = checked_run('badging_command', aapt, 'dump', 'badging', str(candidate))
     require(re.search(r"^package: name='com.vanipy.intodo' versionCode='" + re.escape(code) + r"' versionName='" + re.escape(version) + r"'", text, re.M), 'identity')
-    require("application-label:'itdapk'" in text, 'label')
+    require("application-label:'intodo'" in text, 'label')
     require("native-code: 'arm64-v8a'" in text, 'badging_abi')
     manifest = checked_run('manifest_command', aapt, 'dump', 'xmltree', str(candidate), 'AndroidManifest.xml')
     require(not re.search(r'android:(debuggable|testOnly).*0xffffffff', manifest), 'debug_or_test_flag')

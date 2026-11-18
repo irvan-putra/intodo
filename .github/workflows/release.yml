@@ -163,7 +163,8 @@ jobs:
           IN_NAME: ${{ inputs.version_name }}
         run: |
           set -euo pipefail
-          gh release create "v$IN_NAME" "itdapk-v$IN_NAME.apk" SHA256SUMS \
+          cp "itdapk-v$IN_NAME.apk" "intodo-v$IN_NAME.apk"
+          gh release create "v$IN_NAME" "intodo-v$IN_NAME.apk" "itdapk-v$IN_NAME.apk" SHA256SUMS \
             --target "$STAMP_SHA" \
-            --title "itdapk v$IN_NAME" \
+            --title "intodo v$IN_NAME" \
             --notes ""

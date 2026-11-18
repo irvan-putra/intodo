@@ -29,6 +29,15 @@ public class XdcFetchTest {
         return a;
     }
 
+    @Test public void acceptsCanonicalNameAndPreservesLegacyAssets() throws Exception {
+        JSONArray releases = new JSONArray();
+        releases.put(rel("v0.4.8", false, false, asset("intodo-v0.4.8.xdc", null)));
+        releases.put(rel("v0.4.7", false, false, asset("itdxdc-v0.4.7.xdc", null)));
+        assertEquals("intodo-v0.4.8.xdc", XdcFetch.choose(releases).name);
+        JSONArray legacy = new JSONArray();
+        legacy.put(rel("v0.4.7", false, false, asset("itdxdc-v0.4.7.xdc", null)));
+        assertEquals("itdxdc-v0.4.7.xdc", XdcFetch.choose(legacy).name);
+    }
     @Test public void picksFirstNewestReleaseWithXdc() throws Exception {
         // Newest release has NO xdc (apk-only release): must not hide the older one.
         JSONArray releases = new JSONArray();
