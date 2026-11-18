@@ -33,5 +33,22 @@ for attempt in range(12):
  if 'com.vanipy.intodo/.MainActivity' in focus:break
  time.sleep(1)
 else:raise AssertionError('widget tap did not resume MainActivity: '+focus)
-(out/'resumed.txt').write_text(focus);(out/'app.png').write_bytes(adb('exec-out','screencap','-p'));(out/'package.txt').write_bytes(adb('shell','dumpsys','package','com.vanipy.intodo'))
-print('PASS exact renamed candidate package,label (aapt),1x1 actual provider tap -> MainActivity')
+(out/'resumed.txt').write_text(focus)
+# Resumed activity is not a rendered app: require seeded content on screen.
+visible=False
+for attempt in range(18):
+ try:
+  adb('shell','uiautomator','dump','/sdcard/family-app.xml')
+  xml=adb('exec-out','cat','/sdcard/family-app.xml');(out/'app.xml').write_bytes(xml)
+  nodes=list(E.fromstring(xml).iter('node'))
+  visible=any(n.get('text')=='Read chapter 1' and n.get('package')=='com.vanipy.intodo' for n in nodes)
+  if visible:break
+ except (E.ParseError,subprocess.CalledProcessError,subprocess.TimeoutExpired):pass
+ time.sleep(1)
+(out/'app.png').write_bytes(adb('exec-out','screencap','-p'))
+(out/'package.txt').write_bytes(adb('shell','dumpsys','package','com.vanipy.intodo'))
+(out/'logcat.txt').write_bytes(adb('logcat','-d','-t','600'))
+(out/'activity.txt').write_bytes(adb('shell','dumpsys','activity','activities'))
+assert visible,'MainActivity resumed but seeded row did not become visible within bounded content wait; inspect app.xml/app.png/logcat.txt'
+
+print('PASS exact renamed candidate package,label (aapt),1x1 actual provider tap -> MainActivity and visible seeded row')
