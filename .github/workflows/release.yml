@@ -168,4 +168,4 @@ jobs:
           gh release create "v$IN_NAME" "intodo-v$IN_NAME.apk" "itdapk-v$IN_NAME.apk" SHA256SUMS \
             --target "$STAMP_SHA" \
             --title "intodo v$IN_NAME" \
-            --notes-file docs/releases/0.5.14.md
+            --notes-file "docs/releases/$IN_NAME.md"
