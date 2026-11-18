@@ -31,6 +31,8 @@ public class WidgetCompactTest {
         feed.append("]}]}");
         Prefs.saveFeed(c,feed.toString(),"");
         int id=913;
+        org.robolectric.Shadows.shadowOf(AppWidgetManager.getInstance(c)).bindAppWidgetId(id,
+                new android.content.ComponentName(c,WidgetProvider.class));
         Bundle opts=new Bundle();
         opts.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,48);
         AppWidgetManager.getInstance(c).updateAppWidgetOptions(id,opts);
