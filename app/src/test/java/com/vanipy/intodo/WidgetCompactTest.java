@@ -12,10 +12,12 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
 import static org.junit.Assert.*;
 
 /** Synthetic sizing regression; combined launcher hosting is a separate check. */
 @RunWith(RobolectricTestRunner.class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk=32, qualifiers="w360dp-h800dp-mdpi")
 public class WidgetCompactTest {
     @Test public void compactRemoteViewsKeepEveryItemAndReadableRow() {
@@ -42,6 +44,8 @@ public class WidgetCompactTest {
         assertEquals(1,title.getMaxLines());
         assertEquals(1,note.getMaxLines());
         row.measure(View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+        System.out.println("compact metrics title="+title.getMeasuredHeight()+" note="+note.getMeasuredHeight()+" titleSize="+title.getTextSize()+" noteSize="+note.getTextSize());
+        render(row,"/tmp/itdapk-compact-row.png",360,row.getMeasuredHeight());
         assertTrue("compact row measured="+row.getMeasuredHeight()+"px density="+c.getResources().getDisplayMetrics().density+" scaled="+c.getResources().getDisplayMetrics().scaledDensity, row.getMeasuredHeight()<=40*c.getResources().getDisplayMetrics().density);
         opts.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,180);
         AppWidgetManager.getInstance(c).updateAppWidgetOptions(id,opts);
@@ -62,6 +66,17 @@ public class WidgetCompactTest {
         View v=new android.widget.RemoteViews(c.getPackageName(),R.layout.widget_summary).apply(c,new FrameLayout(c));
         assertNotNull(v.findViewById(R.id.widget_summary_root));
         assertNotNull(v.findViewById(R.id.widget_summary_count));
+        ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
+        render(v,"/tmp/itdapk-onecell-counter.png",64,64);
+    }
+    private static void render(View view,String path,int w,int h) {
+        view.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));
+        view.layout(0,0,w,h);
+        android.graphics.Bitmap b=android.graphics.Bitmap.createBitmap(w,h,android.graphics.Bitmap.Config.ARGB_8888);
+        view.draw(new android.graphics.Canvas(b));
+        try(java.io.FileOutputStream out=new java.io.FileOutputStream(path)) {
+            b.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);
+        } catch(java.io.IOException e) { throw new RuntimeException(e); }
     }
     @Test public void paddingAndCollectionArePreserved() {
         assertEquals(4,WidgetProvider.paddingDpForHeight(48));

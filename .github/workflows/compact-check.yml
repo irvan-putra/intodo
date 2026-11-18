@@ -22,7 +22,10 @@ jobs:
         if: always()
         with:
           name: compact-test-results
-          path: app/build/test-results/testDebugUnitTest/
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            /tmp/itdapk-compact-row.png
+            /tmp/itdapk-onecell-counter.png
           if-no-files-found: warn
       - name: Build debug-only host fixture (not a signed public release)
         run: ./gradlew assembleDebug --no-daemon
