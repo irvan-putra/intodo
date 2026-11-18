@@ -164,6 +164,7 @@ jobs:
         run: |
           set -euo pipefail
           cp "itdapk-v$IN_NAME.apk" "intodo-v$IN_NAME.apk"
+          sha256sum "intodo-v$IN_NAME.apk" >> SHA256SUMS
           gh release create "v$IN_NAME" "intodo-v$IN_NAME.apk" "itdapk-v$IN_NAME.apk" SHA256SUMS \
             --target "$STAMP_SHA" \
             --title "intodo v$IN_NAME" \
