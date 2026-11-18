@@ -107,6 +107,6 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 Current display name across Android, webxdc and web is **intodo**. Android remains `com.vanipy.intodo`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `intodo-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.
 
-## Android 0.5.14 release candidate
+## Android 0.5.16 rename update
 
-Family-name and compact widget update. Existing package, signing key and data remain. Synthetic widget tap routing and label/package checks passed; post-tap content rendering remains unverified and was bypassed for this release. Physical Samsung launcher/runtime remains unverified. See `docs/releases/0.5.14.md` for release scope.
+Current source, future asset outputs and update checks use intodo only. The package, signer, paired feed and list data stay unchanged. Old compatibility asset names are no longer accepted. Release-page download names were cleaned separately without rebuilding historical signed binaries. The mini-app 0.4.9 uses a renamed local canvas-layout key, which may reset layout and zoom but not list items. Post-tap content rendering and physical Samsung runtime remain unverified. See `docs/releases/0.5.16.md`.
