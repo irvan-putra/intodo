@@ -1,6 +1,6 @@
 # Bot log access update
 
-This source change improves the itdapk bot log view:
+This source change improves the intodo bot log view:
 
 - Log text is selectable so lines can be copied.
 - The nested log view handles vertical drags it can scroll; at its edge the

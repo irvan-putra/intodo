@@ -13,14 +13,14 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Checks the public intodo repo's GitHub Releases for a strictly newer itdapk build.
+ * Checks the public intodo repo's GitHub Releases for a strictly newer intodo build.
  * One unauthenticated api.github.com request per app open / manual sync; no background
  * polling. Trust rules:
  *  - only the irvan-putra/intodo repo is queried (never other repos' releases);
  *  - drafts and prereleases never qualify (the /releases/latest endpoint excludes them,
  *    and a repo with no published release answers 404 = "no update info", not an error);
  *  - only a STRICTLY newer dotted-numeric version is offered (no downgrade/same-version);
- *  - the APK asset must be named exactly itdapk-v<version>.apk - anything else is ignored;
+ *  - the APK asset must be named exactly intodo-v<version>.apk - anything else is ignored;
  *  - the download URL must stay on github.com under this repo's releases path.
  */
 public class UpdateCheck {

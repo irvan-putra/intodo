@@ -1,5 +1,5 @@
 """Migration bundle: secure phone-local handoff of the bot between Android
-packages (scratch test app -> itdapk). Reversible by design: export never
+packages (scratch test app -> intodo). Reversible by design: export never
 deletes anything; import stages + verifies before committing.
 
 Bundle = one .dcmig zip with exactly three members:
@@ -277,7 +277,7 @@ def export_migration(native_lib_dir, files_dir, out_dir):
         raise
 
 
-# -- import (itdapk side) ------------------------------------------------------
+# -- import (intodo side) ------------------------------------------------------
 
 def import_migration(native_lib_dir, files_dir, bundle_path, code,
                      _rpc_factory=None):

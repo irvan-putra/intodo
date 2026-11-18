@@ -104,7 +104,7 @@ def write_densities(img, res_dir, name="ic_launcher.png"):
         img.resize((px, px), Image.LANCZOS).save(os.path.join(out, name), optimize=True)
 
 
-def itdapk(version):
+def intodo(version):
     # the existing art: three orange dots and three white list bars (redrawn from measured geometry)
     BG, ORANGE, BAR = (16, 24, 40, 255), (245, 158, 11, 255), (242, 244, 247, 255)
     art, d = new_layer()
@@ -120,7 +120,7 @@ def main():
     root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     gradle = open(os.path.join(root, "app/build.gradle")).read()
     version = parse_version(sys.argv, re.search(r"versionName '([^']+)'", gradle).group(1))
-    write_densities(itdapk(version), os.path.join(root, "app/src/main/res"))
+    write_densities(intodo(version), os.path.join(root, "app/src/main/res"))
     print("wrote icons for", version)
 
 

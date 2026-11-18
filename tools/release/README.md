@@ -1,6 +1,6 @@
 # tools/release - checked review-canvas publication
 
-Small scripts that make publishing the itdweb review canvas to GitHub
+Small scripts that make publishing the intodo review canvas to GitHub
 Pages repeatable and safe. They encode the two lessons from manual
 publication mistakes:
 
@@ -13,7 +13,7 @@ publication mistakes:
 
 Normally you do not run these by hand: `.github/workflows/review-pages.yml`
 builds, stages, publishes and live-verifies on every push to `main` that
-touches `itdweb/review/`. The workflow is split in two for security: the
+touches `web/review/`. The workflow is split in two for security: the
 `build` job (contents: read only) runs dependency install with
 `npm ci --ignore-scripts` (locked to `package-lock.json`) and esbuild, so
 no dependency lifecycle script ever runs in a privileged job; the `deploy`
@@ -24,7 +24,7 @@ manual publish or for testing.
 ## stage_pages.sh DIST_DIR PAGES_CHECKOUT
 
 Replaces `PAGES_CHECKOUT/review/` with the built bundle in `DIST_DIR`
-(from `itdweb/review/build.sh`), then refuses to proceed unless:
+(from `web/review/build.sh`), then refuses to proceed unless:
 
 - the checkout's `origin` is the intodo GitHub repository (a local path
   or any other remote is rejected), and

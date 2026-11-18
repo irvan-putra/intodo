@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MergeDoc, MERGE_DELETED } from './engine';
-const xdcZip = './itdxdc-v0.4.zip';
+const xdcZip = './intodo-v0.4.zip';
 
 // Demo transport: simulates what Delta Chat does for a real webxdc mini app -
 // every update one phone sends is delivered to every phone in the chat.
@@ -92,7 +92,7 @@ function PhoneView({ phone, bus, color }: { phone: Phone; bus: Bus; color: strin
     <div>
       <h2 style={{ fontSize: 14, color }}>{phone.addr}</h2>
       <div data-xdev={phone.addr.includes(" A ") ? "A" : "B"} style={css.phone}>
-        <div style={css.head}>itdxdc</div>
+        <div style={css.head}>intodo</div>
         <div style={css.sub}>local-first prototype - merges offline edits, you pick what survives a conflict</div>
         {ids.length === 0 && <div style={{ color: '#98A2B3', fontSize: 13, padding: 16, textAlign: 'center' }}>Nothing here yet.</div>}
         {ids.map((id: string) => {
@@ -179,21 +179,21 @@ export default function App() {
   }, []);
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', background: '#0B1220', color: '#fff', minHeight: '100vh', padding: 16 }}>
-      <h1 style={{ fontSize: 20 }}>itdxdc - webxdc shared list (prototype demo)</h1>
+      <h1 style={{ fontSize: 20 }}>intodo - webxdc shared list (prototype demo)</h1>
       <p style={{ color: '#98A2B3', fontSize: 13, maxWidth: 720 }}>
         Two SIMULATED phones in one page so the sync is visible without DeltaChat: what you do on
         Phone A appears on Phone B through the same merge engine and update flow the real mini app
         uses. Try it: check off or add an item on one phone, watch the other. The original wrapper has add/check/delete controls but no title-edit control, so adding distinct items does not itself create a same-field conflict. The merge engine retains its conflict-history UI; this limitation is preserved, not presented as a working conflict-generation test.
       </p>
       <p style={{ color: '#F59E0B', fontSize: 12, maxWidth: 720 }}>
-        PROTOTYPE with invented sample data. The real mini app (itdxdc-v0.4.xdc) is shared inside a
+        PROTOTYPE with invented sample data. The real mini app (intodo-v0.4.xdc) is shared inside a
         DeltaChat group, where Delta Chat itself carries the encrypted updates between members.
         Profiles, co-managing with friends and storage on other networks are design directions, not
         built. The Android widget app stays a separate app.
       </p>
       <p style={{ fontSize: 13 }}>
-        <a href={xdcZip} download="itdxdc-v0.4.zip" style={{ color: '#7A5AF8' }}>
-          Download itdxdc v0.4 (itdxdc-v0.4.zip, contains itdxdc-v0.4.xdc)
+        <a href={xdcZip} download="intodo-v0.4.zip" style={{ color: '#7A5AF8' }}>
+          Download intodo v0.4 (intodo-v0.4.zip, contains intodo-v0.4.xdc)
         </a>
         <span style={{ color: '#98A2B3', fontSize: 12 }}> Archived v0.4 package, retained for historical reproduction, not the current release. Each .xdc message is a separate app instance; this download does not upgrade an existing list.</span>
       </p>

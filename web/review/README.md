@@ -12,7 +12,7 @@ levels follow the C4 model (c4model.com): furthest out is the system context
 (people - including the owner in the developer role - the intodo system, and
 external systems: Instinct Files, GitHub, GitHub Actions draft workflows, and
 the DeltaChat network); one level in is the container view - the repo's
-runnable units (itdapk, itdxdc, itdweb, and the feed encryption CLI), with
+runnable units (intodo, intodo, intodo, and the feed encryption CLI), with
 test suites attached to the containers they verify and build/CI plus repo
 docs kept as one honestly-labeled supporting group. Relationships on that
 level are labeled and code-evidenced at the pinned commit: solid lines are
@@ -41,10 +41,10 @@ Unlike the hosted canvas in `../src/App.tsx`, this variant:
 
 ## Build and deploy
 
-    sh itdweb/review/build.sh            # writes itdweb/review/dist/
+    sh web/review/build.sh            # writes web/review/dist/
     # on the gh-pages branch:
     mkdir -p review && cp /path/to/dist/* review/
-    git add review && git commit -m "itdweb: static review canvas" && git push
+    git add review && git commit -m "intodo: static review canvas" && git push
 
 The page then lives at https://vanipy.com/intodo/review/ alongside the
 existing demo at /intodo/.

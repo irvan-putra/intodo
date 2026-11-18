@@ -6,9 +6,9 @@ public class PublishErrorsTest {
     @Test public void versionUnresolvedGetsPlainLead() {
         String lead = PublishErrors.friendlyLead(
             "manifest version unresolved in /data/user/0/x/files/publish-abc.xdc",
-            "itdxdc-v0.4.3-final.xdc");
+            "intodo-v0.4.3-final.xdc");
         assertNotNull(lead);
-        assertTrue(lead.contains("\"itdxdc-v0.4.3-final.xdc\""));
+        assertTrue(lead.contains("\"intodo-v0.4.3-final.xdc\""));
         assertTrue(lead.contains("no version number"));
         assertTrue(lead.contains(PublishErrors.LATEST_XDC_URL));
     }

@@ -47,7 +47,7 @@ public class WidgetCompactTest {
         assertEquals(1,note.getMaxLines());
         row.measure(View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
         System.out.println("compact metrics title="+title.getMeasuredHeight()+" note="+note.getMeasuredHeight()+" titleSize="+title.getTextSize()+" noteSize="+note.getTextSize());
-        render(row,"/tmp/itdapk-compact-row.png",360,row.getMeasuredHeight());
+        render(row,"/tmp/intodo-compact-row.png",360,row.getMeasuredHeight());
         assertTrue("compact row measured="+row.getMeasuredHeight()+"px density="+c.getResources().getDisplayMetrics().density+" scaled="+c.getResources().getDisplayMetrics().scaledDensity, row.getMeasuredHeight()<=40*c.getResources().getDisplayMetrics().density);
         opts.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,180);
         AppWidgetManager.getInstance(c).updateAppWidgetOptions(id,opts);
@@ -71,7 +71,7 @@ public class WidgetCompactTest {
         assertNotNull(v.findViewById(R.id.widget_summary_root));
         assertNotNull(v.findViewById(R.id.widget_summary_count));
         ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
-        render(v,"/tmp/itdapk-onecell-counter.png",64,64);
+        render(v,"/tmp/intodo-onecell-counter.png",64,64);
     }
     @Test public void allThirtySpansKeepNarrowCountersAndWideLists() {
         Context c=RuntimeEnvironment.getApplication();
@@ -82,7 +82,7 @@ public class WidgetCompactTest {
             if(width<160) {
                 View v=new android.widget.RemoteViews(c.getPackageName(),R.layout.widget_summary).apply(c,new FrameLayout(c));
                 ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
-                render(v,"/tmp/itdapk-span-"+columns+"x"+rows+".png",width,height);
+                render(v,"/tmp/intodo-span-"+columns+"x"+rows+".png",width,height);
                 View count=v.findViewById(R.id.widget_summary_count);
                 assertEquals(48,count.getWidth());
                 assertEquals(48,count.getHeight());

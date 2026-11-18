@@ -147,7 +147,7 @@ public class XdcFetchBarRenderTest {
         TextView s = shown(a, bar, "Fetching app");
         bar.setIndeterminate(false);
         bar.setProgress(100);
-        s.setText("Fetched itdxdc-v0.4.7.webxdc");
+        s.setText("Fetched intodo-v0.4.7.webxdc");
         assertEquals(100, bar.getProgress());
         render(a, "/tmp/xdc-bar-terminal.png");
     }

@@ -393,26 +393,26 @@ export const SECTIONS: Section[] = [
   },
   {
     "id": "this-page",
-    "title": "This page (itdweb)",
+    "title": "This page (intodo)",
     "tag": "Review surface",
     "icon": "🌐",
     "purpose": "The page you are reading - its own source is in the repo, so it reviews itself.",
-    "link": "itdweb",
+    "link": "intodo",
     "files": [
       {
-        "path": "itdweb/README.md",
+        "path": "web/README.md",
         "lines": 16
       },
       {
-        "path": "itdweb/src/App.tsx",
+        "path": "web/src/App.tsx",
         "lines": 474
       },
       {
-        "path": "itdweb/src/main.tsx",
+        "path": "web/src/main.tsx",
         "lines": 7
       },
       {
-        "path": "itdweb/src/style.css",
+        "path": "web/src/style.css",
         "lines": 104
       }
     ],
@@ -698,7 +698,7 @@ export const SECTIONS: Section[] = [
         "note": "21.7 MB binary"
       },
       {
-        "path": "itdweb/src/photos/review-concept-hero.png",
+        "path": "web/src/photos/review-concept-hero.png",
         "lines": null,
         "note": "1.3 MB binary"
       },
@@ -758,54 +758,54 @@ export const SECTIONS: Section[] = [
     "tag": "Review surface - source",
     "icon": "🧱",
     "purpose": "The static Pages variant of this review: its own app, build script, and the generator that produced these cards.",
-    "link": "itdweb/review",
+    "link": "web/review",
     "files": [
       {
-        "path": "itdweb/review/App.tsx",
+        "path": "web/review/App.tsx",
         "lines": 1000
       },
       {
-        "path": "itdweb/review/static.css",
+        "path": "web/review/static.css",
         "lines": 266
       },
       {
-        "path": "itdweb/review/main.tsx",
+        "path": "web/review/main.tsx",
         "lines": 7
       },
       {
-        "path": "itdweb/review/files-shim.tsx",
+        "path": "web/review/files-shim.tsx",
         "lines": 68
       },
       {
-        "path": "itdweb/review/index.html",
+        "path": "web/review/index.html",
         "lines": 14
       },
       {
-        "path": "itdweb/review/build.sh",
+        "path": "web/review/build.sh",
         "lines": 17
       },
       {
-        "path": "itdweb/review/package.json",
+        "path": "web/review/package.json",
         "lines": 13
       },
       {
-        "path": "itdweb/review/package-lock.json",
+        "path": "web/review/package-lock.json",
         "lines": 530
       },
       {
-        "path": "itdweb/review/README.md",
+        "path": "web/review/README.md",
         "lines": 50
       },
       {
-        "path": "itdweb/review/.gitignore",
+        "path": "web/review/.gitignore",
         "lines": 2
       },
       {
-        "path": "itdweb/tools/gen_sections.py",
+        "path": "web/tools/gen_sections.py",
         "lines": 263
       },
       {
-        "path": "itdweb/src/sections.ts",
+        "path": "web/src/sections.ts",
         "lines": null,
         "note": "generated - self-size excluded to avoid self-reference"
       }

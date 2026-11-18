@@ -3,7 +3,7 @@ import argparse, hashlib, json, os, sys
 # Portable: point at any local intodo checkout and any output path.
 #   python3 gen_sections.py --repo /path/to/intodo --out src/sections.ts
 # Regenerate after any repo change so cards match the pinned commit.
-ap = argparse.ArgumentParser(description='Generate sections.ts for the itdweb review canvas from a local intodo checkout.')
+ap = argparse.ArgumentParser(description='Generate sections.ts for the intodo review canvas from a local intodo checkout.')
 ap.add_argument('--repo', default='.', help='path to the intodo repository root (default: current directory)')
 ap.add_argument('--out', default='-', help='output path for sections.ts (default: stdout)')
 ap.add_argument('--commit', default=None, help='commit hash the cards pin; default: git rev-parse HEAD in --repo')
@@ -158,13 +158,13 @@ SECTIONS = [
              f('webxdc/js/canvas.js'),
              f('webxdc/js/canvas-math.js')],
       notChecked=['Open/reopen persistence inside a real DeltaChat client (Chrome smoke test only)']),
- dict(id='this-page', title='This page (itdweb)', tag='Review surface', icon='\U0001F310',
+ dict(id='this-page', title='This page (intodo)', tag='Review surface', icon='\U0001F310',
       purpose="The page you are reading - its own source is in the repo, so it reviews itself.",
-      link='itdweb',
-      files=[f('itdweb/README.md'),
-             f('itdweb/src/App.tsx'),
-             f('itdweb/src/main.tsx'),
-             f('itdweb/src/style.css')],
+      link='intodo',
+      files=[f('web/README.md'),
+             f('web/src/App.tsx'),
+             f('web/src/main.tsx'),
+             f('web/src/style.css')],
       notChecked=['Whether your saved layout survives a signed-in reopen on your phone (implemented, not yet verified)']),
  dict(id='tests-android', title='Android tests', tag='Test suites - JVM', icon='\u2705',
       purpose='Render and unit tests for the phone app. These run in CI on every release.',
@@ -235,7 +235,7 @@ SECTIONS = [
       link='.',
       files=[f('README.md'),
              f('app/src/main/jniLibs/arm64-v8a/librpcsrv.so', 'binary'),
-             f('itdweb/src/photos/review-concept-hero.png', 'binary'),
+             f('web/src/photos/review-concept-hero.png', 'binary'),
              f('app/src/main/res/mipmap-hdpi/ic_launcher.png', 'binary'),
              f('app/src/main/res/mipmap-mdpi/ic_launcher.png', 'binary'),
              f('app/src/main/res/mipmap-xhdpi/ic_launcher.png', 'binary'),
@@ -247,19 +247,19 @@ SECTIONS = [
       notChecked=['librpcsrv.so is a ~21 MB prebuilt binary - its source and build recipe are not in this repo']),
  dict(id='review-src', title='Review canvas source', tag='Review surface - source', icon='\U0001F9F1',
       purpose='The static Pages variant of this review: its own app, build script, and the generator that produced these cards.',
-      link='itdweb/review',
-      files=[f('itdweb/review/App.tsx'),
-             f('itdweb/review/static.css'),
-             f('itdweb/review/main.tsx'),
-             f('itdweb/review/files-shim.tsx'),
-             f('itdweb/review/index.html'),
-             f('itdweb/review/build.sh'),
-             f('itdweb/review/package.json'),
-             f('itdweb/review/package-lock.json'),
-             f('itdweb/review/README.md'),
-             f('itdweb/review/.gitignore'),
-             f('itdweb/tools/gen_sections.py'),
-             f('itdweb/src/sections.ts', 'generated')],
+      link='web/review',
+      files=[f('web/review/App.tsx'),
+             f('web/review/static.css'),
+             f('web/review/main.tsx'),
+             f('web/review/files-shim.tsx'),
+             f('web/review/index.html'),
+             f('web/review/build.sh'),
+             f('web/review/package.json'),
+             f('web/review/package-lock.json'),
+             f('web/review/README.md'),
+             f('web/review/.gitignore'),
+             f('web/tools/gen_sections.py'),
+             f('web/src/sections.ts', 'generated')],
       notChecked=[]),
 ]
 

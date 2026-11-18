@@ -598,7 +598,7 @@ public class BotActivity extends Activity {
                 File dir = new File(getFilesDir(), "fetched-xdc");
                 //noinspection ResultOfMethodCallIgnored
                 dir.mkdirs();
-                out = new File(dir, f.name);
+                out = new File(dir, DisplayNames.text(f.name));
                 version = XdcFetch.downloadTo(dir, f, out, pump::offer);
             } catch (final XdcFetch.FetchException fe) {
                 runOnUiThread(() -> {
@@ -609,7 +609,7 @@ public class BotActivity extends Activity {
                     fetchBar.setVisibility(android.view.View.GONE); // failure: dialog explains, no fake final state
                     new android.app.AlertDialog.Builder(this)
                         .setTitle("Could not get the app version")
-                        .setMessage(fe.getMessage())
+                        .setMessage(DisplayNames.text(fe.getMessage()))
                         .setPositiveButton("OK", null).show();
                 });
                 return;
@@ -620,10 +620,10 @@ public class BotActivity extends Activity {
                 fetchXdcBtn.setEnabled(true);
                 fetchBar.setIndeterminate(false);
                 fetchBar.setProgress(100); // terminal success retains the full bar
-                fetchStatus.setText("Fetched " + f.name);
+                fetchStatus.setText("Fetched " + DisplayNames.text(f.name));
                 new android.app.AlertDialog.Builder(this)
                 .setTitle("App version ready")
-                .setMessage("Fetched " + f.name + " (release " + f.tag + ", app version " + version + ").\n\n"
+                .setMessage("Fetched " + DisplayNames.text(f.name) + " (release " + f.tag + ", app version " + version + ").\n\n"
                     + "Publish it to EVERY chat the bot serves now?")
                 .setPositiveButton("Publish", (d, w) -> {
                     File stf = new File(getFilesDir(), "bot_state.json");
@@ -639,7 +639,7 @@ public class BotActivity extends Activity {
                         return;
                     }
                     try {
-                        pendingPublishName = f.name;
+                        pendingPublishName = DisplayNames.text(f.name);
                         queuePublish(new FileInputStream(out));
                     } catch (Exception e) {
                         Toast.makeText(this, "Could not read the fetched file", Toast.LENGTH_LONG).show();

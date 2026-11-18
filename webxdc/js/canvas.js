@@ -1,11 +1,11 @@
-// canvas.js - itdxdc review canvas. Plain-DOM port of the itdweb React canvas
-// (itdweb/src/App.tsx): same world, cards, gestures, minimap and on-device
+// canvas.js - intodo review canvas. Plain-DOM port of the intodo React canvas
+// (web/src/App.tsx): same world, cards, gestures, minimap and on-device
 // layout persistence, adapted to the webxdc dark theme. No dependencies;
 // camera math lives in js/canvas-math.js (shared with the Node test suite).
 //
 // Layout persistence is local to this device (localStorage); it is not sent
 // as webxdc updates and not synced between chat members - same honesty as the
-// itdweb page: implemented, per-device, cleared with webview storage.
+// intodo page: implemented, per-device, cleared with webview storage.
 
 (function () {
   'use strict';
@@ -23,7 +23,7 @@
     fuzz: '\u{1F3B2}', load: '\u{1F4C8}', smoke: '\u{1F4A8}',
   };
 
-  // Card content, verbatim from itdweb/src/App.tsx. Each block is a paragraph
+  // Card content, verbatim from web/src/App.tsx. Each block is a paragraph
   // ('p', 'muted'), bullet list ('ul') or link ('link'). Inline chips are
   // {chip:'real'|'mock', label} segments inside paragraph text arrays.
   const CARDS = {

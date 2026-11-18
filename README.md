@@ -1,6 +1,6 @@
 # intodo
 
-Personal reminder/todo tooling: **intodo for Android** (Android app + home-screen widget, `app/`), **intodo for DeltaChat** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **intodo for web** (hosted review-canvas page source, `itdweb/`).
+Personal reminder/todo tooling: **intodo for Android** (Android app + home-screen widget, `app/`), **intodo for DeltaChat** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **intodo for web** (hosted review-canvas page source, `web/`).
 
 ## intodo - Android widget
 
@@ -21,7 +21,7 @@ Current source uses `com.vanipy.intodo` for the application ID, namespace and An
 
 A first installation starts empty. If `com.vanipy.intodo` is already installed (including the earlier side-by-side candidate), a same-signer update keeps that installation's existing data; it does not reset it. Do not clear data or uninstall as part of setup. Create a pairing key only if the app is unpaired, share only its public key with your feed publisher, enter the resulting encrypted feed address and sync. The optional bot connection is set up separately; never run two copies against the same bot account.
 
-The existing release naming (`itdapk-v<version>.apk`) and in-app update path remain. The installer checks this app's package name and signing certificate before offering Android installation. Older-ID apps refuse a new-ID APK rather than replacing themselves.
+Historical release filename aliases and in-app update compatibility remain. The installer checks this app's package name and signing certificate before offering Android installation. Older-ID apps refuse a new-ID APK rather than replacing themselves.
 
 ## What is verified
 
@@ -36,7 +36,7 @@ Released code and phone-proven behavior are not the same thing; this section rec
 - On-device witness for bot observations (v0.5.3): off by default; not yet exercised in a real group.
 - In-app update check/install: not yet confirmed end-to-end on a phone.
 - `tools/dc_relay` reply ledger: covered by unit tests; not yet proven against a live DeltaChat account.
-- itdxdc: local test harnesses and render checks only; not tested on a phone.
+- intodo: local test harnesses and render checks only; not tested on a phone.
 
 ## How it works
 
@@ -60,8 +60,8 @@ Building without it works fine - the release APKs are unconfigured public builds
 ## Layout
 
 - `app/` - the Android app (plain Java, minSdk 26). `SyncEngine` fetches the feed, `Crypto` decrypts it, `FeedParser` parses it, `WidgetProvider`/`WidgetService` render the home-screen widget. `app/src/main/python/` holds the embedded DeltaChat bot runtime.
-- `webxdc/` - itdxdc, the webxdc shared-list mini-app for DeltaChat groups (`package.sh` builds the `.xdc`).
-- `itdweb/` - authored source of the review-canvas page (React + TypeScript), published through GitHub Pages.
+- `webxdc/` - intodo, the webxdc shared-list mini-app for DeltaChat groups (`package.sh` builds the `.xdc`).
+- `web/` - authored source of the review-canvas page (React + TypeScript), published through GitHub Pages.
 - `tools/encrypt_feed.py` - the publisher side: encrypts a feed JSON to the phone's public key and stamps the generation time. `tools/encrypt_feed.mjs` is the Node twin.
 - `tools/dc_relay/` - durable reply ledger library for bots (duplicate-safe replies across crashes and restarts), with tests.
 - `tools/feed-consistency/` - generic consistency checks comparing a published projection against its source list.

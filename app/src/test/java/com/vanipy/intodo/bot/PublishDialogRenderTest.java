@@ -98,7 +98,7 @@ public class PublishDialogRenderTest {
         String j = "{\"published\":{},"
             + "\"errors\":{\"13\":\"manifest version unresolved in /data/user/0/x/files/publish-abc.xdc\"},"
             + "\"partial\":{},\"request\":\"tok\",\"sha256\":\"ab\"}";
-        Activity a = activityWithDone(j, "itdxdc-v0.4.3-final.xdc");
-        renderDialog(a, j, "itdxdc-v0.4.3-final.xdc", "/tmp/dialog-plain-error.png");
+        Activity a = activityWithDone(j, "intodo-v0.4.3-final.xdc");
+        renderDialog(a, j, "intodo-v0.4.3-final.xdc", "/tmp/dialog-plain-error.png");
     }
 }

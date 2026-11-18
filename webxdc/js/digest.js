@@ -1,4 +1,4 @@
-// itdxdc canonical ops digest (browser). Byte-identical to the bot's
+// intodo canonical ops digest (browser). Byte-identical to the bot's
 // delivery_bot.py canonical_digest and the v4 reference digest-web.mjs.
 // Corruption-integrity only: this NEVER authenticates the bot.
 // Uses crypto.subtle when available; otherwise a portable sync SHA-256

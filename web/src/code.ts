@@ -91,7 +91,7 @@ export const COMPONENTS: C4Component[] = [
     "container": "c-app",
     "name": "Self-update",
     "tech": "Java - APK download + install",
-    "resp": "Checks GitHub Releases for a newer itdapk APK, downloads and installs it.",
+    "resp": "Checks GitHub Releases for a newer intodo APK, downloads and installs it.",
     "files": [
       "app/src/main/java/com/instinct/widget/UpdateCheck.java",
       "app/src/main/java/com/instinct/widget/UpdateInstall.java",
@@ -328,10 +328,10 @@ export const COMPONENTS: C4Component[] = [
     "tech": "React/TypeScript",
     "resp": "Static landing page for the repo, served on GitHub Pages.",
     "files": [
-      "itdweb/src/App.tsx",
-      "itdweb/src/main.tsx",
-      "itdweb/src/style.css",
-      "itdweb/README.md"
+      "web/src/App.tsx",
+      "web/src/main.tsx",
+      "web/src/style.css",
+      "web/README.md"
     ],
     "sections": [
       "this-page"
@@ -346,16 +346,16 @@ export const COMPONENTS: C4Component[] = [
     "tech": "React/TypeScript - this canvas",
     "resp": "This review canvas: zoom-banded C4 map plus the section review workflow.",
     "files": [
-      "itdweb/review/App.tsx",
-      "itdweb/review/static.css",
-      "itdweb/review/main.tsx",
-      "itdweb/review/files-shim.tsx",
-      "itdweb/review/index.html",
-      "itdweb/review/build.sh",
-      "itdweb/review/package.json",
-      "itdweb/review/package-lock.json",
-      "itdweb/review/README.md",
-      "itdweb/review/.gitignore"
+      "web/review/App.tsx",
+      "web/review/static.css",
+      "web/review/main.tsx",
+      "web/review/files-shim.tsx",
+      "web/review/index.html",
+      "web/review/build.sh",
+      "web/review/package.json",
+      "web/review/package-lock.json",
+      "web/review/README.md",
+      "web/review/.gitignore"
     ],
     "sections": [
       "review-src"
@@ -370,8 +370,8 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Python - generates sections.ts",
     "resp": "Generates sections.ts (file inventory and digests) from a repo checkout.",
     "files": [
-      "itdweb/tools/gen_sections.py",
-      "itdweb/src/sections.ts"
+      "web/tools/gen_sections.py",
+      "web/src/sections.ts"
     ],
     "sections": [
       "review-src"
@@ -838,7 +838,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/java/com/instinct/widget/UpdateCheck.java": {
     "path": "app/src/main/java/com/instinct/widget/UpdateCheck.java",
     "lines": 112,
-    "role": "Checks the public intodo repo's GitHub Releases for a strictly newer itdapk build.",
+    "role": "Checks the public intodo repo's GitHub Releases for a strictly newer intodo build.",
     "els": [
       {
         "name": "UpdateCheck",
@@ -933,7 +933,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/java/com/instinct/widget/bot/BotImport.kt": {
     "path": "app/src/main/java/com/instinct/widget/bot/BotImport.kt",
     "lines": 135,
-    "role": "Drop-in \"Import bot backup\" flow for BotActivity (itdapk 0.4.5).",
+    "role": "Drop-in \"Import bot backup\" flow for BotActivity (intodo 0.4.5).",
     "els": [
       {
         "name": "BotImport",
@@ -1063,7 +1063,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/python/delivery_bot.py": {
     "path": "app/src/main/python/delivery_bot.py",
     "lines": 1044,
-    "role": "Latest-version delivery + bot-synced continuity for itdxdc (PixelSocial pattern).",
+    "role": "Latest-version delivery + bot-synced continuity for intodo (PixelSocial pattern).",
     "els": [
       {
         "name": "_version_from_toml",
@@ -1185,7 +1185,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/python/migration.py": {
     "path": "app/src/main/python/migration.py",
     "lines": 337,
-    "role": "Migration bundle: secure phone-local handoff of the bot between Android packages (scratch test app -> itdapk).",
+    "role": "Migration bundle: secure phone-local handoff of the bot between Android packages (scratch test app -> intodo).",
     "els": [
       {
         "name": "MigrationError",
@@ -1257,7 +1257,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasView.java": {
     "path": "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasView.java",
     "lines": 637,
-    "role": "Native review-canvas view for itdapk: a bounded, pannable/zoomable canvas of * review cards with a minimap - the Android port of the itdweb page canvas * (itdweb/src/App.tsx) and the itdxdc port (webxdc/js/canvas.js).",
+    "role": "Native review-canvas view for intodo: a bounded, pannable/zoomable canvas of * review cards with a minimap - the Android port of the intodo page canvas * (web/src/App.tsx) and the intodo port (webxdc/js/canvas.js).",
     "els": [
       {
         "name": "ReviewCanvasView",
@@ -1281,7 +1281,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/java/com/instinct/widget/canvas/CanvasContent.java": {
     "path": "app/src/main/java/com/instinct/widget/canvas/CanvasContent.java",
     "lines": 107,
-    "role": "Card content for the review canvas, verbatim from the itdweb page source * (itdweb/src/App.tsx).",
+    "role": "Card content for the review canvas, verbatim from the intodo page source * (web/src/App.tsx).",
     "els": [
       {
         "name": "CanvasContent",
@@ -1314,7 +1314,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "app/src/main/java/com/instinct/widget/canvas/CanvasMath.java": {
     "path": "app/src/main/java/com/instinct/widget/canvas/CanvasMath.java",
     "lines": 234,
-    "role": "Pure camera/layout math for the itdapk review canvas.",
+    "role": "Pure camera/layout math for the intodo review canvas.",
     "els": [
       {
         "name": "CanvasMath",
@@ -1474,7 +1474,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "webxdc/js/app.js": {
     "path": "webxdc/js/app.js",
     "lines": 520,
-    "role": "app.js - itdxdc shared-list webxdc prototype.",
+    "role": "app.js - intodo shared-list webxdc prototype.",
     "els": [
       {
         "name": "diag",
@@ -1622,7 +1622,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "webxdc/js/digest.js": {
     "path": "webxdc/js/digest.js",
     "lines": 143,
-    "role": "itdxdc canonical ops digest (browser).",
+    "role": "intodo canonical ops digest (browser).",
     "els": [
       {
         "name": "cmpCodePoint",
@@ -1695,7 +1695,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "webxdc/js/canvas.js": {
     "path": "webxdc/js/canvas.js",
     "lines": 408,
-    "role": "canvas.js - itdxdc review canvas.",
+    "role": "canvas.js - intodo review canvas.",
     "els": [
       {
         "name": "el",
@@ -1754,7 +1754,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "webxdc/js/canvas-math.js": {
     "path": "webxdc/js/canvas-math.js",
     "lines": 197,
-    "role": "canvas-math.js - pure camera/layout math for the itdxdc review canvas.",
+    "role": "canvas-math.js - pure camera/layout math for the intodo review canvas.",
     "els": [
       {
         "name": "clampZ",
@@ -1808,8 +1808,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/src/App.tsx": {
-    "path": "itdweb/src/App.tsx",
+  "web/src/App.tsx": {
+    "path": "web/src/App.tsx",
     "lines": 474,
     "role": null,
     "els": [
@@ -1865,32 +1865,32 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/src/main.tsx": {
-    "path": "itdweb/src/main.tsx",
+  "web/src/main.tsx": {
+    "path": "web/src/main.tsx",
     "lines": 7,
     "role": null,
     "els": [],
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/src/style.css": {
-    "path": "itdweb/src/style.css",
+  "web/src/style.css": {
+    "path": "web/src/style.css",
     "lines": 105,
     "role": null,
     "els": [],
     "kindNote": "stylesheet",
     "intraRefs": []
   },
-  "itdweb/README.md": {
-    "path": "itdweb/README.md",
+  "web/README.md": {
+    "path": "web/README.md",
     "lines": 16,
     "role": null,
     "els": [],
     "kindNote": "doc",
     "intraRefs": []
   },
-  "itdweb/review/App.tsx": {
-    "path": "itdweb/review/App.tsx",
+  "web/review/App.tsx": {
+    "path": "web/review/App.tsx",
     "lines": 1855,
     "role": null,
     "els": [
@@ -1946,24 +1946,24 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/review/static.css": {
-    "path": "itdweb/review/static.css",
+  "web/review/static.css": {
+    "path": "web/review/static.css",
     "lines": 644,
     "role": "Static full-screen canvas styles (GitHub Pages variant).",
     "els": [],
     "kindNote": "stylesheet",
     "intraRefs": []
   },
-  "itdweb/review/main.tsx": {
-    "path": "itdweb/review/main.tsx",
+  "web/review/main.tsx": {
+    "path": "web/review/main.tsx",
     "lines": 7,
     "role": null,
     "els": [],
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/review/files-shim.tsx": {
-    "path": "itdweb/review/files-shim.tsx",
+  "web/review/files-shim.tsx": {
+    "path": "web/review/files-shim.tsx",
     "lines": 68,
     "role": "Minimal local stand-ins for the @instinct/files runtime, so the same canvas source builds as a plain static page for GitHub Pages.",
     "els": [
@@ -2011,56 +2011,56 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/review/index.html": {
-    "path": "itdweb/review/index.html",
+  "web/review/index.html": {
+    "path": "web/review/index.html",
     "lines": 14,
     "role": null,
     "els": [],
     "kindNote": "page",
     "intraRefs": []
   },
-  "itdweb/review/build.sh": {
-    "path": "itdweb/review/build.sh",
+  "web/review/build.sh": {
+    "path": "web/review/build.sh",
     "lines": 31,
     "role": "Build the static review canvas for GitHub Pages.",
     "els": [],
     "kindNote": "shell script",
     "intraRefs": []
   },
-  "itdweb/review/package.json": {
-    "path": "itdweb/review/package.json",
+  "web/review/package.json": {
+    "path": "web/review/package.json",
     "lines": 13,
     "role": null,
     "els": [],
     "kindNote": "data",
     "intraRefs": []
   },
-  "itdweb/review/package-lock.json": {
-    "path": "itdweb/review/package-lock.json",
+  "web/review/package-lock.json": {
+    "path": "web/review/package-lock.json",
     "lines": 530,
     "role": null,
     "els": [],
     "kindNote": "data",
     "intraRefs": []
   },
-  "itdweb/review/README.md": {
-    "path": "itdweb/review/README.md",
+  "web/review/README.md": {
+    "path": "web/review/README.md",
     "lines": 50,
     "role": "Review canvas (static, GitHub Pages)",
     "els": [],
     "kindNote": "doc",
     "intraRefs": []
   },
-  "itdweb/review/.gitignore": {
-    "path": "itdweb/review/.gitignore",
+  "web/review/.gitignore": {
+    "path": "web/review/.gitignore",
     "lines": 2,
     "role": null,
     "els": [],
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/tools/gen_sections.py": {
-    "path": "itdweb/tools/gen_sections.py",
+  "web/tools/gen_sections.py": {
+    "path": "web/tools/gen_sections.py",
     "lines": 303,
     "role": "Portable: point at any local intodo checkout and any output path.",
     "els": [
@@ -2080,8 +2080,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "itdweb/src/sections.ts": {
-    "path": "itdweb/src/sections.ts",
+  "web/src/sections.ts": {
+    "path": "web/src/sections.ts",
     "lines": 817,
     "role": "Generated from irvan-putra/intodo @ fbd0213 by gen_sections.py - do not hand-edit.",
     "els": [

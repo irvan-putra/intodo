@@ -16,7 +16,7 @@ public final class PublishErrors {
     public static String friendlyLead(String rawError, String displayName) {
         if (rawError != null && rawError.contains("manifest version unresolved")) {
             String shown = (displayName == null || displayName.isEmpty())
-                ? "The selected file" : "\"" + displayName + "\"";
+                ? "The selected file" : "\"" + DisplayNames.text(displayName) + "\"";
             return shown + " has no version number, so the bot refused to publish it. "
                 + "Publishing needs a versioned mini-app package: use button 6 to fetch "
                 + "the latest version from GitHub, or download it yourself and pick it:\n"

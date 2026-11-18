@@ -16,17 +16,17 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.10'
-      - name: Verify compact and existing RemoteViews
-        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.WidgetCompactTest' --tests 'com.vanipy.intodo.WidgetRemoteApplyTest' --tests 'com.vanipy.intodo.bot.XdcFetchTest'
+      - name: Verify display names and unchanged asset compatibility
+        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.bot.DisplayNamesTest' --tests 'com.vanipy.intodo.bot.XdcFetchTest' --tests 'com.vanipy.intodo.bot.PublishErrorsTest'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: compact-test-results
           path: |
             app/build/test-results/testDebugUnitTest/
-            /tmp/itdapk-compact-row.png
-            /tmp/itdapk-onecell-counter.png
-            /tmp/itdapk-span-*.png
+            /tmp/intodo-compact-row.png
+            /tmp/intodo-onecell-counter.png
+            /tmp/intodo-span-*.png
           if-no-files-found: warn
       - name: Host naming and package checks
         run: |

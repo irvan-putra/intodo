@@ -6,8 +6,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Card content for the review canvas, verbatim from the itdweb page source
- * (itdweb/src/App.tsx). Pure data, no Android imports.
+ * Card content for the review canvas, verbatim from the intodo page source
+ * (web/src/App.tsx). Pure data, no Android imports.
  *
  * A card body is a list of blocks: PARA (paragraph, optionally muted), LIST
  * (bullet items) or LINK (a standalone URL line). Paragraph text is a list of

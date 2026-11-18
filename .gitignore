@@ -6,3 +6,6 @@ local.properties
 *.jks
 webxdc/*.xdc
 __pycache__/
+
+# Local static build dependencies
+**/node_modules/

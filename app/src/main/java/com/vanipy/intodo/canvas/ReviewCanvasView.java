@@ -30,9 +30,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Native review-canvas view for itdapk: a bounded, pannable/zoomable canvas of
- * review cards with a minimap - the Android port of the itdweb page canvas
- * (itdweb/src/App.tsx) and the itdxdc port (webxdc/js/canvas.js). Cards, world
+ * Native review-canvas view for intodo: a bounded, pannable/zoomable canvas of
+ * review cards with a minimap - the Android port of the intodo page canvas
+ * (web/src/App.tsx) and the intodo port (webxdc/js/canvas.js). Cards, world
  * size, gestures, zoom limits and on-device persistence semantics match; camera
  * math is shared verbatim through {@link CanvasMath}.
  *

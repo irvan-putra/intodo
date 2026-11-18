@@ -34,10 +34,10 @@
 # served source. The fetch-then-compare tip check below still aborts the
 # run if the staged gh-pages checkout moved mid-run.
 #
-# What it does, on every push to main that touches itdweb/review/ or the
+# What it does, on every push to main that touches web/review/ or the
 # shared-list simulation (or a manual dispatch from main - the job guard
 # refuses other refs):
-#   1. Builds the static review-canvas bundle (itdweb/review/build.sh).
+#   1. Builds the static review-canvas bundle (web/review/build.sh).
 #   2. Checks out the full current site from gh-pages and stages the bundle
 #      via tools/release/stage_pages.sh, which refuses a wrong origin, a
 #      wrong branch, a dirty tree, or any change outside review/.
@@ -51,7 +51,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'itdweb/review/**'
+      - 'web/review/**'
       - 'demos-shared-list-simulation/**'
       - 'tools/release/**'
       - '.github/workflows/review-pages.yml'
@@ -92,7 +92,7 @@ jobs:
           node-version: 20
 
       - name: Build the review bundle (locked deps, no lifecycle scripts)
-        run: sh source/itdweb/review/build.sh "$PWD/dist"
+        run: sh source/web/review/build.sh "$PWD/dist"
 
       - name: Verify the staged site tip and scope
         run: |

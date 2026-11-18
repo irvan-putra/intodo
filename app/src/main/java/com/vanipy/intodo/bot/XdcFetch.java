@@ -22,15 +22,15 @@ import com.vanipy.intodo.net.Resumable;
  *  - only the irvan-putra/intodo repo is queried;
  *  - drafts and prereleases never qualify;
  *  - releases are walked newest-first and the FIRST release carrying an
- *    itdxdc-v*.xdc asset wins, so a newer release without an .xdc (for
- *    example an itdapk-only release) does not hide the newest app version;
+ *    intodo-v*.xdc asset wins, so a newer release without an .xdc (for
+ *    example an intodo-only release) does not hide the newest app version;
  *  - the asset's download URL must stay under this repo's releases path, and
  *    every redirect hop must stay on GitHub's own release hosts over HTTPS;
  *  - when GitHub reports a sha256 digest for the asset, the downloaded bytes
  *    must match it;
  *  - the downloaded .xdc must be a zip whose manifest.toml carries a
  *    version = "x.y.z" line, and the asset name must start with
- *    itdxdc-v<that version> - a versionless or mismatched file is refused
+ *    intodo-v<that version> - a versionless or mismatched file is refused
  *    here, before it could fail inside the publish flow.
  */
 public class XdcFetch {
@@ -61,7 +61,7 @@ public class XdcFetch {
 
     /**
      * Walks every listed release and picks the qualified asset with the MAX
-     * numeric semver in its itdxdc-v<d.d.d> name - never API order, so a
+     * numeric semver in its intodo-v<d.d.d> name - never API order, so a
      * backport release (newer release carrying an OLDER app version) does
      * not shadow the newest app version in an older release. Pure.
      */

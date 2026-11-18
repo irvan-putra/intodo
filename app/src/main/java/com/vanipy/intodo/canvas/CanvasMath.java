@@ -4,8 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Pure camera/layout math for the itdapk review canvas. No Android imports, so it
- * runs in plain JVM unit tests (CanvasMathTest). Mirror of the itdxdc port
+ * Pure camera/layout math for the intodo review canvas. No Android imports, so it
+ * runs in plain JVM unit tests (CanvasMathTest). Mirror of the intodo port
  * (webxdc/js/canvas-math.js) - divergence between the two is a bug.
  *
  * Camera model: cam = (x, y, z) is the world point at the viewport center plus
@@ -131,7 +131,7 @@ public final class CanvasMath {
      * readable at about 90% of the viewport width, instead of the whole-world
      * fit. The Fit control still gives the overview, and a stored layout always
      * wins over this default. Android default only;
-     * intentionally not mirrored into the itdxdc/itdweb ports.
+     * intentionally not mirrored into the intodo/intodo ports.
      */
     public static Cam defaultOpenCam(double vpW, Map<String, Pos> pos) {
         Pos ctr = center("change", pos);
@@ -210,7 +210,7 @@ public final class CanvasMath {
      * Validate/repair a saved layout. Never throws: a structurally broken record
      * returns null (caller starts fresh); per-field problems are repaired - unknown
      * card ids dropped, missing ids restored to defaults, zoom and camera position
-     * clamped. (The itdweb React original did not clamp the loaded camera; both
+     * clamped. (The intodo React original did not clamp the loaded camera; both
      * native ports do - stored state is untrusted input.)
      */
     public static Saved sanitize(Cam cam, Map<String, Pos> rawPos) {

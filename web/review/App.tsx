@@ -92,7 +92,7 @@ const DEFAULT_POS: Record<string, Pos> = {
 
 // C4 model, grounded in the public repo at the pinned snapshot (see
 // sections.ts COMMIT; each relationship names its evidence file). Runnable
-// containers: itdapk, itdxdc, itdweb and the feed encryption CLI. Tests
+// containers: intodo, intodo, intodo and the feed encryption CLI. Tests
 // attach to the containers they verify; build/CI and repo docs stay one
 // honestly-labeled supporting group; the developer and the draft GitHub
 // Actions workflows appear as people/external systems, not runtime boxes.

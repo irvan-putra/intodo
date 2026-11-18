@@ -1,5 +1,5 @@
-// canvas-math.js - pure camera/layout math for the itdxdc review canvas.
-// Port of the itdweb React canvas math (itdweb/src/App.tsx) with no DOM or
+// canvas-math.js - pure camera/layout math for the intodo review canvas.
+// Port of the intodo React canvas math (web/src/App.tsx) with no DOM or
 // framework dependencies, so the exact same code runs in webxdc webviews and
 // in Node for tests. Mirror of the Android port
 // (app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java) -
@@ -143,7 +143,7 @@
   // Validate/repair a persisted layout. Never throws: structural garbage
   // returns null (caller starts fresh), per-field problems are repaired -
   // unknown card ids dropped, missing ids restored to defaults, zoom and
-  // camera position clamped. (The itdweb React original did not clamp the
+  // camera position clamped. (The intodo React original did not clamp the
   // loaded camera; both native ports do - stored state is untrusted input.)
   function sanitizeSaved(raw) {
     if (raw === null || raw === undefined) return null;

@@ -24,7 +24,7 @@ SHORT = COMMIT[:7]
 J = 'app/src/main/java/com/vanipy/intodo/'
 P = 'app/src/main/python/'
 W = 'webxdc/'
-R = 'itdweb/'
+R = 'web/'
 
 # id, container, name, tech, principal (responsibility source), files,
 # sections (review slices covering these files), shared/dev_only flags.
@@ -323,7 +323,7 @@ RESP = {
     'cp-widget': "Home-screen widget rendering the cached list; taps refresh via the sync scheduler.",
     'cp-sync-sched': "Schedules and runs periodic background feed syncs (WorkManager), then refreshes the widget.",
     'cp-feed-pipeline': "Fetches the feed page through a hidden WebView, decrypts IFW1, parses items.",
-    'cp-self-update': "Checks GitHub Releases for a newer itdapk APK, downloads and installs it.",
+    'cp-self-update': "Checks GitHub Releases for a newer intodo APK, downloads and installs it.",
     'cp-bot-host': "Runs the embedded DeltaChat bot (foreground service) plus its setup and publish UI.",
     'cp-bot-bridge': "Bot runtime: serves each accepted chat an isolated list stack; routes events to bridges.",
     'cp-delivery-ops': "Publishes new .xdc versions to served chats and persists list ops (SQLite).",

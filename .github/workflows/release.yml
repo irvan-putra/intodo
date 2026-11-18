@@ -1,9 +1,9 @@
-# itdapk public release build. Current package identity: com.vanipy.intodo.
+# intodo public release build. Current package identity: com.vanipy.intodo.
 # Builds an UNCONFIGURED APK (no FEED_URL: public source default) and signs it with
 # the project's existing keystore held ONLY in GitHub Actions secrets (write-only,
 # set directly by the repo owner on their own device; never in repo, logs, artifacts,
 # or agent messages):
-#   KEYSTORE_BASE64   - base64 of the itdapk keystore file
+#   KEYSTORE_BASE64   - base64 of the intodo keystore file
 #   KEYSTORE_PASSWORD - keystore passphrase
 #   KEY_ALIAS         - key alias inside the keystore
 #   KEY_PASSWORD      - key passphrase
