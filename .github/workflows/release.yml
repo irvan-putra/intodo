@@ -119,7 +119,7 @@ jobs:
       - name: Fetch public signing reference
         run: |
           curl --fail --location --proto '=https' --proto-redir '=https' \
-            https://github.com/irvan-putra/intodo/releases/download/v0.5.10/itdapk-v0.5.10.apk \
+            https://github.com/irvan-putra/intodo/releases/download/v0.5.13/itdapk-v0.5.13.apk \
             --output "$RUNNER_TEMP/reference.apk"
 
       - name: Decode keystore, sign (passwords via env, never argv), verify, always clean up
@@ -168,4 +168,4 @@ jobs:
           gh release create "v$IN_NAME" "intodo-v$IN_NAME.apk" "itdapk-v$IN_NAME.apk" SHA256SUMS \
             --target "$STAMP_SHA" \
             --title "intodo v$IN_NAME" \
-            --notes ""
+            --notes-file docs/releases/0.5.14.md
