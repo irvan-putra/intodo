@@ -1,11 +1,11 @@
-// Generated from irvan-putra/intodo @ 1f6ba2f by gen_code.py - do not hand-edit.
+// Generated from irvan-putra/intodo @ 0740caf by gen_code.py - do not hand-edit.
 // Component names/file assignment/tech labels are the generator's curated CONFIG;
 // responsibilities are CURATED concise summaries (architectural interpretation);
 // file lines are verbatim first header sentences; declarations and references
 // come from a static syntax scan (a reference is a NAME match, not a proven call).
 
-export const CODE_COMMIT = "1f6ba2fdf7758153ae8020810d11c69f89c20cf3";
-export const CODE_COMMIT_SHORT = "1f6ba2f";
+export const CODE_COMMIT = "0740caff0bb50c174b061875ad1136882a9017ab";
+export const CODE_COMMIT_SHORT = "0740caf";
 export type CodeEl = { name: string; kind: string };
 export type CodeFile = { path: string; lines: number | null; role?: string | null; els: CodeEl[]; kindNote?: string | null; intraRefs: string[] };
 export type C4Component = { id: string; container: string; name: string; tech: string; resp?: string | null; files: string[]; sections: string[]; shared: boolean; devOnly: boolean };
@@ -18,7 +18,7 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - Android Activity",
     "resp": "Shows the reminder list and hosts the app's menu actions (sync, bot, canvas, self-update).",
     "files": [
-      "app/src/main/java/com/instinct/widget/MainActivity.java",
+      "app/src/main/java/com/vanipy/intodo/MainActivity.java",
       "app/src/main/AndroidManifest.xml",
       "app/src/main/res/layout/activity_main.xml",
       "app/src/main/res/layout/list_item.xml",
@@ -38,8 +38,8 @@ export const COMPONENTS: C4Component[] = [
     "tech": "AppWidgetProvider + RemoteViewsService",
     "resp": "Home-screen widget rendering the cached list; taps refresh via the sync scheduler.",
     "files": [
-      "app/src/main/java/com/instinct/widget/WidgetProvider.java",
-      "app/src/main/java/com/instinct/widget/WidgetService.java",
+      "app/src/main/java/com/vanipy/intodo/WidgetProvider.java",
+      "app/src/main/java/com/vanipy/intodo/WidgetService.java",
       "app/src/main/res/layout/widget_layout.xml",
       "app/src/main/res/layout/widget_item.xml",
       "app/src/main/res/layout/widget_section.xml",
@@ -59,8 +59,8 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - WorkManager",
     "resp": "Schedules and runs periodic background feed syncs (WorkManager), then refreshes the widget.",
     "files": [
-      "app/src/main/java/com/instinct/widget/FeedSyncScheduler.java",
-      "app/src/main/java/com/instinct/widget/FeedSyncWorker.java"
+      "app/src/main/java/com/vanipy/intodo/FeedSyncScheduler.java",
+      "app/src/main/java/com/vanipy/intodo/FeedSyncWorker.java"
     ],
     "sections": [
       "feed-sync"
@@ -75,10 +75,10 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - hidden WebView, IFW1 decrypt",
     "resp": "Fetches the feed page through a hidden WebView, decrypts IFW1, parses items.",
     "files": [
-      "app/src/main/java/com/instinct/widget/SyncEngine.java",
-      "app/src/main/java/com/instinct/widget/Crypto.java",
-      "app/src/main/java/com/instinct/widget/FeedParser.java",
-      "app/src/main/java/com/instinct/widget/Freshness.java"
+      "app/src/main/java/com/vanipy/intodo/SyncEngine.java",
+      "app/src/main/java/com/vanipy/intodo/Crypto.java",
+      "app/src/main/java/com/vanipy/intodo/FeedParser.java",
+      "app/src/main/java/com/vanipy/intodo/Freshness.java"
     ],
     "sections": [
       "feed-sync"
@@ -93,9 +93,9 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - APK download + install",
     "resp": "Checks GitHub Releases for a newer intodo APK, downloads and installs it.",
     "files": [
-      "app/src/main/java/com/instinct/widget/UpdateCheck.java",
-      "app/src/main/java/com/instinct/widget/UpdateInstall.java",
-      "app/src/main/java/com/instinct/widget/InstallStatusReceiver.java"
+      "app/src/main/java/com/vanipy/intodo/UpdateCheck.java",
+      "app/src/main/java/com/vanipy/intodo/UpdateInstall.java",
+      "app/src/main/java/com/vanipy/intodo/InstallStatusReceiver.java"
     ],
     "sections": [
       "self-update",
@@ -111,12 +111,13 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java/Kotlin - foreground Service + Activity",
     "resp": "Runs the embedded DeltaChat bot (foreground service) plus its setup and publish UI.",
     "files": [
-      "app/src/main/java/com/instinct/widget/bot/BotService.java",
-      "app/src/main/java/com/instinct/widget/bot/BotActivity.java",
-      "app/src/main/java/com/instinct/widget/bot/BootReceiver.java",
-      "app/src/main/java/com/instinct/widget/bot/BotImport.kt",
-      "app/src/main/java/com/instinct/widget/bot/PublishErrors.java",
-      "app/src/main/java/com/instinct/widget/bot/XdcFetch.java"
+      "app/src/main/java/com/vanipy/intodo/bot/BotService.java",
+      "app/src/main/java/com/vanipy/intodo/bot/BotActivity.java",
+      "app/src/main/java/com/vanipy/intodo/bot/BootReceiver.java",
+      "app/src/main/java/com/vanipy/intodo/bot/BotImport.kt",
+      "app/src/main/java/com/vanipy/intodo/bot/PublishErrors.java",
+      "app/src/main/java/com/vanipy/intodo/bot/DisplayNames.java",
+      "app/src/main/java/com/vanipy/intodo/bot/XdcFetch.java"
     ],
     "sections": [
       "bot-app"
@@ -195,10 +196,10 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - Android Canvas View",
     "resp": "Native Android host and WebView bridge for the review canvas page.",
     "files": [
-      "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasActivity.java",
-      "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasView.java",
-      "app/src/main/java/com/instinct/widget/canvas/CanvasContent.java",
-      "app/src/main/java/com/instinct/widget/canvas/CanvasMath.java"
+      "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasActivity.java",
+      "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasView.java",
+      "app/src/main/java/com/vanipy/intodo/canvas/CanvasContent.java",
+      "app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java"
     ],
     "sections": [
       "native-canvas"
@@ -213,7 +214,7 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - LWW registers, HLC",
     "resp": "CRDT merge core: per-field last-writer-wins registers with HLC ordering.",
     "files": [
-      "app/src/main/java/com/instinct/widget/merge/MergeDoc.java"
+      "app/src/main/java/com/vanipy/intodo/merge/MergeDoc.java"
     ],
     "sections": [
       "merge-core"
@@ -228,10 +229,10 @@ export const COMPONENTS: C4Component[] = [
     "tech": "Java - used across components",
     "resp": "Shared prefs/progress/status helpers used across components (no feature of its own).",
     "files": [
-      "app/src/main/java/com/instinct/widget/Prefs.java",
-      "app/src/main/java/com/instinct/widget/ProgressPump.java",
-      "app/src/main/java/com/instinct/widget/SyncStatusText.java",
-      "app/src/main/java/com/instinct/widget/net/Resumable.java"
+      "app/src/main/java/com/vanipy/intodo/Prefs.java",
+      "app/src/main/java/com/vanipy/intodo/ProgressPump.java",
+      "app/src/main/java/com/vanipy/intodo/SyncStatusText.java",
+      "app/src/main/java/com/vanipy/intodo/net/Resumable.java"
     ],
     "sections": [
       "feed-sync",
@@ -552,6 +553,7 @@ export const COMPONENT_REFS: ComponentRef[] = [
     "a": "cp-widget",
     "b": "cp-feed-pipeline",
     "via": [
+      "WidgetProvider.java -> FeedParser",
       "WidgetService.java -> FeedParser"
     ]
   },
@@ -602,8 +604,8 @@ export const COMPONENT_REFS: ComponentRef[] = [
   }
 ];
 export const CODE_FILES: Record<string, CodeFile> = {
-  "app/src/main/java/com/instinct/widget/MainActivity.java": {
-    "path": "app/src/main/java/com/instinct/widget/MainActivity.java",
+  "app/src/main/java/com/vanipy/intodo/MainActivity.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/MainActivity.java",
     "lines": 364,
     "role": null,
     "els": [
@@ -659,9 +661,9 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/WidgetProvider.java": {
-    "path": "app/src/main/java/com/instinct/widget/WidgetProvider.java",
-    "lines": 64,
+  "app/src/main/java/com/vanipy/intodo/WidgetProvider.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/WidgetProvider.java",
+    "lines": 105,
     "role": null,
     "els": [
       {
@@ -674,9 +676,9 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "WidgetService"
     ]
   },
-  "app/src/main/java/com/instinct/widget/WidgetService.java": {
-    "path": "app/src/main/java/com/instinct/widget/WidgetService.java",
-    "lines": 64,
+  "app/src/main/java/com/vanipy/intodo/WidgetService.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/WidgetService.java",
+    "lines": 72,
     "role": null,
     "els": [
       {
@@ -717,7 +719,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "app/src/main/res/xml/widget_info.xml": {
     "path": "app/src/main/res/xml/widget_info.xml",
-    "lines": 10,
+    "lines": 12,
     "role": null,
     "els": [],
     "kindNote": "xml resource",
@@ -731,10 +733,10 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": "drawable resource",
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/FeedSyncScheduler.java": {
-    "path": "app/src/main/java/com/instinct/widget/FeedSyncScheduler.java",
+  "app/src/main/java/com/vanipy/intodo/FeedSyncScheduler.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/FeedSyncScheduler.java",
     "lines": 36,
-    "role": "Schedules the periodic feed sync.",
+    "role": "Schedules the existing periodic feed sync.",
     "els": [
       {
         "name": "FeedSyncScheduler",
@@ -746,8 +748,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "FeedSyncWorker"
     ]
   },
-  "app/src/main/java/com/instinct/widget/FeedSyncWorker.java": {
-    "path": "app/src/main/java/com/instinct/widget/FeedSyncWorker.java",
+  "app/src/main/java/com/vanipy/intodo/FeedSyncWorker.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/FeedSyncWorker.java",
     "lines": 46,
     "role": "Periodic background feed sync.",
     "els": [
@@ -759,9 +761,9 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/SyncEngine.java": {
-    "path": "app/src/main/java/com/instinct/widget/SyncEngine.java",
-    "lines": 258,
+  "app/src/main/java/com/vanipy/intodo/SyncEngine.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/SyncEngine.java",
+    "lines": 287,
     "role": "Fetches the Instinct Files feed page.",
     "els": [
       {
@@ -780,8 +782,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "Freshness"
     ]
   },
-  "app/src/main/java/com/instinct/widget/Crypto.java": {
-    "path": "app/src/main/java/com/instinct/widget/Crypto.java",
+  "app/src/main/java/com/vanipy/intodo/Crypto.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/Crypto.java",
     "lines": 79,
     "role": "ECIES (P-256 + ECDH + HKDF-SHA256 + AES-256-GCM) for the widget feed.",
     "els": [
@@ -793,8 +795,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/FeedParser.java": {
-    "path": "app/src/main/java/com/instinct/widget/FeedParser.java",
+  "app/src/main/java/com/vanipy/intodo/FeedParser.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/FeedParser.java",
     "lines": 46,
     "role": "Parses the decrypted feed JSON.",
     "els": [
@@ -818,8 +820,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/Freshness.java": {
-    "path": "app/src/main/java/com/instinct/widget/Freshness.java",
+  "app/src/main/java/com/vanipy/intodo/Freshness.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/Freshness.java",
     "lines": 26,
     "role": "Feed freshness comparison on parsed epoch instants, not raw strings.",
     "els": [
@@ -835,9 +837,9 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/UpdateCheck.java": {
-    "path": "app/src/main/java/com/instinct/widget/UpdateCheck.java",
-    "lines": 112,
+  "app/src/main/java/com/vanipy/intodo/UpdateCheck.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/UpdateCheck.java",
+    "lines": 113,
     "role": "Checks the public intodo repo's GitHub Releases for a strictly newer intodo build.",
     "els": [
       {
@@ -852,8 +854,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/UpdateInstall.java": {
-    "path": "app/src/main/java/com/instinct/widget/UpdateInstall.java",
+  "app/src/main/java/com/vanipy/intodo/UpdateInstall.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/UpdateInstall.java",
     "lines": 220,
     "role": "Downloads a release APK and hands it to the Android package installer, which shows * the system's own install confirmation - the user always approves the install.",
     "els": [
@@ -871,8 +873,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "InstallStatusReceiver"
     ]
   },
-  "app/src/main/java/com/instinct/widget/InstallStatusReceiver.java": {
-    "path": "app/src/main/java/com/instinct/widget/InstallStatusReceiver.java",
+  "app/src/main/java/com/vanipy/intodo/InstallStatusReceiver.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/InstallStatusReceiver.java",
     "lines": 47,
     "role": "Receives PackageInstaller session results.",
     "els": [
@@ -884,8 +886,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/bot/BotService.java": {
-    "path": "app/src/main/java/com/instinct/widget/bot/BotService.java",
+  "app/src/main/java/com/vanipy/intodo/bot/BotService.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/BotService.java",
     "lines": 101,
     "role": null,
     "els": [
@@ -897,9 +899,9 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/bot/BotActivity.java": {
-    "path": "app/src/main/java/com/instinct/widget/bot/BotActivity.java",
-    "lines": 798,
+  "app/src/main/java/com/vanipy/intodo/bot/BotActivity.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/BotActivity.java",
+    "lines": 854,
     "role": null,
     "els": [
       {
@@ -911,12 +913,13 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "intraRefs": [
       "BotImport",
       "BotService",
+      "DisplayNames",
       "PublishErrors",
       "XdcFetch"
     ]
   },
-  "app/src/main/java/com/instinct/widget/bot/BootReceiver.java": {
-    "path": "app/src/main/java/com/instinct/widget/bot/BootReceiver.java",
+  "app/src/main/java/com/vanipy/intodo/bot/BootReceiver.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/BootReceiver.java",
     "lines": 31,
     "role": "Restarts the bot after reboot when it was running, mirroring the official * DeltaChat-Android BootReceiver + KeepAliveService.maybeStartSelf path * (official BootReceiver is itself a no-op; receiving the broadcast starts",
     "els": [
@@ -930,8 +933,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "BotService"
     ]
   },
-  "app/src/main/java/com/instinct/widget/bot/BotImport.kt": {
-    "path": "app/src/main/java/com/instinct/widget/bot/BotImport.kt",
+  "app/src/main/java/com/vanipy/intodo/bot/BotImport.kt": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/BotImport.kt",
     "lines": 135,
     "role": "Drop-in \"Import bot backup\" flow for BotActivity (intodo 0.4.5).",
     "els": [
@@ -946,8 +949,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "BotService"
     ]
   },
-  "app/src/main/java/com/instinct/widget/bot/PublishErrors.java": {
-    "path": "app/src/main/java/com/instinct/widget/bot/PublishErrors.java",
+  "app/src/main/java/com/vanipy/intodo/bot/PublishErrors.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/PublishErrors.java",
     "lines": 27,
     "role": "Turns raw publish fan-out errors into a plain-language lead for the * publish result dialog.",
     "els": [
@@ -957,10 +960,25 @@ export const CODE_FILES: Record<string, CodeFile> = {
       }
     ],
     "kindNote": null,
+    "intraRefs": [
+      "DisplayNames"
+    ]
+  },
+  "app/src/main/java/com/vanipy/intodo/bot/DisplayNames.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/DisplayNames.java",
+    "lines": 12,
+    "role": "Presentation names only.",
+    "els": [
+      {
+        "name": "DisplayNames",
+        "kind": "class"
+      }
+    ],
+    "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/bot/XdcFetch.java": {
-    "path": "app/src/main/java/com/instinct/widget/bot/XdcFetch.java",
+  "app/src/main/java/com/vanipy/intodo/bot/XdcFetch.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/bot/XdcFetch.java",
     "lines": 231,
     "role": "Manual-tap \"get the latest app version (.xdc) from GitHub\" for the bot * publish flow.",
     "els": [
@@ -986,7 +1004,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "app/src/main/python/bot_runtime.py": {
     "path": "app/src/main/python/bot_runtime.py",
-    "lines": 1040,
+    "lines": 1042,
     "role": "LIVE bot runtime (scratch 0.3 r12).",
     "els": [
       {
@@ -1045,7 +1063,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "app/src/main/python/bot.py": {
     "path": "app/src/main/python/bot.py",
-    "lines": 397,
+    "lines": 400,
     "role": "webxdc storage bridge bot (v3, gated, ack-free).",
     "els": [
       {
@@ -1239,8 +1257,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasActivity.java": {
-    "path": "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasActivity.java",
+  "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasActivity.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasActivity.java",
     "lines": 60,
     "role": "Hosts the review canvas: a small header, the canvas fitted to the available * screen height (ReviewCanvasView caps itself at 600dp, min 320dp), and the * gesture caption.",
     "els": [
@@ -1254,8 +1272,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "ReviewCanvasView"
     ]
   },
-  "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasView.java": {
-    "path": "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasView.java",
+  "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasView.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasView.java",
     "lines": 637,
     "role": "Native review-canvas view for intodo: a bounded, pannable/zoomable canvas of * review cards with a minimap - the Android port of the intodo page canvas * (web/src/App.tsx) and the intodo port (webxdc/js/canvas.js).",
     "els": [
@@ -1278,8 +1296,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "CanvasMath"
     ]
   },
-  "app/src/main/java/com/instinct/widget/canvas/CanvasContent.java": {
-    "path": "app/src/main/java/com/instinct/widget/canvas/CanvasContent.java",
+  "app/src/main/java/com/vanipy/intodo/canvas/CanvasContent.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/canvas/CanvasContent.java",
     "lines": 107,
     "role": "Card content for the review canvas, verbatim from the intodo page source * (web/src/App.tsx).",
     "els": [
@@ -1311,8 +1329,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/canvas/CanvasMath.java": {
-    "path": "app/src/main/java/com/instinct/widget/canvas/CanvasMath.java",
+  "app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java",
     "lines": 234,
     "role": "Pure camera/layout math for the intodo review canvas.",
     "els": [
@@ -1340,8 +1358,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/merge/MergeDoc.java": {
-    "path": "app/src/main/java/com/instinct/widget/merge/MergeDoc.java",
+  "app/src/main/java/com/vanipy/intodo/merge/MergeDoc.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/merge/MergeDoc.java",
     "lines": 248,
     "role": "Merge engine for the local document.",
     "els": [
@@ -1369,8 +1387,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/Prefs.java": {
-    "path": "app/src/main/java/com/instinct/widget/Prefs.java",
+  "app/src/main/java/com/vanipy/intodo/Prefs.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/Prefs.java",
     "lines": 51,
     "role": null,
     "els": [
@@ -1382,8 +1400,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/ProgressPump.java": {
-    "path": "app/src/main/java/com/instinct/widget/ProgressPump.java",
+  "app/src/main/java/com/vanipy/intodo/ProgressPump.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/ProgressPump.java",
     "lines": 36,
     "role": "Coalesces a firehose of byte-count progress events onto the main thread: * at most one queued runnable, always carrying the newest values.",
     "els": [
@@ -1399,8 +1417,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
     "kindNote": null,
     "intraRefs": []
   },
-  "app/src/main/java/com/instinct/widget/SyncStatusText.java": {
-    "path": "app/src/main/java/com/instinct/widget/SyncStatusText.java",
+  "app/src/main/java/com/vanipy/intodo/SyncStatusText.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/SyncStatusText.java",
     "lines": 61,
     "role": "Single source for the sync footer text in the activity and the widget, * showing both ages the user asked for: when the list last synced (any * successful check, content new or unchanged) and when the list content * last",
     "els": [
@@ -1414,8 +1432,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
       "Prefs"
     ]
   },
-  "app/src/main/java/com/instinct/widget/net/Resumable.java": {
-    "path": "app/src/main/java/com/instinct/widget/net/Resumable.java",
+  "app/src/main/java/com/vanipy/intodo/net/Resumable.java": {
+    "path": "app/src/main/java/com/vanipy/intodo/net/Resumable.java",
     "lines": 486,
     "role": "Verified resumable-download core shared by the APK updater (UpdateInstall) * and the .xdc fetcher (XdcFetch).",
     "els": [
@@ -1531,7 +1549,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   "webxdc/js/mergedoc.js": {
     "path": "webxdc/js/mergedoc.js",
     "lines": 159,
-    "role": "mergedoc.js - JS port of the Android app's MergeDoc (com.instinct.widget.merge).",
+    "role": "mergedoc.js - JS port of the Android app's MergeDoc (com.vanipy.intodo.merge).",
     "els": [
       {
         "name": "cmpStamp",
@@ -1891,7 +1909,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "web/review/App.tsx": {
     "path": "web/review/App.tsx",
-    "lines": 1855,
+    "lines": 1990,
     "role": null,
     "els": [
       {
@@ -1908,6 +1926,10 @@ export const CODE_FILES: Record<string, CodeFile> = {
       },
       {
         "name": "GROUP_Z",
+        "kind": "const"
+      },
+      {
+        "name": "COMP_Z",
         "kind": "const"
       },
       {
@@ -1937,10 +1959,6 @@ export const CODE_FILES: Record<string, CodeFile> = {
       {
         "name": "DEFAULT_POS",
         "kind": "const"
-      },
-      {
-        "name": "C4_CONTAINERS",
-        "kind": "const"
       }
     ],
     "kindNote": null,
@@ -1948,7 +1966,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "web/review/static.css": {
     "path": "web/review/static.css",
-    "lines": 644,
+    "lines": 711,
     "role": "Static full-screen canvas styles (GitHub Pages variant).",
     "els": [],
     "kindNote": "stylesheet",
@@ -2061,7 +2079,7 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "web/tools/gen_sections.py": {
     "path": "web/tools/gen_sections.py",
-    "lines": 303,
+    "lines": 305,
     "role": "Portable: point at any local intodo checkout and any output path.",
     "els": [
       {
@@ -2082,8 +2100,8 @@ export const CODE_FILES: Record<string, CodeFile> = {
   },
   "web/src/sections.ts": {
     "path": "web/src/sections.ts",
-    "lines": 817,
-    "role": "Generated from irvan-putra/intodo @ fbd0213 by gen_sections.py - do not hand-edit.",
+    "lines": 825,
+    "role": "Generated from irvan-putra/intodo @ 0740caf by gen_sections.py - do not hand-edit.",
     "els": [
       {
         "name": "COMMIT",

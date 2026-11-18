@@ -1,6 +1,6 @@
-// Generated from irvan-putra/intodo @ fbd0213 by gen_sections.py - do not hand-edit.
-export const COMMIT = "fbd0213aed84b785d7b6b8f4235b9df7bd8202ac";
-export const COMMIT_SHORT = "fbd0213";
+// Generated from irvan-putra/intodo @ 0740caf by gen_sections.py - do not hand-edit.
+export const COMMIT = "0740caff0bb50c174b061875ad1136882a9017ab";
+export const COMMIT_SHORT = "0740caf";
 export type SectionFile = { path: string; lines: number | null; note?: string };
 export type Section = { id: string; title: string; tag: string; icon: string; purpose: string; link: string; digest: string; totalLines: number; files: SectionFile[]; notChecked: string[] };
 export const SECTIONS: Section[] = [
@@ -13,16 +13,16 @@ export const SECTIONS: Section[] = [
     "link": "app/src/main",
     "files": [
       {
-        "path": "app/src/main/java/com/instinct/widget/MainActivity.java",
+        "path": "app/src/main/java/com/vanipy/intodo/MainActivity.java",
         "lines": 364
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/WidgetProvider.java",
-        "lines": 64
+        "path": "app/src/main/java/com/vanipy/intodo/WidgetProvider.java",
+        "lines": 105
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/WidgetService.java",
-        "lines": 64
+        "path": "app/src/main/java/com/vanipy/intodo/WidgetService.java",
+        "lines": 72
       },
       {
         "path": "app/src/main/res/layout/activity_main.xml",
@@ -54,7 +54,7 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "app/src/main/res/xml/widget_info.xml",
-        "lines": 10
+        "lines": 12
       },
       {
         "path": "app/src/main/res/drawable/ic_refresh.xml",
@@ -69,8 +69,8 @@ export const SECTIONS: Section[] = [
       "TalkBack screen-reader pass over the list",
       "Very large font sizes beyond the 1.3x spot checks"
     ],
-    "digest": "9add1c7f4f12",
-    "totalLines": 701
+    "digest": "6f5c95342153",
+    "totalLines": 752
   },
   {
     "id": "feed-sync",
@@ -78,46 +78,46 @@ export const SECTIONS: Section[] = [
     "tag": "Android app - sync",
     "icon": "🔄",
     "purpose": "Fetches the hosted feed, decrypts it with the paired key, and turns it into list items.",
-    "link": "app/src/main/java/com/instinct/widget",
+    "link": "app/src/main/java/com/vanipy/intodo",
     "files": [
       {
-        "path": "app/src/main/java/com/instinct/widget/SyncEngine.java",
-        "lines": 258
+        "path": "app/src/main/java/com/vanipy/intodo/SyncEngine.java",
+        "lines": 287
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/FeedParser.java",
+        "path": "app/src/main/java/com/vanipy/intodo/FeedParser.java",
         "lines": 46
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/Crypto.java",
+        "path": "app/src/main/java/com/vanipy/intodo/Crypto.java",
         "lines": 79
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/FeedSyncWorker.java",
+        "path": "app/src/main/java/com/vanipy/intodo/FeedSyncWorker.java",
         "lines": 46
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/FeedSyncScheduler.java",
+        "path": "app/src/main/java/com/vanipy/intodo/FeedSyncScheduler.java",
         "lines": 36
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/Prefs.java",
+        "path": "app/src/main/java/com/vanipy/intodo/Prefs.java",
         "lines": 51
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/Freshness.java",
+        "path": "app/src/main/java/com/vanipy/intodo/Freshness.java",
         "lines": 26
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/ProgressPump.java",
+        "path": "app/src/main/java/com/vanipy/intodo/ProgressPump.java",
         "lines": 36
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/SyncStatusText.java",
+        "path": "app/src/main/java/com/vanipy/intodo/SyncStatusText.java",
         "lines": 61
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/InstallStatusReceiver.java",
+        "path": "app/src/main/java/com/vanipy/intodo/InstallStatusReceiver.java",
         "lines": 47
       }
     ],
@@ -125,8 +125,8 @@ export const SECTIONS: Section[] = [
       "Malformed or hostile feed handling beyond the parser tests",
       "Battery cost of the 30-minute schedule over a full week"
     ],
-    "digest": "c99231797651",
-    "totalLines": 686
+    "digest": "67e8edfb6edd",
+    "totalLines": 715
   },
   {
     "id": "self-update",
@@ -134,18 +134,18 @@ export const SECTIONS: Section[] = [
     "tag": "Android app - updates",
     "icon": "⬇️",
     "purpose": "Checks GitHub for a newer APK, downloads it with resume after interruptions, and installs it.",
-    "link": "app/src/main/java/com/instinct/widget",
+    "link": "app/src/main/java/com/vanipy/intodo",
     "files": [
       {
-        "path": "app/src/main/java/com/instinct/widget/UpdateCheck.java",
-        "lines": 112
+        "path": "app/src/main/java/com/vanipy/intodo/UpdateCheck.java",
+        "lines": 113
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/UpdateInstall.java",
+        "path": "app/src/main/java/com/vanipy/intodo/UpdateInstall.java",
         "lines": 220
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/net/Resumable.java",
+        "path": "app/src/main/java/com/vanipy/intodo/net/Resumable.java",
         "lines": 486
       }
     ],
@@ -153,8 +153,8 @@ export const SECTIONS: Section[] = [
       "Interrupted-download recovery on your own phone (JVM-tested, not device-proven)",
       "The Samsung installer-permission prompt flow end to end"
     ],
-    "digest": "f395e5c77a5d",
-    "totalLines": 818
+    "digest": "23ed55433b81",
+    "totalLines": 819
   },
   {
     "id": "native-canvas",
@@ -162,22 +162,22 @@ export const SECTIONS: Section[] = [
     "tag": "Android app - canvas",
     "icon": "🖼️",
     "purpose": "The in-app canvas view. Shares its math with the webxdc canvas below.",
-    "link": "app/src/main/java/com/instinct/widget/canvas",
+    "link": "app/src/main/java/com/vanipy/intodo/canvas",
     "files": [
       {
-        "path": "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasView.java",
+        "path": "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasView.java",
         "lines": 637
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/canvas/CanvasMath.java",
+        "path": "app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java",
         "lines": 234
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/canvas/CanvasContent.java",
+        "path": "app/src/main/java/com/vanipy/intodo/canvas/CanvasContent.java",
         "lines": 107
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/canvas/ReviewCanvasActivity.java",
+        "path": "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasActivity.java",
         "lines": 60
       }
     ],
@@ -185,7 +185,7 @@ export const SECTIONS: Section[] = [
       "Rendered output on a real device or emulator (compiles for API 34, never drawn)",
       "Visual parity with this page"
     ],
-    "digest": "1424bbcb6de9",
+    "digest": "a1c4475d46ca",
     "totalLines": 1038
   },
   {
@@ -194,17 +194,17 @@ export const SECTIONS: Section[] = [
     "tag": "Shared list - CRDT",
     "icon": "🧬",
     "purpose": "How two devices combine list edits without losing items.",
-    "link": "app/src/main/java/com/instinct/widget/merge",
+    "link": "app/src/main/java/com/vanipy/intodo/merge",
     "files": [
       {
-        "path": "app/src/main/java/com/instinct/widget/merge/MergeDoc.java",
+        "path": "app/src/main/java/com/vanipy/intodo/merge/MergeDoc.java",
         "lines": 248
       }
     ],
     "notChecked": [
       "Independent re-run of the reported property tests (7 Java + 9 JS, run by the builders)"
     ],
-    "digest": "b0f7fc8e697b",
+    "digest": "0d6c9e3747ef",
     "totalLines": 248
   },
   {
@@ -213,38 +213,42 @@ export const SECTIONS: Section[] = [
     "tag": "DeltaChat bot - host UI",
     "icon": "🤖",
     "purpose": "The bot's control screens inside the app: logs, publish dialogs, fetch progress.",
-    "link": "app/src/main/java/com/instinct/widget/bot",
+    "link": "app/src/main/java/com/vanipy/intodo/bot",
     "files": [
       {
-        "path": "app/src/main/java/com/instinct/widget/bot/BotActivity.java",
-        "lines": 798
+        "path": "app/src/main/java/com/vanipy/intodo/bot/BotActivity.java",
+        "lines": 854
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/bot/BotService.java",
+        "path": "app/src/main/java/com/vanipy/intodo/bot/BotService.java",
         "lines": 101
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/bot/XdcFetch.java",
+        "path": "app/src/main/java/com/vanipy/intodo/bot/XdcFetch.java",
         "lines": 231
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/bot/BotImport.kt",
+        "path": "app/src/main/java/com/vanipy/intodo/bot/BotImport.kt",
         "lines": 135
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/bot/BootReceiver.java",
+        "path": "app/src/main/java/com/vanipy/intodo/bot/BootReceiver.java",
         "lines": 31
       },
       {
-        "path": "app/src/main/java/com/instinct/widget/bot/PublishErrors.java",
+        "path": "app/src/main/java/com/vanipy/intodo/bot/PublishErrors.java",
         "lines": 27
+      },
+      {
+        "path": "app/src/main/java/com/vanipy/intodo/bot/DisplayNames.java",
+        "lines": 12
       }
     ],
     "notChecked": [
       "Publish error dialogs on a fresh account with no keys configured"
     ],
-    "digest": "bcc13745297d",
-    "totalLines": 1323
+    "digest": "788e2f719755",
+    "totalLines": 1391
   },
   {
     "id": "bot-runtime",
@@ -256,18 +260,18 @@ export const SECTIONS: Section[] = [
     "files": [
       {
         "path": "app/src/main/python/bot.py",
-        "lines": 397
+        "lines": 400
       },
       {
         "path": "app/src/main/python/bot_runtime.py",
-        "lines": 1040
+        "lines": 1042
       }
     ],
     "notChecked": [
       "Runtime rollback across the r13/v2 boundary with mixed history (known compatibility gap)"
     ],
-    "digest": "72c844e36b8e",
-    "totalLines": 1437
+    "digest": "5303b0c68690",
+    "totalLines": 1442
   },
   {
     "id": "bot-delivery",
@@ -291,12 +295,12 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "app/src/main/python/digest-fixtures.json",
-        "lines": 335
+        "lines": 336
       }
     ],
     "notChecked": [],
-    "digest": "6b3a7a610392",
-    "totalLines": 2073
+    "digest": "f170ab67208a",
+    "totalLines": 2074
   },
   {
     "id": "witness",
@@ -361,7 +365,7 @@ export const SECTIONS: Section[] = [
     "notChecked": [
       "Edit migration between app versions - a new version is a new instance, old bubbles do not heal"
     ],
-    "digest": "6b3f7e37158a",
+    "digest": "9fd493ccbab2",
     "totalLines": 1243
   },
   {
@@ -388,7 +392,7 @@ export const SECTIONS: Section[] = [
     "notChecked": [
       "Open/reopen persistence inside a real DeltaChat client (Chrome smoke test only)"
     ],
-    "digest": "e33805d77b49",
+    "digest": "76d5f0580113",
     "totalLines": 713
   },
   {
@@ -413,14 +417,14 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "web/src/style.css",
-        "lines": 104
+        "lines": 105
       }
     ],
     "notChecked": [
       "Whether your saved layout survives a signed-in reopen on your phone (implemented, not yet verified)"
     ],
-    "digest": "03941ca62d5e",
-    "totalLines": 601
+    "digest": "9bf2c0b4fe2b",
+    "totalLines": 602
   },
   {
     "id": "tests-android",
@@ -431,67 +435,71 @@ export const SECTIONS: Section[] = [
     "link": "app/src/test",
     "files": [
       {
-        "path": "app/src/test/java/com/instinct/widget/MainActivityRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/MainActivityRenderTest.java",
         "lines": 265
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/MainActivityProgressRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/MainActivityProgressRenderTest.java",
         "lines": 176
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/WidgetRemoteApplyTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/WidgetRemoteApplyTest.java",
         "lines": 67
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/SyncStatusTextTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/SyncStatusTextTest.java",
         "lines": 94
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/PairingCopyTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/PairingCopyTest.java",
         "lines": 93
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/canvas/CanvasMathTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/canvas/CanvasMathTest.java",
         "lines": 344
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/merge/MergeDocTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/merge/MergeDocTest.java",
         "lines": 174
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/net/ResumableTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/net/ResumableTest.java",
         "lines": 620
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/bot/BotActivityRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/bot/BotActivityRenderTest.java",
         "lines": 201
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/bot/BotPublishIpcTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/bot/BotPublishIpcTest.java",
         "lines": 72
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/bot/PublishDialogRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/bot/PublishDialogRenderTest.java",
         "lines": 104
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/bot/PublishErrorsTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/bot/PublishErrorsTest.java",
         "lines": 25
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/bot/XdcFetchBarRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/intodo/bot/DisplayNamesTest.java",
+        "lines": 16
+      },
+      {
+        "path": "app/src/test/java/com/vanipy/intodo/bot/XdcFetchBarRenderTest.java",
         "lines": 154
       },
       {
-        "path": "app/src/test/java/com/instinct/widget/bot/XdcFetchTest.java",
-        "lines": 100
+        "path": "app/src/test/java/com/vanipy/intodo/bot/XdcFetchTest.java",
+        "lines": 109
       }
     ],
     "notChecked": [
       "The widget inflation test guards the v0.5.6 Samsung failure - keep it when editing"
     ],
-    "digest": "1fb6cbe86f96",
-    "totalLines": 2489
+    "digest": "99332b12a595",
+    "totalLines": 2514
   },
   {
     "id": "tests-bot",
@@ -566,18 +574,18 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "webxdc/test/fixtures/envs-new-bot.json",
-        "lines": 0
+        "lines": 1
       },
       {
         "path": "webxdc/test/fixtures/envs-old-bot.json",
-        "lines": 0
+        "lines": 1
       }
     ],
     "notChecked": [
       "Fixtures pin the 0.4.3 app bytes - they need refreshing per release"
     ],
     "digest": "36b26f37e072",
-    "totalLines": 1384
+    "totalLines": 1386
   },
   {
     "id": "build-ci",
@@ -589,7 +597,7 @@ export const SECTIONS: Section[] = [
     "files": [
       {
         "path": ".github/workflows/release.yml",
-        "lines": 143
+        "lines": 171
       },
       {
         "path": ".github/workflows/render-check.yml",
@@ -609,7 +617,7 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "app/build.gradle",
-        "lines": 45
+        "lines": 50
       },
       {
         "path": "gradle/wrapper/gradle-wrapper.properties",
@@ -617,7 +625,7 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "webxdc/package.sh",
-        "lines": 18
+        "lines": 21
       },
       {
         "path": "webxdc/manifest.toml",
@@ -625,14 +633,14 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": ".gitignore",
-        "lines": 8
+        "lines": 11
       }
     ],
     "notChecked": [
       "Nothing runs on its own - both workflows wait for someone to press the button"
     ],
-    "digest": "315da90e7531",
-    "totalLines": 287
+    "digest": "4f3816e143a5",
+    "totalLines": 326
   },
   {
     "id": "feed-tool",
@@ -690,7 +698,7 @@ export const SECTIONS: Section[] = [
     "files": [
       {
         "path": "README.md",
-        "lines": 57
+        "lines": 112
       },
       {
         "path": "app/src/main/jniLibs/arm64-v8a/librpcsrv.so",
@@ -715,17 +723,17 @@ export const SECTIONS: Section[] = [
       {
         "path": "app/src/main/res/mipmap-xhdpi/ic_launcher.png",
         "lines": null,
-        "note": "4 KB binary"
+        "note": "3 KB binary"
       },
       {
         "path": "app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
         "lines": null,
-        "note": "7 KB binary"
+        "note": "5 KB binary"
       },
       {
         "path": "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
         "lines": null,
-        "note": "6 KB binary"
+        "note": "8 KB binary"
       },
       {
         "path": "webxdc/icon.png",
@@ -749,8 +757,8 @@ export const SECTIONS: Section[] = [
     "notChecked": [
       "librpcsrv.so is a ~21 MB prebuilt binary - its source and build recipe are not in this repo"
     ],
-    "digest": "2d38febe142a",
-    "totalLines": 398
+    "digest": "6f184dc39bbf",
+    "totalLines": 453
   },
   {
     "id": "review-src",
@@ -762,11 +770,11 @@ export const SECTIONS: Section[] = [
     "files": [
       {
         "path": "web/review/App.tsx",
-        "lines": 1000
+        "lines": 1990
       },
       {
         "path": "web/review/static.css",
-        "lines": 266
+        "lines": 711
       },
       {
         "path": "web/review/main.tsx",
@@ -782,7 +790,7 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "web/review/build.sh",
-        "lines": 17
+        "lines": 31
       },
       {
         "path": "web/review/package.json",
@@ -802,7 +810,7 @@ export const SECTIONS: Section[] = [
       },
       {
         "path": "web/tools/gen_sections.py",
-        "lines": 263
+        "lines": 305
       },
       {
         "path": "web/src/sections.ts",
@@ -811,7 +819,7 @@ export const SECTIONS: Section[] = [
       }
     ],
     "notChecked": [],
-    "digest": "48b8ba69a1ad",
-    "totalLines": 2230
+    "digest": "2b86ba05cf15",
+    "totalLines": 3721
   }
 ];
