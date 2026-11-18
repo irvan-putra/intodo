@@ -405,10 +405,10 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         findViewById(R.id.demoBanner).setVisibility(Prefs.isDemo(this) ? View.VISIBLE : View.GONE);
-        ((TextView)findViewById(R.id.demoMode)).setText(Prefs.isDemo(this) ? "Back to real feed" : "Demo");
+        ((TextView)findViewById(R.id.demoMode)).setText(!Prefs.dualConfigured(this) ? "Set up Demo" : Prefs.isDemo(this) ? "Back to real feed" : "Demo");
         findViewById(R.id.openCanvas).setVisibility(Prefs.isDemo(this) ? View.GONE : View.VISIBLE);
         findViewById(R.id.openBot).setVisibility(Prefs.isDemo(this) ? View.GONE : View.VISIBLE);
-        ((TextView)findViewById(R.id.feedMode)).setText(Prefs.isDemo(this) ? "DEMO - synthetic items only" : "Real feed");
+        ((TextView)findViewById(R.id.feedMode)).setText(!Prefs.dualConfigured(this) ? "Current saved feed" : Prefs.isDemo(this) ? "DEMO - synthetic items only" : "Real feed");
         lastSync.setText(SyncStatusText.build(this, Prefs.status(this)));
     }
 
