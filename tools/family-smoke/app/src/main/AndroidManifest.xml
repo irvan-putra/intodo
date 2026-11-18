@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" />
+    <queries>
+        <package android:name="com.vanipy.menit"/><package android:name="com.vanipy.tumbuh"/>
+        <package android:name="com.vanipy.denyut"/><package android:name="com.vanipy.kemas"/>
+        <package android:name="com.vanipy.intodo"/><package android:name="com.vanipy.saku"/>
+    </queries>
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Widget host qualification" android:allowBackup="false">
+        <activity android:name=".HostActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+    </application>
+</manifest>
