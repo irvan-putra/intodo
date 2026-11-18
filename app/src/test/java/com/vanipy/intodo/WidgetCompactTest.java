@@ -61,7 +61,8 @@ public class WidgetCompactTest {
         assertTrue(WidgetProvider.summaryForSize(72,96));
         assertFalse(WidgetProvider.summaryForSize(360,72));
         assertTrue(WidgetProvider.summaryForSize(72,180));
-        assertTrue(WidgetProvider.summaryForSize(159,560));
+        assertTrue(WidgetProvider.summaryForSize(99,560));
+        assertFalse(WidgetProvider.summaryForSize(100,560));
         assertFalse(WidgetProvider.summaryForSize(160,560));
         assertEquals(0,WidgetProvider.itemCount(null));
         assertEquals(0,WidgetProvider.itemCount("bad json"));
@@ -73,13 +74,13 @@ public class WidgetCompactTest {
         ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
         render(v,"/tmp/intodo-onecell-counter.png",64,64);
     }
-    @Test public void allThirtySpansKeepNarrowCountersAndWideLists() {
+    @Test public void allThirtySpansKeepOneColumnCountersAndWiderLists() {
         Context c=RuntimeEnvironment.getApplication();
         for(int columns=1;columns<=5;columns++) for(int rows=1;rows<=6;rows++) {
             int width=columns*72-16, height=rows*96-16;
-            assertEquals("span "+columns+"x"+rows, width<160,
+            assertEquals("span "+columns+"x"+rows, width<100,
                     WidgetProvider.summaryForSize(width,height));
-            if(width<160) {
+            if(width<100) {
                 View v=new android.widget.RemoteViews(c.getPackageName(),R.layout.widget_summary).apply(c,new FrameLayout(c));
                 ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
                 render(v,"/tmp/intodo-span-"+columns+"x"+rows+".png",width,height);

@@ -27,8 +27,8 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     static boolean summaryForSize(int widthDp, int heightDp) {
-        // A tall but narrow widget still cannot show a readable list.
-        return widthDp < 160;
+        // Counter only at one column; two columns and wider get real list content.
+        return widthDp < 100;
     }
 
     static int itemCount(String json) {
@@ -76,10 +76,29 @@ public class WidgetProvider extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
         int paddingPx = Math.round(paddingDpForHeight(heightDp) * context.getResources().getDisplayMetrics().density);
         views.setViewPadding(R.id.widget_root, paddingPx, paddingPx, paddingPx, paddingPx);
-        Intent svc = new Intent(context, WidgetService.class);
-        svc.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
-        svc.setData(android.net.Uri.parse("instinctwidget://widget/" + id));
-        views.setRemoteAdapter(R.id.widget_list, svc);
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            // Bind an immutable row snapshot in this update. Resizing cannot leave a
+            // Samsung launcher waiting on an old RemoteViewsService connection.
+            RemoteViews.RemoteCollectionItems.Builder items = new RemoteViews.RemoteCollectionItems.Builder()
+                    .setHasStableIds(true).setViewTypeCount(2);
+            try {
+                String json = Prefs.feed(context);
+                if (json != null) {
+                    long row = 0;
+                    for (FeedParser.Section section : FeedParser.parse(json).sections) {
+                        for (FeedParser.Item item : section.items) {
+                            items.addItem(row++, WidgetService.itemView(context, item, heightDp <= 110));
+                        }
+                    }
+                }
+            } catch (Exception ignored) { }
+            views.setRemoteAdapter(R.id.widget_list, items.build());
+        } else {
+            Intent svc = new Intent(context, WidgetService.class);
+            svc.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
+            svc.setData(android.net.Uri.parse("intodo://widget/" + id + "/" + (heightDp <= 110 ? "compact" : "full")));
+            views.setRemoteAdapter(R.id.widget_list, svc);
+        }
 
         boolean hasData = Prefs.feed(context) != null;
         views.setViewVisibility(R.id.widget_empty, hasData ? View.GONE : View.VISIBLE);

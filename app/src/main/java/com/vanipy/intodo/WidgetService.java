@@ -17,7 +17,7 @@ public class WidgetService extends RemoteViewsService {
 
     static class Factory implements RemoteViewsService.RemoteViewsFactory {
         private final Context context;
-        private List<Object> rows = new ArrayList<>();
+        private volatile List<Object> rows = new ArrayList<>();
         private final int widgetId;
         Factory(Context c) { this(c, AppWidgetManager.INVALID_APPWIDGET_ID); }
         Factory(Context c, int id) { context = c; widgetId = id; }
@@ -27,33 +27,41 @@ public class WidgetService extends RemoteViewsService {
                     .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 48) <= 110;
         }
 
-        @Override public void onCreate() { }
+        @Override public void onCreate() { onDataSetChanged(); }
         @Override public void onDestroy() { }
 
         @Override
         public void onDataSetChanged() {
-            rows = new ArrayList<>();
+            List<Object> next = new ArrayList<>();
             String json = Prefs.feed(context);
-            if (json == null) return;
+            if (json == null) { rows = next; return; }
             try {
                 FeedParser.Feed feed = FeedParser.parse(json);
                 // pure list (user-chosen): no section headings anywhere, items only
                 for (FeedParser.Section sec : feed.sections) {
-                    rows.addAll(sec.items);
+                    next.addAll(sec.items);
                 }
             } catch (Exception ignored) { }
+            rows = next;
         }
 
         @Override public int getCount() { return rows.size(); }
-        @Override public int getViewTypeCount() { return 1; }
+        @Override public int getViewTypeCount() { return 2; }
         @Override public long getItemId(int i) { return i; }
         @Override public boolean hasStableIds() { return true; }
         @Override public RemoteViews getLoadingView() { return null; }
 
         @Override
         public RemoteViews getViewAt(int i) {
-            FeedParser.Item item = (FeedParser.Item) rows.get(i);
-            RemoteViews v = new RemoteViews(context.getPackageName(), compact() ? R.layout.widget_item_compact : R.layout.widget_item);
+            List<Object> snapshot = rows;
+            if (i < 0 || i >= snapshot.size()) return null;
+            FeedParser.Item item = (FeedParser.Item) snapshot.get(i);
+            return itemView(context, item, compact());
+        }
+    }
+
+    static RemoteViews itemView(Context context, FeedParser.Item item, boolean compact) {
+            RemoteViews v = new RemoteViews(context.getPackageName(), compact ? R.layout.widget_item_compact : R.layout.widget_item);
             String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
             v.setTextViewText(R.id.item_title, item.title + suffix);
             if (item.note != null && !item.note.isEmpty()) {
@@ -67,6 +75,5 @@ public class WidgetService extends RemoteViewsService {
             v.setOnClickFillInIntent(R.id.item_title, new Intent());
             v.setOnClickFillInIntent(R.id.item_note, new Intent());
             return v;
-        }
     }
 }
