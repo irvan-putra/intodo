@@ -17,7 +17,7 @@ public final class CanvasMath {
     public static final double WORLD_W = 1760, WORLD_H = 1420;
     public static final double ZMIN = 0.15, ZMAX = 2.5;
     public static final int MINI_W = 132, MINI_PAD = 4;
-    public static final String STORE_KEY = "itdxdc-review-canvas.v1";
+    public static final String STORE_KEY = "intodo-review-canvas.v1";
 
     public static final class Pos {
         public final double x, y;

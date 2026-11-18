@@ -14,7 +14,7 @@
   const WORLD = { w: 1760, h: 1500 };
   const ZMIN = 0.15, ZMAX = 2.5;
   const MINI_W = 132, MINI_PAD = 4;
-  const STORE_KEY = 'itdxdc-review-canvas.v1';
+  const STORE_KEY = 'intodo-review-canvas.v1';
 
   const CARD_SIZES = {
     change: { w: 380, h: 300 },

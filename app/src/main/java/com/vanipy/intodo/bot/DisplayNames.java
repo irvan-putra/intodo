@@ -7,6 +7,6 @@ public final class DisplayNames {
 
     public static String text(String value) {
         if (value == null) return null;
-        return value.replaceAll("(?i)itdapk|itdxdc|itdweb", "intodo");
+        return value;
     }
 }

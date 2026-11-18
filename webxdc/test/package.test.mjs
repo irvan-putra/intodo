@@ -34,6 +34,6 @@ const av = read('js/app.js').match(/APP_VERSION = '(.+)'/)[1];
 const badge = read('index.html').match(/<span[^>]*>v([^<]+)<\/span>/)[1];
 ok(mv === av, 'manifest version == APP_VERSION (' + mv + ')');
 ok('v' + mv === badge || badge === mv, 'index badge matches manifest (' + badge + ')');
-ok(!/itdxdc-v0\.4\.xdc/.test(sh), 'output name derives from manifest, not hardcoded');
+ok(!/intodo-v0\.4\.xdc/.test(sh), 'output name derives from manifest, not hardcoded');
 
 console.log('ALL PACKAGE TESTS PASS (' + pass + ' assertions)');

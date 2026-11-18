@@ -16,6 +16,3 @@ zip -X "intodo-v${VERSION}.xdc" \
   js/digest.js js/seedfix.js js/restoregen.js js/app.js js/webxdc-mock.js \
   >/dev/null
 unzip -l "intodo-v${VERSION}.xdc"
-
-# Keep the previous download name usable for existing bot versions.
-cp "intodo-v${VERSION}.xdc" "itdxdc-v${VERSION}.xdc"

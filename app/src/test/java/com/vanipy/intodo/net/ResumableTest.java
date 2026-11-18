@@ -34,7 +34,7 @@ public class ResumableTest {
             "https://github.com/irvan-putra/intodo/releases/download/";
     private static final Set<String> HOSTS = new HashSet<>(Arrays.asList(
             "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"));
-    private static final String URL_A = PREFIX + "v9.9.9/itdapk-v9.9.9.apk";
+    private static final String URL_A = PREFIX + "v9.9.9/intodo-v9.9.9.apk";
     private static final long MAX = 1_000_000;
 
     /** Scripted server. Mutate fields between get() calls to change its answers. */
@@ -352,7 +352,7 @@ public class ResumableTest {
         File part = new File(out.getPath() + ".part");
         Files.write(part.toPath(), Arrays.copyOf(b, 100_000));
         Properties p = new Properties();
-        p.setProperty("url", PREFIX + "v1.0.0/itdapk-v1.0.0.apk"); // different asset
+        p.setProperty("url", PREFIX + "v1.0.0/intodo-v1.0.0.apk"); // different asset
         p.setProperty("size", "200000");
         p.setProperty("etag", "\"test-etag\"");
         try (java.io.OutputStream o = Files.newOutputStream(new File(out.getPath() + ".meta").toPath())) {
@@ -580,7 +580,7 @@ public class ResumableTest {
         fs.eofAt = 100_000;
         try { Resumable.get(spec(fs, out, sha256(b))); } catch (Resumable.Incomplete ignored) {}
         fs.eofAt = -1;
-        fs.redirectTo = "https://release-assets.githubusercontent.com/prod/itdapk.apk";
+        fs.redirectTo = "https://release-assets.githubusercontent.com/prod/intodo.apk";
         Resumable.get(spec(fs, out, sha256(b)));
         assertArrayEquals(b, read(out));
         assertEquals(3, fs.opens); // resume probe -> 302 -> final 206

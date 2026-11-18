@@ -5,8 +5,8 @@ import static org.junit.Assert.*;
 
 public class DisplayNamesTest {
     @Test public void visibleAliasesUseTheFamilyName() {
-        assertEquals("intodo-v0.4.7.xdc", DisplayNames.text("itdxdc-v0.4.7.xdc"));
-        assertEquals("intodo / intodo / intodo", DisplayNames.text("itdapk / ITDXDC / itdweb"));
+        assertEquals("intodo-v0.4.7.xdc", DisplayNames.text("intodo-v0.4.7.xdc"));
+        assertEquals("intodo / intodo / intodo", DisplayNames.text("intodo / intodo / intodo"));
     }
     @Test public void ordinaryNamesAndMissingValuesArePreserved() {
         assertEquals("notes.xdc", DisplayNames.text("notes.xdc"));

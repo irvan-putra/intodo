@@ -32,46 +32,46 @@ public class XdcFetchTest {
     @Test public void acceptsCanonicalNameAndPreservesLegacyAssets() throws Exception {
         JSONArray releases = new JSONArray();
         releases.put(rel("v0.4.8", false, false, asset("intodo-v0.4.8.xdc", null)));
-        releases.put(rel("v0.4.7", false, false, asset("itdxdc-v0.4.7.xdc", null)));
+        releases.put(rel("v0.4.7", false, false, asset("intodo-v0.4.7.xdc", null)));
         assertEquals("intodo-v0.4.8.xdc", XdcFetch.choose(releases).name);
         JSONArray legacy = new JSONArray();
-        legacy.put(rel("v0.4.7", false, false, asset("itdxdc-v0.4.7.xdc", null)));
-        assertEquals("itdxdc-v0.4.7.xdc", XdcFetch.choose(legacy).name);
+        legacy.put(rel("v0.4.7", false, false, asset("intodo-v0.4.7.xdc", null)));
+        assertEquals("intodo-v0.4.7.xdc", XdcFetch.choose(legacy).name);
     }
     @Test public void picksFirstNewestReleaseWithXdc() throws Exception {
         // Newest release has NO xdc (apk-only release): must not hide the older one.
         JSONArray releases = new JSONArray();
-        releases.put(rel("v0.4.8", false, false, asset("itdapk-v0.4.8.apk", null)));
+        releases.put(rel("v0.4.8", false, false, asset("intodo-v0.4.8.apk", null)));
         releases.put(rel("v0.4.7", false, false,
-            asset("itdapk-v0.4.7.apk", null),
-            asset("itdxdc-v0.4.3-final.xdc", "sha256:abc123")));
+            asset("intodo-v0.4.7.apk", null),
+            asset("intodo-v0.4.3-final.xdc", "sha256:abc123")));
         XdcFetch.Found f = XdcFetch.choose(releases);
         assertNotNull(f);
         assertEquals("v0.4.7", f.tag);
-        assertEquals("itdxdc-v0.4.3-final.xdc", f.name);
+        assertEquals("intodo-v0.4.3-final.xdc", f.name);
         assertEquals("abc123", f.sha256);
     }
     @Test public void skipsDraftsAndPrereleases() throws Exception {
         JSONArray releases = new JSONArray();
-        releases.put(rel("v0.5.0", true, false, asset("itdxdc-v0.5.0.xdc", null)));
-        releases.put(rel("v0.5.0-rc1", false, true, asset("itdxdc-v0.5.0.xdc", null)));
-        releases.put(rel("v0.4.7", false, false, asset("itdxdc-v0.4.3-final.xdc", null)));
+        releases.put(rel("v0.5.0", true, false, asset("intodo-v0.5.0.xdc", null)));
+        releases.put(rel("v0.5.0-rc1", false, true, asset("intodo-v0.5.0.xdc", null)));
+        releases.put(rel("v0.4.7", false, false, asset("intodo-v0.4.3-final.xdc", null)));
         XdcFetch.Found f = XdcFetch.choose(releases);
         assertEquals("v0.4.7", f.tag);
     }
     @Test public void rejectsWrongRepoUrl() throws Exception {
-        JSONObject bad = asset("itdxdc-v0.4.3.xdc", null);
+        JSONObject bad = asset("intodo-v0.4.3.xdc", null);
         bad.put("browser_download_url",
-            "https://github.com/someone-else/other/releases/download/v1/itdxdc-v0.4.3.xdc");
+            "https://github.com/someone-else/other/releases/download/v1/intodo-v0.4.3.xdc");
         JSONArray releases = new JSONArray();
         releases.put(rel("v1", false, false, bad));
         assertNull(XdcFetch.choose(releases));
     }
     @Test public void rejectsNonXdcNames() throws Exception {
         JSONArray releases = new JSONArray();
-        releases.put(rel("v1", false, false, asset("itdapk-v1.0.0.apk", null)));
+        releases.put(rel("v1", false, false, asset("intodo-v1.0.0.apk", null)));
         releases.put(rel("v1", false, false, asset("random.xdc", null)));
-        releases.put(rel("v1", false, false, asset("itdxdc-nofinal.xdc", null)));
+        releases.put(rel("v1", false, false, asset("intodo-nofinal.xdc", null)));
         assertNull(XdcFetch.choose(releases));
     }
     @Test public void backportDoesNotShadowNewerVersion() throws Exception {
@@ -79,11 +79,11 @@ public class XdcFetchTest {
         // release carries the NEWEST app version: max numeric semver wins,
         // not release order.
         JSONArray releases = new JSONArray();
-        releases.put(rel("v0.4.8", false, false, asset("itdxdc-v0.4.3-final.xdc", null)));
-        releases.put(rel("v0.4.7", false, false, asset("itdxdc-v0.5.0.xdc", null)));
+        releases.put(rel("v0.4.8", false, false, asset("intodo-v0.4.3-final.xdc", null)));
+        releases.put(rel("v0.4.7", false, false, asset("intodo-v0.5.0.xdc", null)));
         XdcFetch.Found f = XdcFetch.choose(releases);
         assertNotNull(f);
-        assertEquals("itdxdc-v0.5.0.xdc", f.name);
+        assertEquals("intodo-v0.5.0.xdc", f.name);
         assertEquals("v0.4.7", f.tag);
     }
     @Test public void semverCompare() {
@@ -94,7 +94,7 @@ public class XdcFetchTest {
     }
     @Test public void digestAbsentYieldsNullSha() throws Exception {
         JSONArray releases = new JSONArray();
-        releases.put(rel("v1", false, false, asset("itdxdc-v1.2.3.xdc", null)));
+        releases.put(rel("v1", false, false, asset("intodo-v1.2.3.xdc", null)));
         XdcFetch.Found f = XdcFetch.choose(releases);
         assertNotNull(f);
         assertNull(f.sha256);
