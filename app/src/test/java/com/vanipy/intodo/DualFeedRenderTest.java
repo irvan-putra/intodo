@@ -28,6 +28,9 @@ public class DualFeedRenderTest {
         assertEquals(1,((ListView)a.findViewById(R.id.list)).getAdapter().getCount());
         assertEquals(View.GONE,a.findViewById(R.id.openBot).getVisibility());
         screenshot(a,"/tmp/dual-demo.png");
+        ((androidx.drawerlayout.widget.DrawerLayout)a.findViewById(R.id.drawerLayout)).closeDrawers();
+        render(a.getWindow().getDecorView(),"/tmp/dual-demo-list.png");
+        ((androidx.drawerlayout.widget.DrawerLayout)a.findViewById(R.id.drawerLayout)).openDrawer(androidx.core.view.GravityCompat.START,false);
         a.findViewById(R.id.demoMode).performClick();
         android.app.AlertDialog confirm=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
         assertTrue(Prefs.isDemo(c));confirm.getButton(-2).performClick();assertTrue(Prefs.isDemo(c));

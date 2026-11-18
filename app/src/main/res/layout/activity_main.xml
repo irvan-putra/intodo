@@ -7,6 +7,9 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <TextView android:id="@+id/demoBanner" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="DEMO - synthetic items only" android:textColor="#F59E0B" android:padding="12dp"
+            android:visibility="gone" android:textStyle="bold" />
         <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
             <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/swipeRefresh"
                 android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone">
