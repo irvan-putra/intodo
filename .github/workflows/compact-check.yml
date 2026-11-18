@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Verify compact and existing RemoteViews
-        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.WidgetCompactTest' --tests 'com.vanipy.intodo.WidgetRemoteApplyTest' --tests 'com.vanipy.intodo.DualFeedTest' --tests 'com.vanipy.intodo.DualFeedRenderTest'
+        run: ./gradlew testDebugUnitTest --no-daemon
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

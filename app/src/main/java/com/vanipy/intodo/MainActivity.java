@@ -310,16 +310,19 @@ public class MainActivity extends Activity {
         EditText real = new EditText(this); real.setSingleLine(true); real.setHint("Real feed HTTPS address");
         real.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         real.setText(Prefs.dualConfigured(this) ? Prefs.realUrl(this) : legacyDemo ? "" : current);
+        TextView realLabel = new TextView(this); realLabel.setText("Real feed address"); form.addView(realLabel);
         form.addView(real);
         EditText demo = new EditText(this); demo.setSingleLine(true); demo.setHint("Synthetic demo feed HTTPS address");
         demo.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         demo.setText(Prefs.dualConfigured(this) ? Prefs.demoUrl(this) : legacyDemo ? current : "");
+        TextView demoLabel = new TextView(this); demoLabel.setText("Synthetic demo feed address"); form.addView(demoLabel);
         form.addView(demo);
         android.widget.CheckBox oldDemo = new android.widget.CheckBox(this);
         oldDemo.setText("The previously saved feed is the demo"); oldDemo.setChecked(legacyDemo);
         oldDemo.setVisibility(Prefs.dualConfigured(this) ? View.GONE : View.VISIBLE); form.addView(oldDemo);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this); scroll.addView(form);
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Set up real and demo feeds")
-                .setView(form).setPositiveButton("Save feeds", null).setNegativeButton("Cancel", null).create();
+                .setView(scroll).setPositiveButton("Save feeds", null).setNegativeButton("Cancel", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String r = SyncEngine.canonicalFeedUrl(real.getText().toString());
             String m = SyncEngine.canonicalFeedUrl(demo.getText().toString());

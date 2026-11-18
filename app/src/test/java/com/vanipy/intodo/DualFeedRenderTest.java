@@ -28,8 +28,10 @@ public class DualFeedRenderTest {
         assertEquals(1,((ListView)a.findViewById(R.id.list)).getAdapter().getCount());
         assertEquals(View.GONE,a.findViewById(R.id.openBot).getVisibility());
         screenshot(a,"/tmp/dual-demo.png");
-        ((androidx.drawerlayout.widget.DrawerLayout)a.findViewById(R.id.drawerLayout)).closeDrawers();
+        ((androidx.drawerlayout.widget.DrawerLayout)a.findViewById(R.id.drawerLayout)).closeDrawer(androidx.core.view.GravityCompat.START,false);
+        org.robolectric.shadows.ShadowLooper.idleMainLooper();
         render(a.getWindow().getDecorView(),"/tmp/dual-demo-list.png");
+        assertEquals(View.VISIBLE,a.findViewById(R.id.demoBanner).getVisibility());
         ((androidx.drawerlayout.widget.DrawerLayout)a.findViewById(R.id.drawerLayout)).openDrawer(androidx.core.view.GravityCompat.START,false);
         a.findViewById(R.id.demoMode).performClick();
         android.app.AlertDialog confirm=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
@@ -42,5 +44,5 @@ public class DualFeedRenderTest {
         ((androidx.drawerlayout.widget.DrawerLayout)a.findViewById(R.id.drawerLayout)).openDrawer(androidx.core.view.GravityCompat.START,false);
         render(a.getWindow().getDecorView(),path);
     }
-    private void render(View v,String path)throws Exception {int w=780,h=1500;v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h);Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(new Canvas(b));try(FileOutputStream f=new FileOutputStream(path)){b.compress(Bitmap.CompressFormat.PNG,100,f);}}
+    private void render(View v,String path)throws Exception {int w=390,h=844;v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h);Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(new Canvas(b));try(FileOutputStream f=new FileOutputStream(path)){b.compress(Bitmap.CompressFormat.PNG,100,f);}}
 }
