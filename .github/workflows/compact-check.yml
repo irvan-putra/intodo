@@ -26,6 +26,7 @@ jobs:
             app/build/test-results/testDebugUnitTest/
             /tmp/itdapk-compact-row.png
             /tmp/itdapk-onecell-counter.png
+            /tmp/itdapk-span-*.png
           if-no-files-found: warn
       - name: Build debug-only host fixture (not a signed public release)
         run: ./gradlew assembleDebug --no-daemon

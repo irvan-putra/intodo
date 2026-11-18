@@ -60,7 +60,9 @@ public class WidgetCompactTest {
         assertTrue(WidgetProvider.summaryForSize(48,48));
         assertTrue(WidgetProvider.summaryForSize(72,96));
         assertFalse(WidgetProvider.summaryForSize(360,72));
-        assertFalse(WidgetProvider.summaryForSize(72,180));
+        assertTrue(WidgetProvider.summaryForSize(72,180));
+        assertTrue(WidgetProvider.summaryForSize(159,560));
+        assertFalse(WidgetProvider.summaryForSize(160,560));
         assertEquals(0,WidgetProvider.itemCount(null));
         assertEquals(0,WidgetProvider.itemCount("bad json"));
         assertEquals(2,WidgetProvider.itemCount("{\"sections\":[{\"items\":[{},{}]}]}"));
@@ -70,6 +72,24 @@ public class WidgetCompactTest {
         assertNotNull(v.findViewById(R.id.widget_summary_count));
         ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
         render(v,"/tmp/itdapk-onecell-counter.png",64,64);
+    }
+    @Test public void allThirtySpansKeepNarrowCountersAndWideLists() {
+        Context c=RuntimeEnvironment.getApplication();
+        for(int columns=1;columns<=5;columns++) for(int rows=1;rows<=6;rows++) {
+            int width=columns*72-16, height=rows*96-16;
+            assertEquals("span "+columns+"x"+rows, width<160,
+                    WidgetProvider.summaryForSize(width,height));
+            if(width<160) {
+                View v=new android.widget.RemoteViews(c.getPackageName(),R.layout.widget_summary).apply(c,new FrameLayout(c));
+                ((TextView)v.findViewById(R.id.widget_summary_count)).setText("6");
+                render(v,"/tmp/itdapk-span-"+columns+"x"+rows+".png",width,height);
+                View count=v.findViewById(R.id.widget_summary_count);
+                assertEquals(48,count.getWidth());
+                assertEquals(48,count.getHeight());
+                assertTrue(count.getLeft()>=0 && count.getRight()<=width);
+                assertTrue(count.getTop()>=0 && count.getBottom()<=height);
+            }
+        }
     }
     private static void render(View view,String path,int w,int h) {
         view.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));

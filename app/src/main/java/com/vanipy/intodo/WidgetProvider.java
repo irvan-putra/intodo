@@ -27,7 +27,8 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     static boolean summaryForSize(int widthDp, int heightDp) {
-        return widthDp < 160 && heightDp <= 110;
+        // A tall but narrow widget still cannot show a readable list.
+        return widthDp < 160;
     }
 
     static int itemCount(String json) {
