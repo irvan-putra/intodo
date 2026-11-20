@@ -52,17 +52,17 @@ if [ -n "$(git -C "$PAGES" status --porcelain)" ]; then
     exit 1
 fi
 
-rm -rf "$PAGES/review"
-mkdir -p "$PAGES/review"
-cp -R "$DIST"/. "$PAGES/review/"
+rm -rf "$PAGES/code-review"
+mkdir -p "$PAGES/code-review"
+cp -R "$DIST"/. "$PAGES/code-review/"
 
 # Nothing outside review/ may change; deletions and renames inside
 # review/ are expected (the directory is fully replaced).
-OUTSIDE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^review/' || true)"
+OUTSIDE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^code-review/' || true)"
 if [ -n "$OUTSIDE" ]; then
     echo "stage_pages: refusing to publish - changes outside review/ detected:" >&2
     echo "$OUTSIDE" >&2
     exit 1
 fi
 
-echo "stage_pages: staged $(git -C "$PAGES" status --porcelain | wc -l | tr -d ' ') changed path(s), all under review/"
+echo "stage_pages: staged $(git -C "$PAGES" status --porcelain | wc -l | tr -d ' ') changed path(s), all under code-review/"

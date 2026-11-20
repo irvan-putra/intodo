@@ -17,10 +17,10 @@ if [ -n "$BRANCH" ] && [ "$BRANCH" != gh-pages ]; then
 fi
 # This step follows stage_pages.sh, which may already have changed review/.
 # No preexisting change outside review/ is allowed.
-OUTSIDE_BEFORE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^review/' || true)"
+OUTSIDE_BEFORE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^code-review/' || true)"
 [ -z "$OUTSIDE_BEFORE" ] || { echo "stage-demo-pages: refusing preexisting changes outside review/:" >&2; echo "$OUTSIDE_BEFORE" >&2; exit 1; }
 mkdir -p "$PAGES/shared-list-simulation"
 cp -R "$SRC"/. "$PAGES/shared-list-simulation/"
-OUTSIDE_AFTER="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(review/|shared-list-simulation/)' || true)"
+OUTSIDE_AFTER="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(code-review/|shared-list-simulation/)' || true)"
 [ -z "$OUTSIDE_AFTER" ] || { echo "stage-demo-pages: refused changes outside approved paths:" >&2; echo "$OUTSIDE_AFTER" >&2; exit 1; }
 echo "stage-demo-pages: staged additive simulation under shared-list-simulation/; review/ preserved"

@@ -12,7 +12,7 @@ case "$ORIGIN" in
 esac
 BRANCH="$(git -C "$PAGES" symbolic-ref --short -q HEAD || true)"
 [ -z "$BRANCH" ] || [ "$BRANCH" = gh-pages ] || { echo 'Expected gh-pages' >&2; exit 1; }
-OUTSIDE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(review/|shared-list-simulation/|tasks/)' || true)"
+OUTSIDE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(code-review/|shared-list-simulation/|tasks/)' || true)"
 [ -z "$OUTSIDE" ] || { echo 'Refusing changes outside approved web directories' >&2; echo "$OUTSIDE" >&2; exit 1; }
 mkdir -p "$PAGES/tasks"
 for name in index.html style.css app.mjs model.mjs; do cp "$SRC/$name" "$PAGES/tasks/$name"; done

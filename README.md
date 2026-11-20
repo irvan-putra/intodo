@@ -6,7 +6,8 @@ Personal reminder/todo tooling: **tindak for Android** (Android app + home-scree
 ## Browser-local task page
 
 The task page at `https://vanipy.com/intodo/tasks/` is separate from the review
-canvas at the root. It supports personal browser-local lists, task edits,
+canvas under `/review/`. The distinct source-review canvas is preserved under
+`/code-review/`, and the homepage opens the task page. It supports personal browser-local lists, task edits,
 completion, archive/restore, separate fictional Demo tasks and JSON backup/import.
 No account or phone sync is connected; dates do not send alerts. Keep unencrypted
 backups private. Existing Android and DeltaChat clients and review pages are

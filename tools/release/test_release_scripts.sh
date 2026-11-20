@@ -20,13 +20,13 @@ echo 'css' > "$DIST/app.cafebabe.css"
 
 # --- fixture: a gh-pages-like checkout --------------------------------
 PAGES="$WORK/pages"
-mkdir -p "$PAGES/review" "$PAGES/photos"
+mkdir -p "$PAGES/code-review" "$PAGES/photos"
 cd "$PAGES"
 git init -q
 git config user.email test@example.com
 git config user.name test
 echo 'demo' > index.html
-echo 'old' > review/index.html
+echo 'old' > code-review/index.html
 git add -A
 git commit -qm base
 git checkout -qb gh-pages
@@ -42,8 +42,8 @@ ok "staging refused when origin is a local clone"
 # 2. staging works with the GitHub origin and touches only review/
 git remote set-url origin https://github.com/irvan-putra/intodo.git
 sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" >/dev/null || fail "clean stage rejected"
-[ -f "$PAGES/review/app.deadbeef.js" ] || fail "bundle not staged"
-git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^review/' | grep . && fail "unexpected change outside review/"
+[ -f "$PAGES/code-review/app.deadbeef.js" ] || fail "bundle not staged"
+git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^code-review/' | grep . && fail "unexpected change outside review/"
 ok "clean stage accepted, changes confined to review/"
 git -C "$PAGES" add -A && git -C "$PAGES" commit -qm staged
 
@@ -86,10 +86,10 @@ ok "staging refused on a branch other than gh-pages"
 # 4e. stale files inside review/ are replaced (deletion is expected and safe)
 sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" >/dev/null || fail "clean stage rejected (4e setup)"
 git -C "$PAGES" add -A && git -C "$PAGES" commit -qm stage1 || true
-echo 'stale' > "$PAGES/review/stale.txt"
+echo 'stale' > "$PAGES/code-review/stale.txt"
 git -C "$PAGES" add -A && git -C "$PAGES" commit -qm stale
 sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" >/dev/null || fail "re-stage over stale review/ rejected"
-[ ! -e "$PAGES/review/stale.txt" ] || fail "stale file inside review/ survived staging"
+[ ! -e "$PAGES/code-review/stale.txt" ] || fail "stale file inside review/ survived staging"
 ok "staging replaces stale content inside review/ (deletion allowed there)"
 git -C "$PAGES" checkout -q -- .
 
@@ -101,7 +101,7 @@ printf '%s\\n' 'bundle' > "$DEMO/bundle.js"
 sh "$HERE/stage-demo-pages.sh" "$DEMO" "$PAGES" >/dev/null || fail "clean simulation stage rejected"
 [ -f "$PAGES/shared-list-simulation/index.html" ] || fail "simulation page not staged"
 [ -f "$PAGES/shared-list-simulation/bundle.js" ] || fail "simulation bundle not staged"
-git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(review/|shared-list-simulation/)' | grep . && fail "unexpected change outside approved paths"
+git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(code-review/|shared-list-simulation/)' | grep . && fail "unexpected change outside approved paths"
 ok "simulation staged under its own path without changing other Pages content"
 git -C "$PAGES" add -A && git -C "$PAGES" commit -qm demo
 
