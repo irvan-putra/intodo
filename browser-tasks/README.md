@@ -22,8 +22,8 @@ session expiry or browser eviction can lose local tasks. Keep backup files priva
 This first page is not an installed/offline PWA and does not claim reliable loading
 without a network connection. After loading, task operations use no server.
 
-The stable storage key and backup format are independent of the displayed app
-name. Existing Android storage, package identity, pairing, DeltaChat instances,
+The Tindak identity reset uses a fresh storage key and backup marker as requested.
+Unused old browser state is intentionally not migrated. Existing Android storage, package identity, pairing, DeltaChat instances,
 review layouts and review marks are not read or changed.
 
 ## Check
