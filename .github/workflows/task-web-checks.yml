@@ -26,7 +26,7 @@ jobs:
       - name: Synthetic browser actions and phone-width screenshots
         run: |
           mkdir -p "$RUNNER_TEMP/task-shots"
-          SHOT_DIR="$RUNNER_TEMP/task-shots" node browser-tasks/ui-check.mjs
+          CHROME_BIN="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium)" SHOT_DIR="$RUNNER_TEMP/task-shots" node browser-tasks/ui-check.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
