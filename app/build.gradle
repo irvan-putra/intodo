@@ -2,14 +2,14 @@ plugins { id 'com.android.application'; id 'com.chaquo.python'; id 'org.jetbrain
 android {
     testOptions { unitTests { includeAndroidResources = true } }
     buildFeatures { buildConfig true }
-    namespace 'com.vanipy.intodo'
+    namespace 'com.vanipy.tindak'
     compileSdk 34
     defaultConfig {
-        applicationId 'com.vanipy.intodo'
+        applicationId 'com.vanipy.tindak'
         minSdk 26
         targetSdk 34
-        versionCode 34
-        versionName '0.5.19'
+        versionCode 35
+        versionName '0.5.20'
         // Bot runtime (DeltaChat core) is bundled for arm64-v8a only, same
         // constraint as the scratch bot builds; librpcsrv.so exists for no
         // other ABI yet.

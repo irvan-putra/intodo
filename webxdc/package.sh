@@ -9,10 +9,10 @@ set -e
 cd "$(dirname "$0")"
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' manifest.toml)
 test -n "$VERSION" || { echo "no version in manifest.toml" >&2; exit 1; }
-rm -f "intodo-v${VERSION}.xdc"
-zip -X "intodo-v${VERSION}.xdc" \
+rm -f "tindak-v${VERSION}.xdc"
+zip -X "tindak-v${VERSION}.xdc" \
   manifest.toml icon.png index.html canvas.html \
   js/mergedoc.js js/canvas-math.js js/canvas.js \
   js/digest.js js/seedfix.js js/restoregen.js js/app.js js/webxdc-mock.js \
   >/dev/null
-unzip -l "intodo-v${VERSION}.xdc"
+unzip -l "tindak-v${VERSION}.xdc"

@@ -68,7 +68,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LIVE_URL: https://vanipy.com/intodo/code-review/
+  LIVE_URL: https://vanipy.com/tindak/code-review/
 
 jobs:
   build:
@@ -143,7 +143,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: https://vanipy.com/intodo/code-review/
+      url: https://vanipy.com/tindak/code-review/
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages

@@ -1,11 +1,11 @@
 #!/bin/sh
-# Explicitly authorized route move. Preserve both distinct review pages.
+# Stage the task app at the project root and preserve both review pages.
 set -eu
 SRC="$1"
 PAGES="$2"
 [ -d "$PAGES/.git" ] || exit 1
 case "$(git -C "$PAGES" remote get-url origin)" in
- https://github.com/irvan-putra/intodo|https://github.com/irvan-putra/intodo.git|git@github.com:irvan-putra/intodo.git) ;;
+ https://github.com/irvan-putra/tindak|https://github.com/irvan-putra/tindak.git|git@github.com:irvan-putra/tindak.git) ;;
  *) echo 'Unexpected Pages origin' >&2; exit 1 ;;
 esac
 BRANCH="$(git -C "$PAGES" symbolic-ref --short -q HEAD || true)"
@@ -17,5 +17,5 @@ OUTSIDE="$(git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -Ev '^(c
 mkdir -p "$PAGES/review"
 # Only the known prototype files; no private/generated project folders.
 for n in index.html app.js style.css; do cp "$SRC/review-prototype/$n" "$PAGES/review/$n"; done
-cp "$SRC/task-homepage.html" "$PAGES/index.html"
+cp "$SRC/browser-tasks/index.html" "$PAGES/index.html"
 echo 'Tasks homepage staged; prototype review and code-review both preserved.'

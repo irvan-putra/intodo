@@ -231,7 +231,7 @@ def _account(dc):
 
 # Public bot display name applied at each start; contacts see the change
 # with its next outgoing message. Idempotent, non-fatal on error.
-BOT_DISPLAY_NAME = "intodo Irvan's bot"
+BOT_DISPLAY_NAME = "tindak Irvan's bot"
 
 
 def _ensure_display_name(acct):

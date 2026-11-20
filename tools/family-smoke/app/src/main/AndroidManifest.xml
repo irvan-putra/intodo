@@ -3,7 +3,7 @@
     <queries>
         <package android:name="com.vanipy.menit"/><package android:name="com.vanipy.tumbuh"/>
         <package android:name="com.vanipy.denyut"/><package android:name="com.vanipy.kemas"/>
-        <package android:name="com.vanipy.intodo"/><package android:name="com.vanipy.saku"/>
+        <package android:name="com.vanipy.tindak"/><package android:name="com.vanipy.saku"/>
     </queries>
     <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Widget host qualification" android:allowBackup="false">
         <activity android:name=".HostActivity" android:exported="true">

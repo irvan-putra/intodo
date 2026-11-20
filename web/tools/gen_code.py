@@ -9,7 +9,7 @@ import argparse, json, os, re, subprocess
 # scan, relationships from a static reference scan (a referenced NAME, not
 # a proven runtime call - the UI labels them "references").
 #
-#   python3 gen_code.py --repo /path/to/intodo --out ../src/code.ts
+#   python3 gen_code.py --repo /path/to/tindak --out ../src/code.ts
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--repo', default='.')
@@ -21,7 +21,7 @@ COMMIT = args.commit or subprocess.check_output(
     ['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip()
 SHORT = COMMIT[:7]
 
-J = 'app/src/main/java/com/vanipy/intodo/'
+J = 'app/src/main/java/com/vanipy/tindak/'
 P = 'app/src/main/python/'
 W = 'webxdc/'
 R = 'web/'
@@ -323,7 +323,7 @@ RESP = {
     'cp-widget': "Home-screen widget rendering the cached list; taps refresh via the sync scheduler.",
     'cp-sync-sched': "Schedules and runs periodic background feed syncs (WorkManager), then refreshes the widget.",
     'cp-feed-pipeline': "Fetches the feed page through a hidden WebView, decrypts IFW1, parses items.",
-    'cp-self-update': "Checks GitHub Releases for a newer intodo APK, downloads and installs it.",
+    'cp-self-update': "Checks GitHub Releases for a newer tindak APK, downloads and installs it.",
     'cp-bot-host': "Runs the embedded DeltaChat bot (foreground service) plus its setup and publish UI.",
     'cp-bot-bridge': "Bot runtime: serves each accepted chat an isolated list stack; routes events to bridges.",
     'cp-delivery-ops': "Publishes new .xdc versions to served chats and persists list ops (SQLite).",
@@ -409,7 +409,7 @@ for c in CONFIG:
 
 crefs = [dict(a=a, b=b, via=sorted(set(v))[:6]) for (a, b), v in sorted(comp_refs.items())]
 
-header = ('// Generated from irvan-putra/intodo @ %s by gen_code.py - do not hand-edit.\n'
+header = ('// Generated from irvan-putra/tindak @ %s by gen_code.py - do not hand-edit.\n'
           '// Component names/file assignment/tech labels are the generator\'s curated CONFIG;\n'
           '// responsibilities are CURATED concise summaries (architectural interpretation);\n'
           '// file lines are verbatim first header sentences; declarations and references\n'

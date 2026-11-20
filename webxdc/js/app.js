@@ -1,4 +1,4 @@
-// app.js - intodo shared-list webxdc prototype.
+// app.js - tindak shared-list webxdc prototype.
 // PROTOTYPE with invented sample data. Profile/membership and multi-network
 // layers are NOT built - this proves shared-list updates, merge convergence and
 // conflict trimming inside one chat. The native Android widget stays separate.
@@ -12,9 +12,9 @@
 
   const MergeDoc = window.MergeDoc;
   const DELETED = window.MERGE_DELETED;
-  const STORE_KEY = 'instinct-shared-list-doc-v1';
-  const BIND_KEY = 'instinct-shared-list-binding-v1';
-  const APP_VERSION = '0.4.9'; // keep in step with manifest.toml version
+  const STORE_KEY = 'tindak-shared-list-doc-v1';
+  const BIND_KEY = 'tindak-shared-list-binding-v1';
+  const APP_VERSION = '0.4.10'; // keep in step with manifest.toml version
   // List binding: an instance only accepts restore envelopes for its bound
   // list_id. Binding comes from trusted packaging (list.json packed by the
   // bot at publish) or an explicit in-app owner confirmation - NEVER from
@@ -27,7 +27,7 @@
   // Local diagnostics: what happened to restore envelopes, on this device
   // only. Events are facts ("accepted 3 ops", "rejected: digest mismatch"),
   // never completion claims, and never leave the device (no info/notice).
-  const DIAG_KEY = 'instinct-shared-list-diag-v1';
+  const DIAG_KEY = 'tindak-shared-list-diag-v1';
   let diagLog = [];
   try { diagLog = JSON.parse(localStorage.getItem(DIAG_KEY) || '[]'); } catch (e) {}
   function diag(msg) {

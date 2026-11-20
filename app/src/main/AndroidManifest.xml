@@ -10,6 +10,7 @@
     <application
         android:label="tindak"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:theme="@style/AppTheme">
@@ -39,7 +40,7 @@
         </receiver>
         <receiver android:name=".InstallStatusReceiver" android:exported="false">
             <intent-filter>
-                <action android:name="com.vanipy.intodo.INSTALL_STATUS" />
+                <action android:name="com.vanipy.tindak.INSTALL_STATUS" />
             </intent-filter>
         </receiver>
     </application>

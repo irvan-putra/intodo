@@ -1,10 +1,10 @@
 # A phone bot that adds cloud storage
 
-Design note, checked 16 Nov 2026. This is a proposed architecture, not a report on the project's current state: it describes how a storage-saving bot could plug into the intodo shared list, and what a real deployment would still need to prove.
+Design note, checked 16 Nov 2026. This is a proposed architecture, not a report on the project's current state: it describes how a storage-saving bot could plug into the tindak shared list, and what a real deployment would still need to prove.
 
 ## The idea
 
-The webxdc rules deny the mini-app itself any internet access, so intodo can never talk to a database directly. But a DeltaChat group can contain more than human profiles: a second profile in the same group - a bot - receives every mini-app update exactly like any member. That bot is the bridge: it listens to the chat it is part of, and saves each list update, in order, to a storage adapter. No webxdc change is needed on the mini-app side.
+The webxdc rules deny the mini-app itself any internet access, so tindak can never talk to a database directly. But a DeltaChat group can contain more than human profiles: a second profile in the same group - a bot - receives every mini-app update exactly like any member. That bot is the bridge: it listens to the chat it is part of, and saves each list update, in order, to a storage adapter. No webxdc change is needed on the mini-app side.
 
 ## How it would work
 

@@ -6,7 +6,7 @@
 
     var WORLD = { w: 1760, h: 1420 };
     var ZMIN = 0.15, ZMAX = 2.5;
-    var SAVE_KEY = 'review-canvas.v1';
+    var SAVE_KEY = 'tindak-prototype-review.v1';
 
     var CARD_SIZES = {
         change: { w: 380, h: 300 }, permanence: { w: 380, h: 210 },
@@ -53,7 +53,7 @@
         reviews: '<p>No one has reviewed v0.4.</p>' +
             '<p class="rc-muted">Signed reviews from people you choose to trust would appear here, with what each one checked. A review is human judgment, not a scan.</p>',
         source: '<p>The project source is public - the wall of code this canvas is meant to replace for review.</p>' +
-            '<p><a href="https://github.com/irvan-putra/intodo">irvan-putra/intodo</a></p>',
+            '<p><a href="https://github.com/irvan-putra/tindak">irvan-putra/tindak</a></p>',
         rule: '<p>No badge ever reads "app is secure". Each badge says exactly what was checked, and what has not been checked stays visible in the same size next to it.</p>',
         gaps: '<ul><li>Independent check of the reported property tests (7 Java + 9 JS, run by the builders).</li>' +
             '<li>Any proof - none exists.</li>' +

@@ -30,12 +30,12 @@ jobs:
         with:
           python-version: '3.10'
       - name: Run render tests (Robolectric native graphics)
-        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.bot.BotActivityRenderTest' --tests 'com.vanipy.intodo.bot.PublishDialogRenderTest'
+        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.tindak.bot.BotActivityRenderTest' --tests 'com.vanipy.tindak.bot.PublishDialogRenderTest'
       - name: Collect renders (hard-fail when an expected render is absent)
         run: |
           set -euo pipefail
           mkdir -p renders
-          for f in /tmp/intodo-bot-compact.png /tmp/intodo-bot-setup-expanded.png /tmp/intodo-bot-logs-expanded.png; do
+          for f in /tmp/tindak-bot-compact.png /tmp/tindak-bot-setup-expanded.png /tmp/tindak-bot-logs-expanded.png; do
             if [ ! -f "$f" ]; then
               echo "EXPECTED RENDER MISSING: $f - the test did not produce it; failing"
               exit 1

@@ -1,6 +1,6 @@
 # tools/release - checked review-canvas publication
 
-Small scripts that make publishing the intodo review canvas to GitHub
+Small scripts that make publishing the tindak review canvas to GitHub
 Pages repeatable and safe. They encode the two lessons from manual
 publication mistakes:
 
@@ -26,7 +26,7 @@ manual publish or for testing.
 Replaces `PAGES_CHECKOUT/review/` with the built bundle in `DIST_DIR`
 (from `web/review/build.sh`), then refuses to proceed unless:
 
-- the checkout's `origin` is the intodo GitHub repository (a local path
+- the checkout's `origin` is the tindak GitHub repository (a local path
   or any other remote is rejected), and
 - the pending changes touch only `review/` - the demo page at the branch
   root, `photos/`, and everything else on gh-pages must be untouched.

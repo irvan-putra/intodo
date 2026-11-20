@@ -41,7 +41,7 @@ export type LocalMeta = { ready: boolean; message: string };
 // Same contract as the hosted hook: [value, setValue, meta]. Persisted per
 // key in this browser's localStorage; nothing leaves the device.
 export function useLocalState<T>(key: string, initial: T): [T, (v: T) => void, LocalMeta] {
-    const storageKey = `intodo-review.${key}`;
+    const storageKey = `tindak-review.${key}`;
     const [value, setValue] = useState<T>(() => {
         try {
             const raw = window.localStorage.getItem(storageKey);

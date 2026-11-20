@@ -1,4 +1,4 @@
-/* intodo - portable standalone build (no internal kit).
+/* tindak - portable standalone build (no internal kit).
    Palette approximates the host page theme with local variables. */
 :root {
     --ds-page: #fdfcfa;

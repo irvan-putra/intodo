@@ -215,19 +215,19 @@ const SYS_NODES: C4Node[] = [
     { id: 'p-owner', label: 'Owner', sub: 'personal user', kind: 'person', frac: { fx: 0.22, fy: 0.2 } },
     { id: 'p-members', label: 'Group members', sub: 'DeltaChat chat', kind: 'person', frac: { fx: 0.78, fy: 0.2 } },
     { id: 'p-dev', label: 'Developer', sub: 'builds + publishes', kind: 'person', frac: { fx: 0.5, fy: 0.1 } },
-    { id: 's-intodo', label: 'tindak', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
+    { id: 's-tindak', label: 'tindak', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
     { id: 'x-gha', label: 'GitHub Actions', sub: 'build + deploy on push', kind: 'external', frac: { fx: 0.84, fy: 0.44 } },
     { id: 'x-files', label: 'Instinct Files', sub: 'feed page', kind: 'external', frac: { fx: 0.18, fy: 0.7 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.82, fy: 0.7 } },
     { id: 'x-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.82 } },
 ];
 const SYS_RELS: C4Rel[] = [
-    { a: 'p-owner', b: 's-intodo', label: 'uses + reviews' },
-    { a: 'p-members', b: 's-intodo', label: 'edit shared list' },
-    { a: 's-intodo', b: 'x-files', label: 'feed page' },
-    { a: 's-intodo', b: 'x-github', label: 'source, releases, pages' },
-    { a: 's-intodo', b: 'x-dc', label: 'bot + webxdc' },
-    { a: 'p-dev', b: 's-intodo', label: 'builds + tests (Gradle)' },
+    { a: 'p-owner', b: 's-tindak', label: 'uses + reviews' },
+    { a: 'p-members', b: 's-tindak', label: 'edit shared list' },
+    { a: 's-tindak', b: 'x-files', label: 'feed page' },
+    { a: 's-tindak', b: 'x-github', label: 'source, releases, pages' },
+    { a: 's-tindak', b: 'x-dc', label: 'bot + webxdc' },
+    { a: 'p-dev', b: 's-tindak', label: 'builds + tests (Gradle)' },
     // Both workflows are REVIEW DRAFTS, manual workflow_dispatch only: no
     // automatic CI runs on push (grounded in .github/workflows/*.yml).
     { a: 'p-dev', b: 'x-gha', label: 'triggers release + render-check (manual run)', dashed: true },
@@ -776,7 +776,7 @@ function SectionCard({ s, mark, expanded, finding, onToggleExpand, onMark, onFin
         <p>{s.purpose}</p>
         <ul className="rc-files">
             {shown.map((fl) => (
-                <li key={fl.path}><TextLink href={`https://github.com/irvan-putra/intodo/blob/${COMMIT}/${fl.path}`}><code>{fl.path.split('/').pop()}</code></TextLink>{fl.lines != null ? ` - ${fl.lines} lines` : fl.note ? ` - ${fl.note}` : ''}</li>
+                <li key={fl.path}><TextLink href={`https://github.com/irvan-putra/tindak/blob/${COMMIT}/${fl.path}`}><code>{fl.path.split('/').pop()}</code></TextLink>{fl.lines != null ? ` - ${fl.lines} lines` : fl.note ? ` - ${fl.note}` : ''}</li>
             ))}
         </ul>
         {s.files.length > 5 && (
@@ -789,7 +789,7 @@ function SectionCard({ s, mark, expanded, finding, onToggleExpand, onMark, onFin
         <ul>
             {s.notChecked.map((n) => <li key={n}>{n}</li>)}
         </ul>
-        <p><TextLink href={`https://github.com/irvan-putra/intodo/tree/${COMMIT}/${s.link}`}>Open this folder at {COMMIT_SHORT}</TextLink></p>
+        <p><TextLink href={`https://github.com/irvan-putra/tindak/tree/${COMMIT}/${s.link}`}>Open this folder at {COMMIT_SHORT}</TextLink></p>
         <p className="rc-nchead">Your findings</p>
         <textarea
             className="rc-findings"
@@ -1437,7 +1437,7 @@ const compTileSize = (gid: string, n: number) => {
     // seven externals spread on all four sides by relationship, each edge
     // leaving the nearest side, like the C4 System Context sample.
     const sysLayout: GroupNode[] = [
-        { g: SYS_NODES.find((x) => x.id === 's-intodo')!, x: 1750, y: 1220, hw: 1018, hh: 720 },
+        { g: SYS_NODES.find((x) => x.id === 's-tindak')!, x: 1750, y: 1220, hw: 1018, hh: 720 },
         extNode('p-owner', SYS_NODES, 1050, 280, 240, 150), extNode('p-members', SYS_NODES, 2150, 280, 240, 150),
         extNode('p-dev', SYS_NODES, 180, 900, 240, 150),
         extNode('x-gha', SYS_NODES, 3300, 900, 240, 150), extNode('x-files', SYS_NODES, 180, 1400, 240, 150),
@@ -1463,8 +1463,8 @@ const compTileSize = (gid: string, n: number) => {
         'c-app-c-xdc': { pts: [[1574, 914], [1930, 914]], pill: [1750, 1000], lines: ['same merge', 'algo, no', 'runtime link'], hw: 152, hh: 78 },
         'p-dev-c-app': { pts: [[420, 914], [752, 914]], pill: [581, 830], lines: ['builds + tests', '(Gradle)'], hw: 146 },
         'p-dev-c-feedtool': { pts: [[220, 995], [220, 1070], [700, 1070], [700, 1990], [2100, 1990], [2100, 1820]], pill: [410, 1620], lines: ['feed JSON in,', 'IFW1 payload out'], hw: 200 },
-        'p-owner-s-intodo': { pts: [[1050, 375], [1050, 500]], pill: [1310, 455], lines: ['uses + reviews'] },
-        'p-members-s-intodo': { pts: [[2150, 375], [2150, 500]], pill: [1910, 505], lines: ['edit shared list'] },
+        'p-owner-s-tindak': { pts: [[1050, 375], [1050, 500]], pill: [1310, 455], lines: ['uses + reviews'] },
+        'p-members-s-tindak': { pts: [[2150, 375], [2150, 500]], pill: [1910, 505], lines: ['edit shared list'] },
         'p-dev-x-gha': { pts: [[-60, 880], [-100, 880], [-100, 2050], [3620, 2050], [3620, 900], [3540, 900]], pill: [2300, 2130], lines: ['triggers release +', 'render-check (manual)'], hw: 240 },
         'x-gha-x-github': { pts: [[3300, 957], [3300, 1343]], pill: [3100, 1130], lines: ['signs + publishes', 'APK (manual)'], hw: 185 },
         'p-dev-x-files': { pts: [[140, 995], [140, 1343]], pill: [410, 1180], lines: ['encrypts feed,', 'publishes by hand'], hw: 200 },
@@ -1596,7 +1596,7 @@ const compTileSize = (gid: string, n: number) => {
             <ul>
                 <li>Your view, review marks and findings are remembered in this browser's local storage on this static page. Cards stay fixed in place.</li>
                 <li>Not synced across devices; clearing browser storage resets them.</li>
-                <li>Public repo content only, generated from irvan-putra/intodo @ {COMMIT_SHORT} on Nov 13, 2026; nothing is sent anywhere or published with this page, and nothing here changes the app or the repo.</li>
+                <li>Public repo content only, generated from irvan-putra/tindak @ {COMMIT_SHORT} on Nov 13, 2026; nothing is sent anywhere or published with this page, and nothing here changes the app or the repo.</li>
                 <li>Marks made on the Instinct-hosted review page live in that browser's storage and cannot carry over here.</li>
                 <li>Long-term ownership (export, backup) is an open question, not a claim.</li>
             </ul>

@@ -1,9 +1,9 @@
-# intodo public release build. Current package identity: com.vanipy.intodo.
+# tindak public release build. Current package identity: com.vanipy.tindak.
 # Builds an UNCONFIGURED APK (no FEED_URL: public source default) and signs it with
 # the project's existing keystore held ONLY in GitHub Actions secrets (write-only,
 # set directly by the repo owner on their own device; never in repo, logs, artifacts,
 # or agent messages):
-#   KEYSTORE_BASE64   - base64 of the intodo keystore file
+#   KEYSTORE_BASE64   - base64 of the tindak keystore file
 #   KEYSTORE_PASSWORD - keystore passphrase
 #   KEY_ALIAS         - key alias inside the keystore
 #   KEY_PASSWORD      - key passphrase
@@ -32,9 +32,9 @@ jobs:
     # patuh pre-publish source gate: package, version format, label,
     # permission/license drift, family icon geometry. Runs on the tree being
     # released (pre-stamp state, which must itself stay clean).
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@42fbdaded0107faf601932102c07d1d081991c3d
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
     with:
-      app: intodo
+      app: tindak
       published: false
 
   build:
@@ -94,7 +94,7 @@ jobs:
           git config user.name "irvan-putra"
           git config user.email "irvan.putra@gmail.com"
           python3 tools/version_icons.py
-          git add app/build.gradle app/src/main/res/mipmap-*/ic_launcher.png
+          git add app/build.gradle app/src/main/res/mipmap-* app/src/main/res/drawable-xxxhdpi app/src/main/res/values/colors.xml
           git commit -m "release: stamp v$IN_NAME ($IN_CODE)"
           git push origin HEAD:main
           echo "STAMP_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
@@ -134,7 +134,7 @@ jobs:
       - name: Fetch public signing reference
         run: |
           curl --fail --location --proto '=https' --proto-redir '=https' \
-            https://github.com/irvan-putra/intodo/releases/download/v0.5.15/intodo-v0.5.15.apk \
+            https://github.com/irvan-putra/tindak/releases/download/v0.5.15/intodo-v0.5.15.apk \
             --output "$RUNNER_TEMP/reference.apk"
 
       - name: Decode keystore, sign (passwords via env, never argv), verify, always clean up
@@ -150,7 +150,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ks.jks"
           chmod 600 "$RUNNER_TEMP/ks.jks"
           APK=$(ls app/build/outputs/apk/release/*-unsigned.apk)
-          OUT="intodo-v$IN_NAME.apk"
+          OUT="tindak-v$IN_NAME.apk"
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" sign \
             --ks "$RUNNER_TEMP/ks.jks" \
@@ -170,14 +170,14 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/reference.apk"' EXIT
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           python3 tools/release/verify_apk.py "$BT/aapt" "$BT/apksigner" \
-            "intodo-v$IN_NAME.apk" "$RUNNER_TEMP/reference.apk" "$IN_NAME" "$IN_CODE" > SHA256SUMS
+            "tindak-v$IN_NAME.apk" "$RUNNER_TEMP/reference.apk" "$IN_NAME" "$IN_CODE" > SHA256SUMS
 
       - name: Upload candidate APK for the byte check
         uses: actions/upload-artifact@v4
         with:
           name: candidate-apk
           path: |
-            intodo-v${{ inputs.version_name }}.apk
+            tindak-v${{ inputs.version_name }}.apk
             SHA256SUMS
           retention-days: 1
 
@@ -186,12 +186,12 @@ jobs:
     # the stamped candidate version) before anything is published. This is the
     # preventive boundary.
     needs: build
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@42fbdaded0107faf601932102c07d1d081991c3d
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
     with:
-      app: intodo
+      app: tindak
       published: false
       candidate_apk_artifact: candidate-apk
-      # intodo stamps the version mid-run, after checkout; the byte check
+      # tindak stamps the version mid-run, after checkout; the byte check
       # must compare the badge against the stamped version, not the
       # checked-out (pre-stamp) source version.
       candidate_version: ${{ inputs.version_name }}
@@ -211,7 +211,7 @@ jobs:
           STAMP_SHA: ${{ needs.build.outputs.stamp_sha }}
         run: |
           set -euo pipefail
-          gh release create "v$IN_NAME" "dist/intodo-v$IN_NAME.apk" dist/SHA256SUMS \
+          gh release create "v$IN_NAME" "dist/tindak-v$IN_NAME.apk" dist/SHA256SUMS \
             --target "$STAMP_SHA" \
             --title "tindak v$IN_NAME" \
             --notes-file "docs/releases/$IN_NAME.md"
@@ -220,7 +220,7 @@ jobs:
     # post-publish: verifies the live release (tag, APK name, checksum,
     # gallery card, downloaded sha256, packaged icon). Detects, cannot undo.
     needs: publish
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@42fbdaded0107faf601932102c07d1d081991c3d
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
     with:
-      app: intodo
+      app: tindak
       published: true

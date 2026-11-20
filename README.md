@@ -5,7 +5,7 @@ Personal reminder/todo tooling: **tindak for Android** (Android app + home-scree
 
 ## Browser-local task page
 
-The task page at `https://vanipy.com/intodo/tasks/` is separate from the review
+The task page at `https://vanipy.com/tindak/tasks/` is separate from the review
 canvas under `/review/`. The distinct source-review canvas is preserved under
 `/code-review/`, and the homepage opens the task page. It supports personal browser-local lists, task edits,
 completion, archive/restore, separate fictional Demo tasks and JSON backup/import.
@@ -21,16 +21,16 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 
 Active test builds, published on this repository's Releases page. Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
 
-- **tindak for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.intodo`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
+- **tindak for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.tindak`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
 - **tindak for DeltaChat**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
 - **tindak for web**: review canvas published through GitHub Pages Actions.
 - Branch `unfinished/log-access-v3` holds a partial, unfinished step in the wider log-access work: selectable bot-log text, nested scrolling that preserves vertical drags, and opening at the newest lines. It has been compiled but not run on a device, and is not part of any release - see `UNFINISHED-log-access-v3.md` on that branch.
 
 ## Android identity and fresh setup
 
-Current source uses `com.vanipy.intodo` for the application ID, namespace and Android source packages. Display names stay unchanged. It is separate from old `com.instinct.widget` installs, whose source remains in Git history. No export/import bridge or automatic data migration is added. Existing background feed work is updated to the current worker class without clearing app data. A home-screen widget added from the earlier new-ID candidate may need to be removed from the home screen and added again because its provider class name changed; the old app's widgets are separate and unchanged. Recreate an existing new-ID launcher shortcut as well if the launcher retains its old activity component. This does not require clearing app data. Keep an old installation and its data unless you choose otherwise.
+Current source uses `com.vanipy.tindak` for the application ID, namespace and Android source packages. Display names stay unchanged. It is separate from old `com.instinct.widget` installs, whose source remains in Git history. No export/import bridge or automatic data migration is added. Existing background feed work is updated to the current worker class without clearing app data. A home-screen widget added from the earlier new-ID candidate may need to be removed from the home screen and added again because its provider class name changed; the old app's widgets are separate and unchanged. Recreate an existing new-ID launcher shortcut as well if the launcher retains its old activity component. This does not require clearing app data. Keep an old installation and its data unless you choose otherwise.
 
-A first installation starts empty. If `com.vanipy.intodo` is already installed (including the earlier side-by-side candidate), a same-signer update keeps that installation's existing data; it does not reset it. Do not clear data or uninstall as part of setup. Create a pairing key only if the app is unpaired, share only its public key with your feed publisher, enter the resulting encrypted feed address and sync. The optional bot connection is set up separately; never run two copies against the same bot account.
+A first installation starts empty. If `com.vanipy.tindak` is already installed (including the earlier side-by-side candidate), a same-signer update keeps that installation's existing data; it does not reset it. Do not clear data or uninstall as part of setup. Create a pairing key only if the app is unpaired, share only its public key with your feed publisher, enter the resulting encrypted feed address and sync. The optional bot connection is set up separately; never run two copies against the same bot account.
 
 Historical release filename aliases and in-app update compatibility remain. The installer checks this app's package name and signing certificate before offering Android installation. Older-ID apps refuse a new-ID APK rather than replacing themselves.
 
@@ -47,7 +47,7 @@ Released code and phone-proven behavior are not the same thing; this section rec
 - On-device witness for bot observations (v0.5.3): off by default; not yet exercised in a real group.
 - In-app update check/install: not yet confirmed end-to-end on a phone.
 - `tools/dc_relay` reply ledger: covered by unit tests; not yet proven against a live DeltaChat account.
-- intodo: local test harnesses and render checks only; not tested on a phone.
+- tindak: local test harnesses and render checks only; not tested on a phone.
 
 ## How it works
 
@@ -85,7 +85,7 @@ Requires JDK 17, Android SDK (platform 34), and Gradle 8.5.
 gradle assembleDebug
 ```
 
-The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Public, unconfigured release APKs are attached to each GitHub release; they are signed with the project keystore (same signer across releases), so an update with the same package ID keeps that installation's data (pairing key and cached list). The package-ID change to `com.vanipy.intodo` is a separate install from the older ID, not an in-place upgrade.
+The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Public, unconfigured release APKs are attached to each GitHub release; they are signed with the project keystore (same signer across releases), so an update with the same package ID keeps that installation's data (pairing key and cached list). The package-ID change to `com.vanipy.tindak` is a separate install from the older ID, not an in-place upgrade.
 
 ## Known limits
 
@@ -102,7 +102,7 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 ## Browser simulation demos
 
-- [Two-phone shared-list simulation](https://vanipy.com/intodo/shared-list-simulation/) - a browser-local, invented-data demo of the original merge engine. It does not connect to DeltaChat or any real phone. Its controls do not generate a same-field conflict; see the limitations on the page and in the [source README](demos-shared-list-simulation/README.md). The archive download is historical v0.4, not a current release or an upgrade to an existing list.
+- [Two-phone shared-list simulation](https://vanipy.com/tindak/shared-list-simulation/) - a browser-local, invented-data demo of the original merge engine. It does not connect to DeltaChat or any real phone. Its controls do not generate a same-field conflict; see the limitations on the page and in the [source README](demos-shared-list-simulation/README.md). The archive download is historical v0.4, not a current release or an upgrade to an existing list.
 
 
 
@@ -116,8 +116,25 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 ## Family naming and compatibility
 
-Current display name across Android, webxdc and web is **tindak**. Android remains `com.vanipy.intodo`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `intodo-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.
+Current display name across Android, webxdc and web is **tindak**. Android remains `com.vanipy.tindak`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `tindak-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.
 
 ## Android 0.5.16 rename update
 
 Current source, future asset outputs and update checks use tindak only. The package, signer, paired feed and list data stay unchanged. Old compatibility asset names are no longer accepted. Release-page download names were cleaned separately without rebuilding historical signed binaries. The mini-app 0.4.9 uses a renamed local canvas-layout key, which may reset layout and zoom but not list items. Post-tap content rendering and physical Samsung runtime remain unverified. See `docs/releases/0.5.16.md`.
+
+
+## Tindak identity reset, 20 November 2026
+
+The project repository, Android package (`com.vanipy.tindak`), updater artifact names,
+widget actions and browser/miniapp local storage now use tindak. The actual task app
+is served at `/tindak/`, not a redirect. The review prototype and code canvas remain
+separate under `/tindak/review/` and `/tindak/code-review/`.
+
+Android0.5.20 is a separate install from previous `com.vanipy.intodo` APKs. Existing
+configuration and browser state are not migrated. Tagged historical releases remain
+available unchanged. The new install needs its own on-device pairing key and feed
+setup before it can decrypt reminders. This change does not re-pair the phone, alter
+an existing bot account or publish/send a miniapp into a real chat. Reminder content
+and the existing encrypted feed are not deleted or reset. Do not uninstall the old
+app until you have finished any setup you still need. Browser tasks remain local,
+without Android task sync or timed alerts.

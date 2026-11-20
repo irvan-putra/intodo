@@ -149,7 +149,7 @@ function SectionCard({ s, mark, expanded, onToggleExpand, onMark, onFocus }: {
         <p>{s.purpose}</p>
         <ul className="rc-files">
             {shown.map((fl) => (
-                <li key={fl.path}><TextLink href={`https://github.com/irvan-putra/intodo/blob/${COMMIT}/${fl.path}`}><code>{fl.path.split('/').pop()}</code></TextLink>{fl.lines != null ? ` - ${fl.lines} lines` : fl.note ? ` - ${fl.note}` : ''}</li>
+                <li key={fl.path}><TextLink href={`https://github.com/irvan-putra/tindak/blob/${COMMIT}/${fl.path}`}><code>{fl.path.split('/').pop()}</code></TextLink>{fl.lines != null ? ` - ${fl.lines} lines` : fl.note ? ` - ${fl.note}` : ''}</li>
             ))}
         </ul>
         {s.files.length > 5 && (
@@ -162,7 +162,7 @@ function SectionCard({ s, mark, expanded, onToggleExpand, onMark, onFocus }: {
         <ul>
             {s.notChecked.map((n) => <li key={n}>{n}</li>)}
         </ul>
-        <p><TextLink href={`https://github.com/irvan-putra/intodo/tree/${COMMIT}/${s.link}`}>Open this folder at {COMMIT_SHORT}</TextLink></p>
+        <p><TextLink href={`https://github.com/irvan-putra/tindak/tree/${COMMIT}/${s.link}`}>Open this folder at {COMMIT_SHORT}</TextLink></p>
         <div className="rc-reviewbtns">
             <button type="button" onClick={cycle}>{label}</button>
         </div>
@@ -460,7 +460,7 @@ export function App() {
 
         <Group label="How this works" heading>
             <Text>
-                <Paragraph>Every card is a real section of irvan-putra/intodo at commit {COMMIT_SHORT}: the phone app, the DeltaChat bot, the webxdc mini-app, this page itself, the tests, and the plumbing. File lists, line counts and digests are generated from the actual repository - no mock entries.</Paragraph>
+                <Paragraph>Every card is a real section of irvan-putra/tindak at commit {COMMIT_SHORT}: the phone app, the DeltaChat bot, the webxdc mini-app, this page itself, the tests, and the plumbing. File lists, line counts and digests are generated from the actual repository - no mock entries.</Paragraph>
                 <Paragraph>Test-suite cards connect to the code they guard. A mark means you read it; it is your judgment, not a scan, and "Not checked yet" never disappears just because a section is marked reviewed.</Paragraph>
             </Text>
         </Group>
@@ -469,6 +469,6 @@ export function App() {
             <Canvas />
         </Group>
 
-        <Closing>Working review surface, generated from irvan-putra/intodo @ {COMMIT_SHORT} on Nov 13, 2026. Review marks are kept on this device, in this browser, for your signed-in account - the notice under the canvas always shows the actual storage state. Adopting this as the project standard is your call - nothing here changes the app or the repo.</Closing>
+        <Closing>Working review surface, generated from irvan-putra/tindak @ {COMMIT_SHORT} on Nov 13, 2026. Review marks are kept on this device, in this browser, for your signed-in account - the notice under the canvas always shows the actual storage state. Adopting this as the project standard is your call - nothing here changes the app or the repo.</Closing>
     </FileCard>;
 }

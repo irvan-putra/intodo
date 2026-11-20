@@ -7,7 +7,7 @@ PAGES="$2"
 [ -d "$PAGES/.git" ] || { echo 'Expected a Pages checkout' >&2; exit 1; }
 ORIGIN="$(git -C "$PAGES" remote get-url origin)"
 case "$ORIGIN" in
- https://github.com/irvan-putra/intodo|https://github.com/irvan-putra/intodo.git|git@github.com:irvan-putra/intodo.git) ;;
+ https://github.com/irvan-putra/tindak|https://github.com/irvan-putra/tindak.git|git@github.com:irvan-putra/tindak.git) ;;
  *) echo 'Unexpected Pages origin' >&2; exit 1 ;;
 esac
 BRANCH="$(git -C "$PAGES" symbolic-ref --short -q HEAD || true)"

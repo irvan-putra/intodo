@@ -4,9 +4,9 @@ Per-version changes, newest first. "Phone-verified" means the behavior has
 run on a real phone; anything not marked that way is verified only by build,
 tests, code review or local harnesses. See README.md "What is verified".
 
-## intodo (Android app + home-screen widget)
+## tindak (Android app + home-screen widget)
 
-- **v0.5.12 (source preparation, not yet released)** - Use `com.vanipy.intodo` consistently for the current Android application ID, namespace and source/test packages. Fresh-start install beside the old app, no migration or reset. Keep existing app names, versioned downloads and same-package/signer update checks. Update active CI selectors/source generators and the icon version. Refresh persisted background sync to the renamed worker without resetting its schedule. Existing home-screen widgets from the earlier new-ID candidate may need re-adding because their provider class changed. Previous source remains in Git history.
+- **v0.5.12 (source preparation, not yet released)** - Use `com.vanipy.tindak` consistently for the current Android application ID, namespace and source/test packages. Fresh-start install beside the old app, no migration or reset. Keep existing app names, versioned downloads and same-package/signer update checks. Update active CI selectors/source generators and the icon version. Refresh persisted background sync to the renamed worker without resetting its schedule. Existing home-screen widgets from the earlier new-ID candidate may need re-adding because their provider class changed. Previous source remains in Git history.
 
 - **v0.5.7** - Fix widget host inflation and list copying.
 - **v0.5.6** - List view fills the app and the widget.
@@ -29,7 +29,7 @@ tests, code review or local harnesses. See README.md "What is verified".
 - **v0.4-test and earlier** - Initial pairing, encrypted feed sync and widget
   layout; see git history.
 
-## intodo (webxdc shared list for DeltaChat)
+## tindak (webxdc shared list for DeltaChat)
 
 - **v0.4.7** - Icon version badge correction. Separate app instance from
   0.4.6; existing instances and their edit histories are unchanged.
@@ -45,6 +45,6 @@ tests, code review or local harnesses. See README.md "What is verified".
 - `tools/feed-consistency`: generic checker comparing a published projection
   against its source list.
 - `tools/encrypt_feed.mjs`: Node twin of the Python feed encryptor.
-- intodo review canvas: C4 views (context/container/component, dynamic and
+- tindak review canvas: C4 views (context/container/component, dynamic and
   deployment), Diataxis labels, published through GitHub Pages Actions.
 - Removed the unused Turso storage adapter.

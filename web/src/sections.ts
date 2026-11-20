@@ -1,4 +1,4 @@
-// Generated from irvan-putra/intodo @ 0740caf by gen_sections.py - do not hand-edit.
+// Generated from irvan-putra/tindak @ 0740caf by gen_sections.py - do not hand-edit.
 export const COMMIT = "0740caff0bb50c174b061875ad1136882a9017ab";
 export const COMMIT_SHORT = "0740caf";
 export type SectionFile = { path: string; lines: number | null; note?: string };
@@ -13,15 +13,15 @@ export const SECTIONS: Section[] = [
     "link": "app/src/main",
     "files": [
       {
-        "path": "app/src/main/java/com/vanipy/intodo/MainActivity.java",
+        "path": "app/src/main/java/com/vanipy/tindak/MainActivity.java",
         "lines": 364
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/WidgetProvider.java",
+        "path": "app/src/main/java/com/vanipy/tindak/WidgetProvider.java",
         "lines": 105
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/WidgetService.java",
+        "path": "app/src/main/java/com/vanipy/tindak/WidgetService.java",
         "lines": 72
       },
       {
@@ -78,46 +78,46 @@ export const SECTIONS: Section[] = [
     "tag": "Android app - sync",
     "icon": "🔄",
     "purpose": "Fetches the hosted feed, decrypts it with the paired key, and turns it into list items.",
-    "link": "app/src/main/java/com/vanipy/intodo",
+    "link": "app/src/main/java/com/vanipy/tindak",
     "files": [
       {
-        "path": "app/src/main/java/com/vanipy/intodo/SyncEngine.java",
+        "path": "app/src/main/java/com/vanipy/tindak/SyncEngine.java",
         "lines": 287
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/FeedParser.java",
+        "path": "app/src/main/java/com/vanipy/tindak/FeedParser.java",
         "lines": 46
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/Crypto.java",
+        "path": "app/src/main/java/com/vanipy/tindak/Crypto.java",
         "lines": 79
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/FeedSyncWorker.java",
+        "path": "app/src/main/java/com/vanipy/tindak/FeedSyncWorker.java",
         "lines": 46
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/FeedSyncScheduler.java",
+        "path": "app/src/main/java/com/vanipy/tindak/FeedSyncScheduler.java",
         "lines": 36
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/Prefs.java",
+        "path": "app/src/main/java/com/vanipy/tindak/Prefs.java",
         "lines": 51
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/Freshness.java",
+        "path": "app/src/main/java/com/vanipy/tindak/Freshness.java",
         "lines": 26
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/ProgressPump.java",
+        "path": "app/src/main/java/com/vanipy/tindak/ProgressPump.java",
         "lines": 36
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/SyncStatusText.java",
+        "path": "app/src/main/java/com/vanipy/tindak/SyncStatusText.java",
         "lines": 61
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/InstallStatusReceiver.java",
+        "path": "app/src/main/java/com/vanipy/tindak/InstallStatusReceiver.java",
         "lines": 47
       }
     ],
@@ -134,18 +134,18 @@ export const SECTIONS: Section[] = [
     "tag": "Android app - updates",
     "icon": "⬇️",
     "purpose": "Checks GitHub for a newer APK, downloads it with resume after interruptions, and installs it.",
-    "link": "app/src/main/java/com/vanipy/intodo",
+    "link": "app/src/main/java/com/vanipy/tindak",
     "files": [
       {
-        "path": "app/src/main/java/com/vanipy/intodo/UpdateCheck.java",
+        "path": "app/src/main/java/com/vanipy/tindak/UpdateCheck.java",
         "lines": 113
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/UpdateInstall.java",
+        "path": "app/src/main/java/com/vanipy/tindak/UpdateInstall.java",
         "lines": 220
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/net/Resumable.java",
+        "path": "app/src/main/java/com/vanipy/tindak/net/Resumable.java",
         "lines": 486
       }
     ],
@@ -162,22 +162,22 @@ export const SECTIONS: Section[] = [
     "tag": "Android app - canvas",
     "icon": "🖼️",
     "purpose": "The in-app canvas view. Shares its math with the webxdc canvas below.",
-    "link": "app/src/main/java/com/vanipy/intodo/canvas",
+    "link": "app/src/main/java/com/vanipy/tindak/canvas",
     "files": [
       {
-        "path": "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasView.java",
+        "path": "app/src/main/java/com/vanipy/tindak/canvas/ReviewCanvasView.java",
         "lines": 637
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java",
+        "path": "app/src/main/java/com/vanipy/tindak/canvas/CanvasMath.java",
         "lines": 234
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/canvas/CanvasContent.java",
+        "path": "app/src/main/java/com/vanipy/tindak/canvas/CanvasContent.java",
         "lines": 107
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/canvas/ReviewCanvasActivity.java",
+        "path": "app/src/main/java/com/vanipy/tindak/canvas/ReviewCanvasActivity.java",
         "lines": 60
       }
     ],
@@ -194,10 +194,10 @@ export const SECTIONS: Section[] = [
     "tag": "Shared list - CRDT",
     "icon": "🧬",
     "purpose": "How two devices combine list edits without losing items.",
-    "link": "app/src/main/java/com/vanipy/intodo/merge",
+    "link": "app/src/main/java/com/vanipy/tindak/merge",
     "files": [
       {
-        "path": "app/src/main/java/com/vanipy/intodo/merge/MergeDoc.java",
+        "path": "app/src/main/java/com/vanipy/tindak/merge/MergeDoc.java",
         "lines": 248
       }
     ],
@@ -213,34 +213,34 @@ export const SECTIONS: Section[] = [
     "tag": "DeltaChat bot - host UI",
     "icon": "🤖",
     "purpose": "The bot's control screens inside the app: logs, publish dialogs, fetch progress.",
-    "link": "app/src/main/java/com/vanipy/intodo/bot",
+    "link": "app/src/main/java/com/vanipy/tindak/bot",
     "files": [
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/BotActivity.java",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/BotActivity.java",
         "lines": 854
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/BotService.java",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/BotService.java",
         "lines": 101
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/XdcFetch.java",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/XdcFetch.java",
         "lines": 231
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/BotImport.kt",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/BotImport.kt",
         "lines": 135
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/BootReceiver.java",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/BootReceiver.java",
         "lines": 31
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/PublishErrors.java",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/PublishErrors.java",
         "lines": 27
       },
       {
-        "path": "app/src/main/java/com/vanipy/intodo/bot/DisplayNames.java",
+        "path": "app/src/main/java/com/vanipy/tindak/bot/DisplayNames.java",
         "lines": 12
       }
     ],
@@ -397,11 +397,11 @@ export const SECTIONS: Section[] = [
   },
   {
     "id": "this-page",
-    "title": "This page (intodo)",
+    "title": "This page (tindak)",
     "tag": "Review surface",
     "icon": "🌐",
     "purpose": "The page you are reading - its own source is in the repo, so it reviews itself.",
-    "link": "intodo",
+    "link": "tindak",
     "files": [
       {
         "path": "web/README.md",
@@ -435,63 +435,63 @@ export const SECTIONS: Section[] = [
     "link": "app/src/test",
     "files": [
       {
-        "path": "app/src/test/java/com/vanipy/intodo/MainActivityRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/MainActivityRenderTest.java",
         "lines": 265
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/MainActivityProgressRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/MainActivityProgressRenderTest.java",
         "lines": 176
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/WidgetRemoteApplyTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/WidgetRemoteApplyTest.java",
         "lines": 67
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/SyncStatusTextTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/SyncStatusTextTest.java",
         "lines": 94
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/PairingCopyTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/PairingCopyTest.java",
         "lines": 93
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/canvas/CanvasMathTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/canvas/CanvasMathTest.java",
         "lines": 344
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/merge/MergeDocTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/merge/MergeDocTest.java",
         "lines": 174
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/net/ResumableTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/net/ResumableTest.java",
         "lines": 620
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/BotActivityRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/BotActivityRenderTest.java",
         "lines": 201
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/BotPublishIpcTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/BotPublishIpcTest.java",
         "lines": 72
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/PublishDialogRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/PublishDialogRenderTest.java",
         "lines": 104
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/PublishErrorsTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/PublishErrorsTest.java",
         "lines": 25
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/DisplayNamesTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/DisplayNamesTest.java",
         "lines": 16
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/XdcFetchBarRenderTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/XdcFetchBarRenderTest.java",
         "lines": 154
       },
       {
-        "path": "app/src/test/java/com/vanipy/intodo/bot/XdcFetchTest.java",
+        "path": "app/src/test/java/com/vanipy/tindak/bot/XdcFetchTest.java",
         "lines": 109
       }
     ],

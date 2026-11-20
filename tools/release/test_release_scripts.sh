@@ -36,11 +36,11 @@ git remote add origin "$WORK/local-review-clone"
 if sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" 2>"$WORK/err"; then
     fail "local-origin checkout was accepted"
 fi
-grep -q 'not exactly irvan-putra/intodo' "$WORK/err" || fail "local-origin rejection message missing"
+grep -q 'not exactly irvan-putra/tindak' "$WORK/err" || fail "local-origin rejection message missing"
 ok "staging refused when origin is a local clone"
 
 # 2. staging works with the GitHub origin and touches only review/
-git remote set-url origin https://github.com/irvan-putra/intodo.git
+git remote set-url origin https://github.com/irvan-putra/tindak.git
 sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" >/dev/null || fail "clean stage rejected"
 [ -f "$PAGES/code-review/app.deadbeef.js" ] || fail "bundle not staged"
 git -C "$PAGES" status --porcelain | awk '{print $2}' | grep -v '^code-review/' | grep . && fail "unexpected change outside review/"
@@ -58,19 +58,19 @@ ok "staging refused when the root demo would change"
 git -C "$PAGES" checkout -q -- .
 
 # 4a. a same-named FORK origin must be refused
-git -C "$PAGES" remote set-url origin git@github.com:someone-else/intodo.git
+git -C "$PAGES" remote set-url origin git@github.com:someone-else/tindak.git
 if sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" 2>"$WORK/err3"; then
     fail "fork origin was accepted"
 fi
-grep -q 'not exactly irvan-putra/intodo' "$WORK/err3" || fail "fork rejection message missing"
+grep -q 'not exactly irvan-putra/tindak' "$WORK/err3" || fail "fork rejection message missing"
 ok "staging refused when origin is a same-named fork"
-git -C "$PAGES" remote set-url origin https://github.com/irvan-putra/intodo.git
+git -C "$PAGES" remote set-url origin https://github.com/irvan-putra/tindak.git
 
 # 4b. the https URL without .git suffix is also accepted
-git -C "$PAGES" remote set-url origin https://github.com/irvan-putra/intodo
+git -C "$PAGES" remote set-url origin https://github.com/irvan-putra/tindak
 sh "$HERE/stage_pages.sh" "$DIST" "$PAGES" >/dev/null || fail "https bare origin rejected"
 git -C "$PAGES" add -A && git -C "$PAGES" commit -qm staged || true
-git -C "$PAGES" remote set-url origin https://github.com/irvan-putra/intodo.git
+git -C "$PAGES" remote set-url origin https://github.com/irvan-putra/tindak.git
 ok "the official https origin without .git suffix accepted"
 
 # 4c. a checkout on the wrong branch must be refused

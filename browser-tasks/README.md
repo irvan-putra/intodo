@@ -1,7 +1,7 @@
 # Browser-local tasks
 
 A usable task list, separate from the historical review canvas and DeltaChat mini-app.
-The deployed route is `/intodo/tasks/`. No account, server-side task database,
+The deployed route is `/tindak/tasks/`. No account, server-side task database,
 telemetry, phone pairing, feed key or automatic cross-device sync is included.
 Do not put private tasks into this repository. Tasks entered in the page stay in
 that browser's storage. The public page ships no personal task data.
@@ -41,3 +41,5 @@ then the existing review bundle and historical shared-list simulation, then only
 these browser assets under `tasks/`. It refuses preexisting changes outside those
 additive paths. Existing review and root pages stay at their current URLs.
 Naming and any future sync transport require their own decisions.
+
+The project root /tindak/ serves the app directly, without a redirect. The renamed app uses fresh browser storage and a new backup format marker. Older browser/config state is not migrated, per the requested identity reset.

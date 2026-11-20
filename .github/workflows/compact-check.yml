@@ -24,16 +24,16 @@ jobs:
           name: compact-test-results
           path: |
             app/build/test-results/testDebugUnitTest/
-            /tmp/intodo-compact-row.png
-            /tmp/intodo-onecell-counter.png
-            /tmp/intodo-span-*.png
+            /tmp/tindak-compact-row.png
+            /tmp/tindak-onecell-counter.png
+            /tmp/tindak-span-*.png
             /tmp/dual-*.png
           if-no-files-found: warn
       - name: Build debug-only host fixture (not a signed public release)
         run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: intodo-compact-host-fixture
+          name: tindak-compact-host-fixture
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/test-results/testDebugUnitTest/

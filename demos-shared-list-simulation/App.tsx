@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MergeDoc, MERGE_DELETED } from './engine';
-const xdcZip = './intodo-v0.4.zip';
+const xdcZip = './tindak-v0.4.zip';
 
 // Demo transport: simulates what Delta Chat does for a real webxdc mini app -
 // every update one phone sends is delivered to every phone in the chat.
@@ -186,19 +186,19 @@ export default function App() {
         uses. Try it: check off or add an item on one phone, watch the other. The original wrapper has add/check/delete controls but no title-edit control, so adding distinct items does not itself create a same-field conflict. The merge engine retains its conflict-history UI; this limitation is preserved, not presented as a working conflict-generation test.
       </p>
       <p style={{ color: '#F59E0B', fontSize: 12, maxWidth: 720 }}>
-        PROTOTYPE with invented sample data. The real mini app (intodo-v0.4.xdc) is shared inside a
+        PROTOTYPE with invented sample data. The real mini app (tindak-v0.4.xdc) is shared inside a
         DeltaChat group, where Delta Chat itself carries the encrypted updates between members.
         Profiles, co-managing with friends and storage on other networks are design directions, not
         built. The Android widget app stays a separate app.
       </p>
       <p style={{ fontSize: 13 }}>
-        <a href={xdcZip} download="intodo-v0.4.zip" style={{ color: '#7A5AF8' }}>
-          Download tindak v0.4 (intodo-v0.4.zip, contains intodo-v0.4.xdc)
+        <a href={xdcZip} download="tindak-v0.4.zip" style={{ color: '#7A5AF8' }}>
+          Download tindak v0.4 (tindak-v0.4.zip, contains tindak-v0.4.xdc)
         </a>
         <span style={{ color: '#98A2B3', fontSize: 12 }}> Archived v0.4 package, retained for historical reproduction, not the current release. Each .xdc message is a separate app instance; this download does not upgrade an existing list.</span>
       </p>
       <p style={{ fontSize: 13 }}>
-        <a href="https://github.com/irvan-putra/intodo/commit/dcc8257cb1d43b45cb4ec1fd7b784bb5b8558b37" target="_blank" rel="noreferrer" style={{ color: '#7A5AF8' }}>
+        <a href="https://github.com/irvan-putra/tindak/commit/dcc8257cb1d43b45cb4ec1fd7b784bb5b8558b37" target="_blank" rel="noreferrer" style={{ color: '#7A5AF8' }}>
           Historical source: tindak at dcc8257
         </a>
         <span style={{ color: '#98A2B3', fontSize: 12 }}>

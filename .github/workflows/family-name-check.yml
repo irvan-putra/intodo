@@ -1,4 +1,4 @@
-name: intodo-family-name-check
+name: tindak-family-name-check
 on:
   workflow_dispatch:
 permissions:
@@ -17,16 +17,16 @@ jobs:
         with:
           python-version: '3.10'
       - name: Verify display names and unchanged asset compatibility
-        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.intodo.bot.DisplayNamesTest' --tests 'com.vanipy.intodo.bot.XdcFetchTest' --tests 'com.vanipy.intodo.bot.PublishErrorsTest'
+        run: ./gradlew testDebugUnitTest --no-daemon --tests 'com.vanipy.tindak.bot.DisplayNamesTest' --tests 'com.vanipy.tindak.bot.XdcFetchTest' --tests 'com.vanipy.tindak.bot.PublishErrorsTest'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: compact-test-results
           path: |
             app/build/test-results/testDebugUnitTest/
-            /tmp/intodo-compact-row.png
-            /tmp/intodo-onecell-counter.png
-            /tmp/intodo-span-*.png
+            /tmp/tindak-compact-row.png
+            /tmp/tindak-onecell-counter.png
+            /tmp/tindak-span-*.png
           if-no-files-found: warn
       - name: Host naming and package checks
         run: |
@@ -38,7 +38,7 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: intodo-family-debug-candidate
+          name: tindak-family-debug-candidate
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/test-results/testDebugUnitTest/

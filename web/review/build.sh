@@ -2,7 +2,7 @@
 # Build the static review canvas for GitHub Pages.
 # Usage: sh web/review/build.sh [outdir]   (default: web/review/dist)
 # Then copy the outdir contents into a review/ directory on the gh-pages
-# branch. The page expects to be served at <site>/intodo/review/ next to
+# branch. The page expects to be served at <site>/tindak/review/ next to
 # the existing photos/ directory (it reuses ../photos/review-concept-hero.png).
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"

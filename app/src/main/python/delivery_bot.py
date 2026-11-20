@@ -1,4 +1,4 @@
-"""Latest-version delivery + bot-synced continuity for intodo (PixelSocial pattern).
+"""Latest-version delivery + bot-synced continuity for tindak (PixelSocial pattern).
 
 Delivery: the owner DMs the bot a new .xdc; the bot sends it into granted
 chat(s). The new version appears in Delta Chat - no download, no manual
@@ -546,7 +546,7 @@ class DeliveryBot:
         version = parse_manifest_version(packed)
         if not version:
             raise ValueError("manifest version unresolved in %s" % xdc_path)
-        text = note or ("intodo update v%s" % version)
+        text = note or ("tindak update v%s" % version)
         msg = chat.send_message(text=text, file=packed, viewtype="Webxdc")
         self._register_trusted(chat.id, msg.id, version, ORIGIN_BOT, self.bot_addr)
         log.info("published %s (v%s) to chat %s as msg %s", xdc_path, version, chat.id, msg.id)

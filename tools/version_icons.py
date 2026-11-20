@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
-"""Launcher icon generator: one picture plus the shared version badge.
+# Derived from the shared family generator (kokok/tools/badge_icon.py, itself
+# from bidik). Same pinned geometry; only the Tindak art, palette and version
+# source differ. No repo writes: outputs go to an out/ dir for the custodian.
+"""Tindak launcher icon generator: check-arrow glyph plus the family version badge.
 
-Deterministic. Same version in, same PNGs out. Inputs are pinned: Pillow
-PILLOW_PIN and DejaVu Sans Bold with sha256 FONT_SHA256. The script fails
-instead of falling back to another font or Pillow version, because a
-different rasterizer or font changes the pixels.
-    pip install pillow==12.3.0   (the pinned font is included in tools/assets/fonts)
+Deterministic. Same version in, same PNGs out. Pillow and DejaVu Sans Bold are
+hash-pinned; the script fails instead of falling back, because a different
+rasterizer or font changes the pixels.
+    pip install pillow==12.3.0   (the font is vendored next to this script)
+
+Glyph: a bold check mark whose long arm extends into an arrowhead, pointing
+up-right - a task being acted on, not just listed. Single flat accent colour
+so it survives mdpi at 48px.
 
 Badge: numbers only, a full-width strip across the bottom 24% of the icon.
-Picture safety: every picture pixel is checked to lie inside the circle that
-touches the icon edges (shrunk by a margin), so round launcher masks do not
-clip it; the version text is checked the same way.
+Outputs match the com.vanipy family standard:
+- legacy mipmap PNGs per density (rounded-square, strip)
+- ic_launcher_round per density
+- adaptive foreground + themed monochrome (432px), numbers cut out of the strip
+- mipmap-anydpi-v26 XML and background colour
+- webxdc 256px icon
 """
-import hashlib, math, os, re, sys
+import hashlib, math, os, re, shutil, sys, tempfile
 import PIL
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 PILLOW_PIN = "12.3.0"
-FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "DejaVuSans-Bold.ttf")
+HERE = os.path.dirname(os.path.abspath(__file__))
+FONT_PATH = os.path.join(HERE, "assets", "fonts", "DejaVuSans-Bold.ttf")
 FONT_SHA256 = "d1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b"
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 S = 768
@@ -56,18 +66,6 @@ def new_layer(size=S):
     return img, ImageDraw.Draw(img)
 
 
-def sparkle(d, cx, cy, r, fill, size=S):
-    pts = []
-    for i in range(96):
-        t = i * 2 * math.pi / 96
-        pts.append((cx * size + r * size * math.cos(t) ** 3, cy * size + r * size * math.sin(t) ** 3))
-    d.polygon(pts, fill=fill)
-
-
-def rrect(d, box, radius, fill, size=S):
-    d.rounded_rectangle([c * size for c in box], radius=radius * size, fill=fill)
-
-
 def compose(bg, art, version, strip, text, rounded=None, size=S, circle_check=True):
     """Background, then the picture layer, then the badge strip."""
     if circle_check:
@@ -90,13 +88,6 @@ def compose(bg, art, version, strip, text, rounded=None, size=S, circle_check=Tr
     return base
 
 
-def parse_version(argv, fallback=None):
-    v = argv[1] if len(argv) > 1 else fallback
-    if not v or not re.fullmatch(r"\d+\.\d+\.\d+", v):
-        sys.exit("version must be X.Y.Z")
-    return v
-
-
 def write_densities(img, res_dir, name="ic_launcher.png"):
     for dens, px in DENSITIES.items():
         out = os.path.join(res_dir, "mipmap-" + dens)
@@ -104,24 +95,120 @@ def write_densities(img, res_dir, name="ic_launcher.png"):
         img.resize((px, px), Image.LANCZOS).save(os.path.join(out, name), optimize=True)
 
 
-def intodo(version):
-    # the existing art: three orange dots and three white list bars (redrawn from measured geometry)
-    BG, ORANGE, BAR = (16, 24, 40, 255), (245, 158, 11, 255), (242, 244, 247, 255)
-    art, d = new_layer()
-    k = S / 192.0
-    for cy in (52, 92, 132):
-        d.ellipse([(52 - 8) * k, (cy - 8) * k, (52 + 8) * k, (cy + 8) * k], fill=ORANGE)
-        d.rounded_rectangle([66 * k, (cy - 6) * k, 148 * k, (cy + 6) * k], radius=6 * k, fill=BAR)
-    return compose(BG, art, version, (8, 12, 22, 255), (245, 248, 252, 255), rounded=.2)
+# Family palette (shared with intodo/kokok): dark navy face, darker strip.
+TINDAK_BG = (16, 24, 40, 255)       # #101828
+TINDAK_STRIP = (8, 12, 22, 255)     # #080C16
+TINDAK_TEXT = (245, 248, 252, 255)
+TINDAK_ACCENT = (245, 158, 11, 255) # family amber, carried over from intodo
 
+
+def tindak_art():
+    """Bold check mark; the long arm ends in an arrowhead pointing up-right."""
+    art, d = new_layer()
+    w = 74  # stroke width
+    p0 = (246.0, 372.0)   # short-arm start
+    p1 = (340.0, 466.0)   # vertex
+    p2 = (596.0, 214.0)   # arm end (base of arrowhead)
+    ux, uy = p2[0] - p1[0], p2[1] - p1[1]
+    n = math.hypot(ux, uy)
+    ux, uy = ux / n, uy / n          # arm direction
+    px, py = -uy, ux                 # perpendicular
+    # rounded caps at start and vertex
+    d.ellipse([p0[0] - w / 2, p0[1] - w / 2, p0[0] + w / 2, p0[1] + w / 2], fill=TINDAK_ACCENT)
+    d.ellipse([p1[0] - w / 2, p1[1] - w / 2, p1[0] + w / 2, p1[1] + w / 2], fill=TINDAK_ACCENT)
+    d.line([p0, p1], fill=TINDAK_ACCENT, width=w)
+    d.line([p1, p2], fill=TINDAK_ACCENT, width=w)
+    # arrowhead: tip extended along the arm, base spread perpendicular
+    tip = (p2[0] + ux * 66, p2[1] + uy * 66)
+    back = (p2[0] - ux * 40, p2[1] - uy * 40)
+    half = 62
+    c1 = (back[0] + px * half, back[1] + py * half)
+    c2 = (back[0] - px * half, back[1] - py * half)
+    d.polygon([tip, c1, c2], fill=TINDAK_ACCENT)
+    return art
+
+
+def tindak(version):
+    return compose(TINDAK_BG, tindak_art(), version, TINDAK_STRIP, TINDAK_TEXT, rounded=.2)
+
+
+ADAPTIVE_XML = """<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>
+"""
+
+COLORS_XML = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#101828</color>
+</resources>
+"""
+
+
+def tindak_adaptive(version):
+    """Foreground + monochrome layers with the family strip on the face.
+
+    The 72dp face is 576px centred on the 108dp 864px layer (18dp overscan).
+    Strip and text use the same 76%/88%/11.5% face geometry as the legacy
+    icon, so masked and unmasked launchers show the same badge. The themed
+    numbers are cut out of the strip for contrast.
+    """
+    T, F, I = 864, 576, 144
+    art = tindak_art().resize((F, F), Image.LANCZOS)
+    fg, d = new_layer(T)
+    fg.alpha_composite(art, (I, I))
+    y = I + int(F * STRIP_TOP)
+    d.rectangle([0, y, T, T], fill=TINDAK_STRIP)
+    text, td = new_layer(T)
+    td.text((T / 2, I + F * .88), version, font=font(int(F * TEXT_SIZE)),
+            fill=(255, 255, 255, 255), anchor="mm")
+    fg.alpha_composite(text)
+    alpha = Image.new("L", (T, T), 0)
+    alpha.paste(art.getchannel("A"), (I, I))
+    ImageDraw.Draw(alpha).rectangle([0, y, T, T], fill=255)
+    alpha = ImageChops.subtract(alpha, text.getchannel("A"))
+    mono = Image.new("RGBA", (T, T), (255, 255, 255, 255))
+    mono.putalpha(alpha)
+    return fg, mono
+
+
+def write_all(version, res_dir):
+    write_densities(tindak(version), res_dir)
+    write_densities(tindak(version), res_dir, "ic_launcher_round.png")
+    fg, mono = tindak_adaptive(version)
+    drawables = os.path.join(res_dir, "drawable-xxxhdpi")
+    os.makedirs(drawables, exist_ok=True)
+    fg.resize((432, 432), Image.LANCZOS).save(
+        os.path.join(drawables, "ic_launcher_foreground.png"), optimize=True)
+    mono.resize((432, 432), Image.LANCZOS).save(
+        os.path.join(drawables, "ic_launcher_monochrome.png"), optimize=True)
+    anydpi = os.path.join(res_dir, "mipmap-anydpi-v26")
+    os.makedirs(anydpi, exist_ok=True)
+    for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+        with open(os.path.join(anydpi, name), "w") as fh:
+            fh.write(ADAPTIVE_XML)
+    values = os.path.join(res_dir, "values")
+    os.makedirs(values, exist_ok=True)
+    colors_path = os.path.join(values, 'colors.xml')
+    text = open(colors_path).read() if os.path.exists(colors_path) else '<resources>\n</resources>\n'
+    entry = '<color name="ic_launcher_background">#101828</color>'
+    if 'name="ic_launcher_background"' in text:
+        text = re.sub(r'<color name="ic_launcher_background">[^<]+</color>', entry, text)
+    else:
+        text = text.replace('</resources>', '    '+entry+'\n</resources>')
+    with open(colors_path, 'w') as fh: fh.write(text)
 
 
 def main():
-    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-    gradle = open(os.path.join(root, "app/build.gradle")).read()
-    version = parse_version(sys.argv, re.search(r"versionName '([^']+)'", gradle).group(1))
-    write_densities(intodo(version), os.path.join(root, "app/src/main/res"))
-    print("wrote icons for", version)
+    root = os.path.dirname(HERE)
+    gradle = open(os.path.join(root, 'app/build.gradle')).read()
+    version = sys.argv[1] if len(sys.argv) > 1 else re.search(r"versionName '([^']+)'", gradle).group(1)
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        sys.exit('version must be X.Y.Z')
+    write_all(version, os.path.join(root, 'app/src/main/res'))
+    print('wrote native tindak icons for', version)
 
 
 if __name__ == "__main__":

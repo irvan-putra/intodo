@@ -1,6 +1,6 @@
 name: patuh consistency gate
 
-# Family consistency checks from irvan-putra/patuh, required for intodo.
+# Family consistency checks from irvan-putra/patuh, required for tindak.
 # On every push: source gate on the exact pushed tree (package ID, version
 # format, lowercase label, permission/license drift, family icon geometry,
 # badge reads the source version). Manual dispatch also verifies the
@@ -16,14 +16,14 @@ permissions:
 
 jobs:
   source-gate:
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@d059503c2c094f7e0c050a58e56e4b8d7cd49ac0
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
     with:
-      app: intodo
+      app: tindak
       published: false
 
   verify-live-release:
     if: github.event_name == 'workflow_dispatch'
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@d059503c2c094f7e0c050a58e56e4b8d7cd49ac0
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
     with:
-      app: intodo
+      app: tindak
       published: true

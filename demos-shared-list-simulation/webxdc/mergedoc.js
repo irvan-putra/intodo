@@ -1,4 +1,4 @@
-// mergedoc.js - JS port of the Android app's MergeDoc (com.vanipy.intodo.merge).
+// mergedoc.js - JS port of the Android app's MergeDoc (com.vanipy.tindak.merge).
 // Same semantics: per-field last-writer-wins registers ordered by (hlc, deviceId),
 // lexical deviceId tie-break, LWW tombstone for deletes, losers kept in per-item
 // history, heuristic conflict surface for the trim UI.

@@ -40,7 +40,7 @@ public class HostActivity extends Activity {
         int cellW = gridW / 5;
         int cellH = dp(96);
         root.addView(grid, new LinearLayout.LayoutParams(gridW, cellH * 6));
-        String[] pkgs = {"com.vanipy.intodo", "com.vanipy.saku", "com.vanipy.menit", "com.vanipy.tumbuh", "com.vanipy.denyut", "com.vanipy.kemas"};
+        String[] pkgs = {"com.vanipy.tindak", "com.vanipy.saku", "com.vanipy.menit", "com.vanipy.tumbuh", "com.vanipy.denyut", "com.vanipy.kemas"};
         List<AppWidgetProviderInfo> providers = mgr.getInstalledProviders();
         int added = 0;
         for (int i = 0; i < pkgs.length; i++) {

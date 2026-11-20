@@ -11,7 +11,7 @@
 # instead of letting a bad publish through.
 #
 # Guards, all before staging is considered valid:
-#   - origin must be exactly the irvan-putra/intodo GitHub repo - a local
+#   - origin must be exactly the irvan-putra/tindak GitHub repo - a local
 #     review clone, a fork, or any other remote is refused;
 #   - a checkout on a branch must be on gh-pages (a detached CI HEAD is
 #     accepted; the caller verified the tip it checked out);
@@ -33,9 +33,9 @@ fi
 # Exact official repo only - never a local clone or a same-named fork.
 ORIGIN="$(git -C "$PAGES" remote get-url origin 2>/dev/null || true)"
 case "$ORIGIN" in
-    https://github.com/irvan-putra/intodo|https://github.com/irvan-putra/intodo.git|git@github.com:irvan-putra/intodo.git) ;;
+    https://github.com/irvan-putra/tindak|https://github.com/irvan-putra/tindak.git|git@github.com:irvan-putra/tindak.git) ;;
     *)
-        echo "stage_pages: refusing - origin is not exactly irvan-putra/intodo on GitHub (origin: ${ORIGIN:-none})" >&2
+        echo "stage_pages: refusing - origin is not exactly irvan-putra/tindak on GitHub (origin: ${ORIGIN:-none})" >&2
         exit 1
         ;;
 esac

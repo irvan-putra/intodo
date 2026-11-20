@@ -1,8 +1,8 @@
-// canvas-math.js - pure camera/layout math for the intodo review canvas.
-// Port of the intodo React canvas math (web/src/App.tsx) with no DOM or
+// canvas-math.js - pure camera/layout math for the tindak review canvas.
+// Port of the tindak React canvas math (web/src/App.tsx) with no DOM or
 // framework dependencies, so the exact same code runs in webxdc webviews and
 // in Node for tests. Mirror of the Android port
-// (app/src/main/java/com/vanipy/intodo/canvas/CanvasMath.java) -
+// (app/src/main/java/com/vanipy/tindak/canvas/CanvasMath.java) -
 // divergence between the two is a bug.
 //
 // Camera model: cam = { x, y, z } is the world point at the viewport center
@@ -14,7 +14,7 @@
   const WORLD = { w: 1760, h: 1500 };
   const ZMIN = 0.15, ZMAX = 2.5;
   const MINI_W = 132, MINI_PAD = 4;
-  const STORE_KEY = 'intodo-review-canvas.v1';
+  const STORE_KEY = 'tindak-review-canvas.v1';
 
   const CARD_SIZES = {
     change: { w: 380, h: 300 },
@@ -143,7 +143,7 @@
   // Validate/repair a persisted layout. Never throws: structural garbage
   // returns null (caller starts fresh), per-field problems are repaired -
   // unknown card ids dropped, missing ids restored to defaults, zoom and
-  // camera position clamped. (The intodo React original did not clamp the
+  // camera position clamped. (The tindak React original did not clamp the
   // loaded camera; both native ports do - stored state is untrusted input.)
   function sanitizeSaved(raw) {
     if (raw === null || raw === undefined) return null;

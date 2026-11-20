@@ -8,7 +8,7 @@ PAGES="$2"
 [ -d "$PAGES/.git" ] || { echo "stage-demo-pages: not a git checkout" >&2; exit 1; }
 ORIGIN="$(git -C "$PAGES" remote get-url origin 2>/dev/null || true)"
 case "$ORIGIN" in
-  https://github.com/irvan-putra/intodo|https://github.com/irvan-putra/intodo.git|git@github.com:irvan-putra/intodo.git) ;;
+  https://github.com/irvan-putra/tindak|https://github.com/irvan-putra/tindak.git|git@github.com:irvan-putra/tindak.git) ;;
   *) echo "stage-demo-pages: refusing - unexpected origin: ${ORIGIN:-none}" >&2; exit 1 ;;
 esac
 BRANCH="$(git -C "$PAGES" symbolic-ref --short -q HEAD || true)"

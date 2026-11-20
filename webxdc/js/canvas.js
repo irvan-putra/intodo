@@ -63,7 +63,7 @@
       tag: 'Today', title: 'The real code',
       blocks: [
         { p: ['The project source is public - the wall of code this canvas is meant to replace for review.'] },
-        { link: { href: 'https://github.com/irvan-putra/intodo', label: 'irvan-putra/intodo' } },
+        { link: { href: 'https://github.com/irvan-putra/tindak', label: 'irvan-putra/tindak' } },
       ],
     },
     rule: {

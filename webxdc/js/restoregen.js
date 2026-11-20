@@ -12,13 +12,13 @@
 (function (root) {
   'use strict';
 
-  var STORAGE_KEY = 'instinct-shared-list-restore-v1';
+  var STORAGE_KEY = 'tindak-shared-list-restore-v1';
   // Latest VERIFIED-complete generation, kept SEPARATE from the incomplete
   // coverage (which is dropped on completion). Written only after the
   // whole-set digest matched, read into the boot hint so healthy opens
   // cost the bot nothing. It is a claim about THIS instance's own state,
   // never a gate for anyone else.
-  var COMPLETE_KEY = 'instinct-shared-list-restore-complete-v1';
+  var COMPLETE_KEY = 'tindak-shared-list-restore-complete-v1';
   var MAX_BATCH_COUNT = 1000;
 
   function isHex64(s) {

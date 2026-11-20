@@ -1,4 +1,4 @@
-name: focused intodo family widget tap
+name: focused tindak family widget tap
 on:
   workflow_dispatch:
 permissions:
@@ -15,7 +15,7 @@ jobs:
       - name: Download exact renamed candidate
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_RUNS: '{"intodo":{"run":44246227777,"sha":"d1170aafe2b1f709c82508e27e35d16bdb402870","artifact":"intodo-family-debug-candidate"}}'
+          ARTIFACT_RUNS: '{"tindak":{"run":44246227777,"sha":"d1170aafe2b1f709c82508e27e35d16bdb402870","artifact":"tindak-family-debug-candidate"}}'
         run: python3 tools/family-smoke/download-apks.py
       - name: Build disposable host and verify candidate package and label
         run: |
@@ -25,10 +25,10 @@ jobs:
           /tmp/gradle-8.7/bin/gradle --no-daemon -p tools/family-smoke :app:assembleDebug
           mkdir -p host-evidence
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/aapt" dump badging host-apks/intodo.apk > host-evidence/badging.txt
-          grep -F "package: name='com.vanipy.intodo'" host-evidence/badging.txt
-          grep -Fx "application-label:'intodo'" host-evidence/badging.txt
-          sha256sum host-apks/intodo.apk > host-evidence/apk-sha256.txt
+          "$BT/aapt" dump badging host-apks/tindak.apk > host-evidence/badging.txt
+          grep -F "package: name='com.vanipy.tindak'" host-evidence/badging.txt
+          grep -Fx "application-label:'tindak'" host-evidence/badging.txt
+          sha256sum host-apks/tindak.apk > host-evidence/apk-sha256.txt
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -43,5 +43,5 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: intodo-family-tap-evidence
+          name: tindak-family-tap-evidence
           path: host-evidence/

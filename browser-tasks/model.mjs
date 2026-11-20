@@ -1,8 +1,8 @@
-export const STORE_KEY='vanipy-task-web-v1';
-export function empty(){return {format:'vanipy-task-web',version:1,lists:[{id:'inbox',name:'Inbox'}],tasks:[]};}
+export const STORE_KEY='tindak-task-web-v1';
+export function empty(){return {format:'tindak-task-web',version:1,lists:[{id:'inbox',name:'Inbox'}],tasks:[]};}
 const text=(v,max)=>typeof v==='string'&&v.length<=max;
 export function validate(x){
- if(!x||x.format!=='vanipy-task-web'||x.version!==1||!Array.isArray(x.lists)||!Array.isArray(x.tasks)||x.lists.length<1||x.lists.length>200||x.tasks.length>10000)throw Error('This is not a supported task backup.');
+ if(!x||x.format!=='tindak-task-web'||x.version!==1||!Array.isArray(x.lists)||!Array.isArray(x.tasks)||x.lists.length<1||x.lists.length>200||x.tasks.length>10000)throw Error('This is not a supported task backup.');
  const ids=new Set(),ls=new Set();
  for(const l of x.lists){if(!l||!text(l.id,100)||!l.id||ids.has(l.id)||!text(l.name,200)||!l.name.trim())throw Error('A list in the backup is invalid.');ids.add(l.id);ls.add(l.id);}
  for(const t of x.tasks){if(!t||!text(t.id,100)||!t.id||ids.has(t.id)||!ls.has(t.list)||!text(t.title,500)||!t.title.trim()||!text(t.note,10000)||typeof t.done!=='boolean'||typeof t.archived!=='boolean'||!text(t.due,10)||!validDate(t.due)||!Number.isSafeInteger(t.created)||!Number.isSafeInteger(t.updated)||t.created<0||t.updated<0)throw Error('A task in the backup is invalid.');ids.add(t.id);}

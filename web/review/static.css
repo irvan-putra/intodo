@@ -318,7 +318,7 @@ a, .rc-card a { color: var(--ds-ink); }
 .rc-legend-num.rc-legend-num-dash { border-style: dashed; border-color: var(--ds-ink-2); }
 
 /* System context level (furthest out, C4 system landscape): people + the
-   intodo system + external systems. */
+   tindak system + external systems. */
 .rc-sysnodes { display: none; }
 .rc-sysedges { display: none; }
 .rc-sys .rc-world .rc-card,
