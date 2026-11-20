@@ -9,7 +9,47 @@
 </head>
 <body>
 <aside class="android-release" aria-label="Android version"><a href="https://github.com/irvan-putra/tindak/releases/download/v0.5.20/tindak-v0.5.20.apk">Separate-install Tindak Android test v0.5.20</a> · <a href="https://github.com/irvan-putra/tindak/releases/tag/v0.5.20">Release notes</a><small>New com.vanipy.tindak package, fresh setup. Not an in-place update from the old package. This page is a web review prototype or simulation, not the Android app or a synced web version.</small></aside>
+<section id="review-load-status" role="status" style="margin:12px;padding:12px;border:1px solid #8886;border-radius:8px;font:14px/1.5 system-ui,sans-serif">
+  <strong id="review-load-title">Loading the code-review canvas...</strong>
+  <p id="review-load-detail">The Android notice above is not the review itself. The canvas loads below it.</p>
+  <button type="button" id="review-load-retry" hidden>Retry loading the review</button>
+  <noscript>This review needs JavaScript. Enable JavaScript for this site, then reload.</noscript>
+</section>
 <div id="root"></div>
+<script>
+(function () {
+  var box = document.getElementById('review-load-status');
+  var button = document.getElementById('review-load-retry');
+  function failed(message) {
+    box.hidden = false;
+    document.getElementById('review-load-title').textContent = 'The code-review canvas has not loaded.';
+    document.getElementById('review-load-detail').textContent = message;
+    button.hidden = false;
+  }
+  button.onclick = function () {
+    var url = new URL(location.href);
+    url.searchParams.set('review-retry', String(Date.now()));
+    location.replace(url.href);
+  };
+  window.addEventListener('error', function (event) {
+    if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
+      failed('A review file could not load. Retry without clearing your saved review data.');
+    }
+  }, true);
+  var started = Date.now();
+  var timer = setInterval(function () {
+    var rendered = document.querySelector('#root .rc-page');
+    var css = Array.prototype.some.call(document.styleSheets, function (sheet) {
+      return sheet.href && /app\.[a-f0-9]+\.css/.test(sheet.href);
+    });
+    if (rendered && css) { box.hidden = true; clearInterval(timer); }
+    else if (Date.now() - started > 12000) {
+      failed('The canvas is taking longer than expected. Retry without clearing your saved review data.');
+      clearInterval(timer);
+    }
+  }, 150);
+})();
+</script>
 <link rel="stylesheet" href="./app.css">
 <script src="./app.js"></script>
 </body>
