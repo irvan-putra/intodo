@@ -1,0 +1,29 @@
+name: patuh consistency gate
+
+# Family consistency checks from irvan-putra/patuh, required for intodo.
+# On every push: source gate on the exact pushed tree (package ID, version
+# format, lowercase label, permission/license drift, family icon geometry,
+# badge reads the source version). Manual dispatch also verifies the
+# currently live release (tag, APK name, checksum, gallery card, downloaded
+# sha256, packaged icon pixels).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-gate:
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@v0.2.1
+    with:
+      app: intodo
+      published: false
+
+  verify-live-release:
+    if: github.event_name == 'workflow_dispatch'
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@v0.2.1
+    with:
+      app: intodo
+      published: true
