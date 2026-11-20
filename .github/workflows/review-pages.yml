@@ -52,6 +52,7 @@ on:
     branches: [main]
     paths:
       - 'web/review/**'
+      - 'browser-tasks/**'
       - 'demos-shared-list-simulation/**'
       - 'tools/release/**'
       - '.github/workflows/review-pages.yml'
@@ -105,6 +106,11 @@ jobs:
 
       - name: Stage the shared-list simulation without replacing other pages
         run: sh source/tools/release/stage-demo-pages.sh source/demos-shared-list-simulation "$PWD/site"
+
+      - name: Check and stage the browser-local task page
+        run: |
+          node --test source/browser-tasks/model.test.mjs
+          sh source/tools/release/stage-task-pages.sh source/browser-tasks "$PWD/site"
 
       - name: Drop git metadata from the artifact
         run: rm -rf site/.git

@@ -2,6 +2,16 @@
 
 Personal reminder/todo tooling: **intodo for Android** (Android app + home-screen widget, `app/`), **intodo for DeltaChat** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **intodo for web** (hosted review-canvas page source, `web/`).
 
+
+## Browser-local task page
+
+The task page at `https://vanipy.com/intodo/tasks/` is separate from the review
+canvas at the root. It supports personal browser-local lists, task edits,
+completion, archive/restore, separate fictional Demo tasks and JSON backup/import.
+No account or phone sync is connected; dates do not send alerts. Keep unencrypted
+backups private. Existing Android and DeltaChat clients and review pages are
+unchanged. Source and test details: [browser-tasks](browser-tasks/README.md).
+
 ## intodo - Android widget
 
 A home-screen widget and companion app that shows my Instinct reminders and todos on my phone. The list syncs through an encrypted page that only the paired phone can read.

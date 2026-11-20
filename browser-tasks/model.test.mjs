@@ -1,0 +1,16 @@
+import test from 'node:test';import assert from 'node:assert/strict';import * as M from './model.mjs';
+const task=(s,id='a')=>M.addTask(s,{id,list:s.lists[0].id,title:'A task',note:'A note',due:'2026-11-26',now:1});
+test('empty personal state has no fictional tasks',()=>assert.equal(M.empty().tasks.length,0));
+test('add, edit, complete, reopen and archive preserve values',()=>{let s=task(M.empty());s=M.updateTask(s,'a',{title:'Changed',done:true},2);s=M.updateTask(s,'a',{done:false,archived:true},3);assert.equal(s.tasks[0].title,'Changed');assert.equal(s.tasks[0].note,'A note');s=M.updateTask(s,'a',{archived:false},4);assert.equal(s.tasks.length,1);assert.equal(s.tasks[0].archived,false);});
+test('operations do not mutate old state',()=>{const old=task(M.empty());M.updateTask(old,'a',{done:true},2);assert.equal(old.tasks[0].done,false);});
+test('reject duplicate IDs and broken list references',()=>{assert.throws(()=>task(task(M.empty())));let s=task(M.empty());s.tasks[0].list='missing';assert.throws(()=>M.validate(s));});
+test('date validation rejects impossible dates and allows leap years',()=>{assert.equal(M.validDate('2026-02-29'),false);assert.equal(M.validDate('2024-02-29'),true);assert.equal(M.validDate('2026-13-01'),false);assert.equal(M.validDate(''),true);});
+test('empty titles and long notes rejected',()=>{assert.throws(()=>M.addTask(M.empty(),{id:'a',list:'inbox',title:'  ',now:1}));assert.throws(()=>M.addTask(M.empty(),{id:'a',list:'inbox',title:'ok',note:'x'.repeat(10001),now:1}));});
+test('backup roundtrip keeps archived and completed tasks exactly',()=>{let s=task(M.empty());s=M.updateTask(s,'a',{done:true,archived:true},2);assert.deepEqual(M.validate(JSON.parse(JSON.stringify(s))),s);});
+test('import never replaces local tasks, conflicting IDs copied',()=>{const old=task(M.empty());let i=0;const next=M.importCopy(old,old,()=>`import-${++i}`);assert.equal(next.tasks.length,2);assert.deepEqual(next.tasks[0],old.tasks[0]);assert.notEqual(next.tasks[1].id,'a');assert.equal(next.lists[1].name,'Inbox (imported)');assert.equal(old.tasks.length,1);});
+test('corrupt backup rejected before current state can change',()=>{const old=task(M.empty());assert.throws(()=>M.importCopy(old,{format:'bad'},()=>''));assert.equal(old.tasks.length,1);});
+test('load corruption does not overwrite raw bytes',()=>{let raw='broken';const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};assert.throws(()=>M.load(storage,'x'));assert.equal(raw,'broken');});
+test('storage quota failure propagates',()=>assert.throws(()=>M.save({setItem(){throw Error('quota');}},'x',M.empty()),/quota/));
+test('demo edits separate from personal state',()=>{const mine=M.empty();let demo=M.demo();demo=M.updateTask(demo,'example-1',{done:true},5);assert.equal(mine.tasks.length,0);assert.equal(demo.tasks[0].done,true);});
+test('oversized task import rejected',()=>{const bad=M.empty();bad.tasks=Array(10001).fill({});assert.throws(()=>M.validate(bad));});
+test('unknown backup fields discarded, text is data',()=>{let s=task(M.empty());s.tasks[0].title='<img src=x onerror=alert(1)>';s.extra='not used';const clean=M.validate(s);assert.equal(clean.tasks[0].title,s.tasks[0].title);assert.equal(clean.extra,undefined);});
