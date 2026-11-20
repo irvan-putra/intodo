@@ -32,7 +32,7 @@ jobs:
     # patuh pre-publish source gate: package, version format, label,
     # permission/license drift, family icon geometry. Runs on the tree being
     # released (pre-stamp state, which must itself stay clean).
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@b3c5d671164812ea06fb44857b0f0a423ade0d66
     with:
       app: tindak
       published: false
@@ -186,7 +186,7 @@ jobs:
     # the stamped candidate version) before anything is published. This is the
     # preventive boundary.
     needs: build
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@b3c5d671164812ea06fb44857b0f0a423ade0d66
     with:
       app: tindak
       published: false
@@ -220,7 +220,7 @@ jobs:
     # post-publish: verifies the live release (tag, APK name, checksum,
     # gallery card, downloaded sha256, packaged icon). Detects, cannot undo.
     needs: publish
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f573dfb242b3bc57f919416cff2b93d30381d39d
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@b3c5d671164812ea06fb44857b0f0a423ade0d66
     with:
       app: tindak
       published: true
