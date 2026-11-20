@@ -21,14 +21,14 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 
 Active test builds, published on this repository's Releases page. Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
 
-- **tindak for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.tindak`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
+- **tindak for Android**: signed **v0.5.20** uses `com.vanipy.tindak`, a separate install from previous `com.vanipy.intodo`. See Releases for the actual APK and checksum. Public builds are unconfigured; generate a new on-device pairing key before requesting a feed switch.
 - **tindak for DeltaChat**: historical release **v0.4.7** (current Tindak0.4.10 package built and tested locally, not yet distributed) (`.xdc` attachment for DeltaChat).
 - **tindak for web**: review canvas published through GitHub Pages Actions.
 - Branch `unfinished/log-access-v3` holds a partial, unfinished step in the wider log-access work: selectable bot-log text, nested scrolling that preserves vertical drags, and opening at the newest lines. It has been compiled but not run on a device, and is not part of any release - see `UNFINISHED-log-access-v3.md` on that branch.
 
 ## Android identity and fresh setup
 
-Current source uses `com.vanipy.tindak` for the application ID, namespace and Android source packages. Display names stay unchanged. It is separate from old `com.instinct.widget` installs, whose source remains in Git history. No export/import bridge or automatic data migration is added. Existing background feed work is updated to the current worker class without clearing app data. A home-screen widget added from the earlier new-ID candidate may need to be removed from the home screen and added again because its provider class name changed; the old app's widgets are separate and unchanged. Recreate an existing new-ID launcher shortcut as well if the launcher retains its old activity component. This does not require clearing app data. Keep an old installation and its data unless you choose otherwise.
+Current source uses `com.vanipy.tindak` for the application ID, namespace and Android source packages. It is a separate install from previous `com.vanipy.intodo` and older `com.instinct.widget` builds. No export/import bridge or automatic configuration migration is included. A new installation creates a new private key on device. The existing encrypted feed remains paired to the old client until the new public key is supplied and switching is confirmed. Old app data, widgets and feed are not deleted or reset by publishing this release.
 
 A first installation starts empty. If `com.vanipy.tindak` is already installed (including the earlier side-by-side candidate), a same-signer update keeps that installation's existing data; it does not reset it. Do not clear data or uninstall as part of setup. Create a pairing key only if the app is unpaired, share only its public key with your feed publisher, enter the resulting encrypted feed address and sync. The optional bot connection is set up separately; never run two copies against the same bot account.
 
@@ -118,9 +118,9 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 Current identity across Android, webxdc and web is **tindak**. Android uses `com.vanipy.tindak`, a separate install from historical `com.vanipy.intodo`, with fresh configuration and pairing. Browser and miniapp keys are fresh Tindak keys as requested, unused old state is not migrated. Old tagged releases retain their original bytes and filenames. Current downloads use `tindak-v<version>`. Existing bot accounts are not recreated or restarted by a source rename; no real-chat miniapp instance is replaced automatically.
 
-## Android 0.5.16 rename update
+## Historical Android 0.5.16 rename update (superseded)
 
-Current source, future asset outputs and update checks use tindak only. The package, signer, paired feed and list data stay unchanged. Old compatibility asset names are no longer accepted. Release-page download names were cleaned separately without rebuilding historical signed binaries. The mini-app 0.4.9 uses a renamed local canvas-layout key, which may reset layout and zoom but not list items. Post-tap content rendering and physical Samsung runtime remain unverified. See `docs/releases/0.5.16.md`.
+The0.5.16 historical release was a naming-only update that kept the previous package and paired data. That plan was superseded by the0.5.20 identity reset below. Old tagged releases retain their original package and bytes. See `docs/releases/0.5.16.md` for the historical scope.
 
 
 ## Tindak identity reset, 20 November 2026
