@@ -424,9 +424,9 @@ public class MainActivity extends Activity {
             View v = convert != null ? convert : inflater.inflate(R.layout.list_item, parent, false);
             FeedParser.Item item = (FeedParser.Item) rows.get(i);
             String suffix = "in_progress".equals(item.status) ? "  (in progress)" : "";
-            ((TextView) v.findViewById(R.id.item_title)).setText(item.title + suffix);
+            ReminderLinks.apply((TextView) v.findViewById(R.id.item_title), item.title + suffix);
             TextView note = v.findViewById(R.id.item_note);
-            if (item.note != null && !item.note.isEmpty()) { note.setText(item.note); note.setVisibility(View.VISIBLE); }
+            if (item.note != null && !item.note.isEmpty()) { ReminderLinks.apply(note, item.note); note.setVisibility(View.VISIBLE); }
             else note.setVisibility(View.GONE);
             return v;
         }
