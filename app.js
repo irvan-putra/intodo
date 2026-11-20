@@ -1,5 +1,5 @@
-/* intodo review canvas - portable vanilla port of the public React source
-   (intodo repo, web/src/App.tsx). Same world, cards, gestures, minimap
+/* tindak review canvas - portable vanilla port of the public React source
+   (tindak repo, web/src/App.tsx). Same world, cards, gestures, minimap
    and persistence shape; localStorage replaces the host kit's useLocalState. */
 (function () {
     'use strict';
