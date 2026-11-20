@@ -22,7 +22,7 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 Active test builds, published on this repository's Releases page. Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
 
 - **tindak for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.tindak`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
-- **tindak for DeltaChat**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
+- **tindak for DeltaChat**: historical release **v0.4.7** (current Tindak0.4.10 package built and tested locally, not yet distributed) (`.xdc` attachment for DeltaChat).
 - **tindak for web**: review canvas published through GitHub Pages Actions.
 - Branch `unfinished/log-access-v3` holds a partial, unfinished step in the wider log-access work: selectable bot-log text, nested scrolling that preserves vertical drags, and opening at the newest lines. It has been compiled but not run on a device, and is not part of any release - see `UNFINISHED-log-access-v3.md` on that branch.
 
@@ -116,7 +116,7 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 ## Family naming and compatibility
 
-Current display name across Android, webxdc and web is **tindak**. Android remains `com.vanipy.tindak`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `tindak-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.
+Current identity across Android, webxdc and web is **tindak**. Android uses `com.vanipy.tindak`, a separate install from historical `com.vanipy.intodo`, with fresh configuration and pairing. Browser and miniapp keys are fresh Tindak keys as requested, unused old state is not migrated. Old tagged releases retain their original bytes and filenames. Current downloads use `tindak-v<version>`. Existing bot accounts are not recreated or restarted by a source rename; no real-chat miniapp instance is replaced automatically.
 
 ## Android 0.5.16 rename update
 
