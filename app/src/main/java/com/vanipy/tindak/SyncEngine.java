@@ -82,6 +82,10 @@ public class SyncEngine {
 
     public static void run(Context context, Callback cb) {
         final Context feedContext = Prefs.captureFeed(context);
+        if (Prefs.isDemo(feedContext) && Prefs.builtInDemo(feedContext)) {
+            cb.onDone(true, "Built-in demo, offline");
+            return;
+        }
         final String feedUrl = effectiveFeedUrl(feedContext);
         if (feedUrl == null || feedUrl.isEmpty()) {
             Prefs.saveStatus(context, "sync failed: feed URL not configured");

@@ -49,8 +49,42 @@ public class Prefs {
         e.putString("feed_url", real).putString("demo_feed_url", demo)
                 .putBoolean("dual_configured", true).putLong("mode_epoch", modeEpoch(c) + 1).commit();
     }
+    public static boolean builtInDemo(Context c) { return get(c).getBoolean("built_in_demo", false); }
+    /** One-time demo-only migration. Real feed, pairing and mode are untouched. */
+    public static void ensureBuiltInDemo(Context c) {
+        if (builtInDemo(c)) return;
+        SharedPreferences prefs = get(c);
+        SharedPreferences.Editor e = prefs.edit();
+        for (String key : FEED_KEYS) {
+            Object v = prefs.getAll().get("demo_" + key);
+            if (v instanceof String) e.putString("external_demo_" + key, (String)v);
+            else if (v instanceof Long) e.putLong("external_demo_" + key, (Long)v);
+            e.remove("demo_" + key);
+        }
+        e.putString("external_demo_feed_url", demoUrl(c))
+                .putString("demo_feed", DemoFeed.BUILT_IN)
+                .putString("demo_status", "built-in demo, offline")
+                .putBoolean("built_in_demo", true)
+                .putLong("mode_epoch", modeEpoch(c) + 1).commit();
+    }
+    /** Save only a real address. Never require a demo URL or replace a key. */
+    public static void configureRealFeed(Context c, String real, boolean oldWasDemo) {
+        SharedPreferences prefs = get(c);
+        SharedPreferences.Editor e = prefs.edit();
+        if (!dualConfigured(c) && oldWasDemo) {
+            for (String key : FEED_KEYS) {
+                Object v = prefs.getAll().get(key);
+                if (v instanceof String) e.putString("legacy_" + key, (String)v);
+                else if (v instanceof Long) e.putLong("legacy_" + key, (Long)v);
+                e.remove(key);
+            }
+        }
+        e.putString("feed_url", real).putBoolean("dual_configured", true)
+                .putLong("mode_epoch", modeEpoch(c) + 1).commit();
+        ensureBuiltInDemo(c);
+    }
     public static boolean setDemo(Context c, boolean demo) {
-        if (!dualConfigured(c) || realUrl(c).isEmpty() || demoUrl(c).isEmpty()) return false;
+        if (!builtInDemo(c) && (!dualConfigured(c) || realUrl(c).isEmpty() || demoUrl(c).isEmpty())) return false;
         get(c).edit().putBoolean("demo_mode", demo).putLong("mode_epoch", modeEpoch(c) + 1).commit();
         return true;
     }

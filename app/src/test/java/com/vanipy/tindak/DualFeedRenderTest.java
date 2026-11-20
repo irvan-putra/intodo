@@ -21,7 +21,7 @@ public class DualFeedRenderTest {
         MainActivity a=Robolectric.buildActivity(MainActivity.class).setup().get();
         screenshot(a,"/tmp/dual-real.png");
         a.findViewById(R.id.demoMode).performClick();
-        assertTrue(Prefs.isDemo(c));assertNull(Prefs.feed(c));assertEquals(0,((ListView)a.findViewById(R.id.list)).getAdapter().getCount());
+        assertTrue(Prefs.isDemo(c));assertTrue(DemoFeed.isSynthetic(Prefs.feed(c)));assertEquals(6,((ListView)a.findViewById(R.id.list)).getAdapter().getCount());
         screenshot(a,"/tmp/dual-demo-empty.png");
         Prefs.saveFeed(c,DualFeedTest.DEMO_JSON,"d");
         org.robolectric.shadows.ShadowLooper.idleMainLooper();

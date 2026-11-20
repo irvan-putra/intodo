@@ -74,7 +74,7 @@
         <Button android:id="@+id/demoMode" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Demo" android:minHeight="48dp" />
         <TextView android:id="@+id/configureFeeds" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Set up real and demo feeds" android:minHeight="48dp" android:gravity="center_vertical" android:focusable="true" />
+            android:text="Set up real feed" android:minHeight="48dp" android:gravity="center_vertical" android:focusable="true" />
         <TextView android:id="@+id/lastSync" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textColor="#98A2B3" android:textSize="12sp" />
         <Button android:id="@+id/syncNow" android:layout_width="match_parent" android:layout_height="wrap_content"

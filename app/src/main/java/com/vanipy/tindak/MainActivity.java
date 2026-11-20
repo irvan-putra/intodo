@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prefs.ensureBuiltInDemo(this);
         setContentView(R.layout.activity_main);
         FeedSyncScheduler.schedule(this);
         lastSync = findViewById(R.id.lastSync);
@@ -101,7 +102,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Feed address must start with https://", Toast.LENGTH_LONG).show();
                 return;
             }
-            Prefs.saveFeedUrl(this, SyncEngine.canonicalFeedUrl(url));
+            Prefs.configureRealFeed(this, SyncEngine.canonicalFeedUrl(url), false);
             Toast.makeText(this, "Feed address saved", Toast.LENGTH_SHORT).show();
         });
         findViewById(R.id.updateLine).setOnClickListener(v -> {
@@ -159,7 +160,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         Prefs.get(this).registerOnSharedPreferenceChangeListener(syncPrefsListener);
-        if (Prefs.isPaired(this)) showList(); else showPairing();
+        if (Prefs.isDemo(this) || Prefs.isPaired(this)) showList(); else showPairing();
         refreshStatus();
         if (getIntent() != null && getIntent().getBooleanExtra("sync", false) && Prefs.isPaired(this)) {
             getIntent().removeExtra("sync");
@@ -282,7 +283,7 @@ public class MainActivity extends Activity {
         applyFeedSwitch();
     }
     private void applyFeedSwitch() {
-        if (!Prefs.dualConfigured(this)) { configureFeedDialog(); return; }
+        Prefs.ensureBuiltInDemo(this);
         // Remove visible rows before changing mode, including a launcher's old snapshot.
         adapter.setRows(new ArrayList<>());
         WidgetProvider.blankAll(this);
@@ -291,6 +292,7 @@ public class MainActivity extends Activity {
         findViewById(R.id.syncProgress).setVisibility(View.GONE);
         syncNow.setEnabled(true);
         Prefs.setDemo(this, !Prefs.isDemo(this));
+        if (Prefs.isDemo(this) || Prefs.isPaired(this)) showList(); else showPairing();
         reload(); refreshStatus();
         WidgetProvider.refreshAll(this);
         // Keep cached data available offline. Fetch never merges the two lists.
@@ -303,7 +305,7 @@ public class MainActivity extends Activity {
         int pad = (int)(20 * getResources().getDisplayMetrics().density);
         form.setPadding(pad, pad, pad, pad);
         TextView note = new TextView(this);
-        note.setText("One-time setup. Both feeds stay online and use this phone's existing key. Real and demo lists stay separate. Confirm which feed is currently saved before assigning it.");
+        note.setText("Demo is bundled in the app and works offline. Only your real reminders need a feed address. Your existing pairing key is kept; saving does not confirm a successful sync.");
         form.addView(note);
         boolean legacyDemo = !Prefs.dualConfigured(this) && DemoFeed.isSynthetic(Prefs.feed(this));
         String current = SyncEngine.effectiveFeedUrl(this);
@@ -312,34 +314,28 @@ public class MainActivity extends Activity {
         real.setText(Prefs.dualConfigured(this) ? Prefs.realUrl(this) : legacyDemo ? "" : current);
         TextView realLabel = new TextView(this); realLabel.setText("Real feed address"); form.addView(realLabel);
         form.addView(real);
-        EditText demo = new EditText(this); demo.setSingleLine(true); demo.setHint("Synthetic demo feed HTTPS address");
-        demo.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        demo.setText(Prefs.dualConfigured(this) ? Prefs.demoUrl(this) : legacyDemo ? current : "");
-        TextView demoLabel = new TextView(this); demoLabel.setText("Synthetic demo feed address"); form.addView(demoLabel);
-        form.addView(demo);
         android.widget.CheckBox oldDemo = new android.widget.CheckBox(this);
         oldDemo.setText("The previously saved feed is the demo"); oldDemo.setChecked(legacyDemo);
         oldDemo.setVisibility(Prefs.dualConfigured(this) ? View.GONE : View.VISIBLE); form.addView(oldDemo);
         android.widget.ScrollView scroll = new android.widget.ScrollView(this); scroll.addView(form);
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Set up real and demo feeds")
-                .setView(scroll).setPositiveButton("Save feeds", null).setNegativeButton("Cancel", null).create();
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Set up real feed")
+                .setView(scroll).setPositiveButton("Save real feed", null).setNegativeButton("Cancel", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String r = SyncEngine.canonicalFeedUrl(real.getText().toString());
-            String m = SyncEngine.canonicalFeedUrl(demo.getText().toString());
-            if (!r.startsWith("https://files.instinct.com/") || !m.startsWith("https://files.instinct.com/") || r.equals(m)) {
-                demo.setError("Use two different HTTPS Files feed addresses"); return;
+            if (!r.startsWith("https://files.instinct.com/")) {
+                real.setError("Use your real HTTPS Files feed address"); return;
             }
             adapter.setRows(new ArrayList<>()); WidgetProvider.blankAll(this);
             ++syncGen; syncRunning = false; syncNow.setEnabled(true);
             findViewById(R.id.syncProgress).setVisibility(View.GONE);
-            Prefs.configureFeeds(this, r, m, oldDemo.isChecked());
+            Prefs.configureRealFeed(this, r, oldDemo.isChecked());
             reload(); refreshStatus(); WidgetProvider.refreshAll(this); dialog.dismiss();
         }));
         dialog.show();
     }
 
     private void sync() {
-        if (!Prefs.isPaired(this)) { swipeRefresh.setRefreshing(false); return; }
+        if (!Prefs.isDemo(this) && !Prefs.isPaired(this)) { swipeRefresh.setRefreshing(false); return; }
         if (syncRunning) { swipeRefresh.setRefreshing(false); return; }
         syncRunning = true;
         syncDataStarted = false;
@@ -360,7 +356,7 @@ public class MainActivity extends Activity {
                 refreshStatus();
                 Toast.makeText(MainActivity.this, ok ? "Synced" : message, Toast.LENGTH_LONG).show();
                 WidgetProvider.refreshAll(MainActivity.this);
-                checkForUpdate(); // manual sync doubles as an update check, as the comment above says
+                if (!Prefs.isDemo(MainActivity.this)) checkForUpdate(); // local demo needs no network
             }
             @Override public void onProgress(String stage, long done, long total) {
                 if (gen != syncGen || !syncRunning) return; // late event after terminal
@@ -408,11 +404,11 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         findViewById(R.id.demoBanner).setVisibility(Prefs.isDemo(this) ? View.VISIBLE : View.GONE);
-        ((TextView)findViewById(R.id.demoMode)).setText(!Prefs.dualConfigured(this) ? "Set up Demo" : Prefs.isDemo(this) ? "Back to real feed" : "Demo");
+        ((TextView)findViewById(R.id.demoMode)).setText(Prefs.isDemo(this) ? "Back to real feed" : "Demo (built-in)");
         findViewById(R.id.openCanvas).setVisibility(Prefs.isDemo(this) ? View.GONE : View.VISIBLE);
         findViewById(R.id.openBot).setVisibility(Prefs.isDemo(this) ? View.GONE : View.VISIBLE);
-        ((TextView)findViewById(R.id.feedMode)).setText(!Prefs.dualConfigured(this) ? "Current saved feed" : Prefs.isDemo(this) ? "DEMO - synthetic items only" : "Real feed");
-        lastSync.setText(SyncStatusText.build(this, Prefs.status(this)));
+        ((TextView)findViewById(R.id.feedMode)).setText(Prefs.isDemo(this) ? "DEMO - bundled synthetic items" : "Real feed");
+        lastSync.setText(Prefs.isDemo(this) ? "Built-in demo - offline, no feed needed" : SyncStatusText.build(this, Prefs.status(this)));
     }
 
     static class FeedAdapter extends BaseAdapter {

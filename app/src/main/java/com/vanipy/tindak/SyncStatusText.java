@@ -20,6 +20,7 @@ public final class SyncStatusText {
     }
 
     public static String build(Context c, String emptyFallback, boolean compact) {
+        if (Prefs.isDemo(c) && Prefs.builtInDemo(c)) return "Built-in demo - offline";
         long feedAt = Prefs.feedAt(c);   // written only when new list content is applied
         long checkAt = Prefs.checkAt(c); // written on every successful fetch
         if (feedAt <= 0 && checkAt <= 0) return emptyFallback;
