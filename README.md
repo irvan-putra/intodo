@@ -1,6 +1,6 @@
-# intodo
+# tindak
 
-Personal reminder/todo tooling: **intodo for Android** (Android app + home-screen widget, `app/`), **intodo for DeltaChat** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **intodo for web** (hosted review-canvas page source, `web/`).
+Personal reminder/todo tooling: **tindak for Android** (Android app + home-screen widget, `app/`), **tindak for DeltaChat** (webxdc shared-list mini-app for DeltaChat, `webxdc/`), and **tindak for web** (hosted review-canvas page source, `web/`).
 
 
 ## Browser-local task page
@@ -12,7 +12,7 @@ No account or phone sync is connected; dates do not send alerts. Keep unencrypte
 backups private. Existing Android and DeltaChat clients and review pages are
 unchanged. Source and test details: [browser-tasks](browser-tasks/README.md).
 
-## intodo - Android widget
+## tindak - Android widget
 
 A home-screen widget and companion app that shows my Instinct reminders and todos on my phone. The list syncs through an encrypted page that only the paired phone can read.
 
@@ -20,9 +20,9 @@ A home-screen widget and companion app that shows my Instinct reminders and todo
 
 Active test builds, published on this repository's Releases page. Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
 
-- **intodo for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.intodo`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
-- **intodo for DeltaChat**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
-- **intodo for web**: review canvas published through GitHub Pages Actions.
+- **tindak for Android**: current source prepares **v0.5.12**, a fresh-start build using `com.vanipy.intodo`. Source preparation is not a published release. See Releases for actual APK availability. Public builds are unconfigured; enter your feed address after pairing.
+- **tindak for DeltaChat**: latest release **v0.4.7** (`.xdc` attachment for DeltaChat).
+- **tindak for web**: review canvas published through GitHub Pages Actions.
 - Branch `unfinished/log-access-v3` holds a partial, unfinished step in the wider log-access work: selectable bot-log text, nested scrolling that preserves vertical drags, and opening at the newest lines. It has been compiled but not run on a device, and is not part of any release - see `UNFINISHED-log-access-v3.md` on that branch.
 
 ## Android identity and fresh setup
@@ -70,7 +70,7 @@ Building without it works fine - the release APKs are unconfigured public builds
 ## Layout
 
 - `app/` - the Android app (plain Java, minSdk 26). `SyncEngine` fetches the feed, `Crypto` decrypts it, `FeedParser` parses it, `WidgetProvider`/`WidgetService` render the home-screen widget. `app/src/main/python/` holds the embedded DeltaChat bot runtime.
-- `webxdc/` - intodo, the webxdc shared-list mini-app for DeltaChat groups (`package.sh` builds the `.xdc`).
+- `webxdc/` - tindak, the webxdc shared-list mini-app for DeltaChat groups (`package.sh` builds the `.xdc`).
 - `web/` - authored source of the review-canvas page (React + TypeScript), published through GitHub Pages.
 - `tools/encrypt_feed.py` - the publisher side: encrypts a feed JSON to the phone's public key and stamps the generation time. `tools/encrypt_feed.mjs` is the Node twin.
 - `tools/dc_relay/` - durable reply ledger library for bots (duplicate-safe replies across crashes and restarts), with tests.
@@ -115,8 +115,8 @@ The debug APK lands in `app/build/outputs/apk/debug/` and is debug-signed. Publi
 
 ## Family naming and compatibility
 
-Current display name across Android, webxdc and web is **intodo**. Android remains `com.vanipy.intodo`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `intodo-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.
+Current display name across Android, webxdc and web is **tindak**. Android remains `com.vanipy.intodo`. Existing storage keys, web paths, instance IDs and published download files are preserved. New downloads use `intodo-v<version>` with the previous filename as a byte-identical compatibility alias where needed. Existing bot accounts are not recreated or restarted by a source rename. Source changes are not a new signed release.
 
 ## Android 0.5.16 rename update
 
-Current source, future asset outputs and update checks use intodo only. The package, signer, paired feed and list data stay unchanged. Old compatibility asset names are no longer accepted. Release-page download names were cleaned separately without rebuilding historical signed binaries. The mini-app 0.4.9 uses a renamed local canvas-layout key, which may reset layout and zoom but not list items. Post-tap content rendering and physical Samsung runtime remain unverified. See `docs/releases/0.5.16.md`.
+Current source, future asset outputs and update checks use tindak only. The package, signer, paired feed and list data stay unchanged. Old compatibility asset names are no longer accepted. Release-page download names were cleaned separately without rebuilding historical signed binaries. The mini-app 0.4.9 uses a renamed local canvas-layout key, which may reset layout and zoom but not list items. Post-tap content rendering and physical Samsung runtime remain unverified. See `docs/releases/0.5.16.md`.

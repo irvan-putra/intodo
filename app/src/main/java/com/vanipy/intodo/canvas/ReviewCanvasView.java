@@ -31,8 +31,8 @@ import java.util.Map;
 
 /**
  * Native review-canvas view for intodo: a bounded, pannable/zoomable canvas of
- * review cards with a minimap - the Android port of the intodo page canvas
- * (web/src/App.tsx) and the intodo port (webxdc/js/canvas.js). Cards, world
+ * review cards with a minimap - the Android port of the tindak page canvas
+ * (web/src/App.tsx) and the tindak port (webxdc/js/canvas.js). Cards, world
  * size, gestures, zoom limits and on-device persistence semantics match; camera
  * math is shared verbatim through {@link CanvasMath}.
  *

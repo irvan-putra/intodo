@@ -12,7 +12,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Drop-in "Import bot backup" flow for BotActivity (intodo 0.4.5).
+ * Drop-in "Import bot backup" flow for BotActivity (tindak 0.4.5).
  *
  * Restores BOTH halves of the bot from one .dcmig bundle written by the
  * scratch app's export (button 5 there):
@@ -42,7 +42,7 @@ class BotImport(
             .setTitle("Import bot backup")
             .setMessage(
                 "Move the existing bot (its Delta Chat identity, chats and " +
-                "per-chat lists) into intodo from the .dcmig bundle exported by the " +
+                "per-chat lists) into tindak from the .dcmig bundle exported by the " +
                 "old app. You will also need the one-time transfer code " +
                 "shown there.\n\nThe bot service stays stopped during the " +
                 "import.")

@@ -230,7 +230,7 @@ public class MainActivity extends Activity {
 
     private void copyKey() {
         ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        cm.setPrimaryClip(ClipData.newPlainText("intodo public key", Prefs.publicKey(this)));
+        cm.setPrimaryClip(ClipData.newPlainText("tindak public key", Prefs.publicKey(this)));
         Toast.makeText(this, "Public key copied. Send it to your assistant's WhatsApp chat.", Toast.LENGTH_LONG).show();
     }
 

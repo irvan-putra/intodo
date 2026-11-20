@@ -13,7 +13,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Checks the public intodo repo's GitHub Releases for a strictly newer intodo build.
+ * Checks the public tindak repo's GitHub Releases for a strictly newer tindak build.
  * One unauthenticated api.github.com request per app open / manual sync; no background
  * polling. Trust rules:
  *  - only the irvan-putra/intodo repo is queried (never other repos' releases);

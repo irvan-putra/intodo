@@ -4,8 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Pure camera/layout math for the intodo review canvas. No Android imports, so it
- * runs in plain JVM unit tests (CanvasMathTest). Mirror of the intodo port
+ * Pure camera/layout math for the tindak review canvas. No Android imports, so it
+ * runs in plain JVM unit tests (CanvasMathTest). Mirror of the tindak port
  * (webxdc/js/canvas-math.js) - divergence between the two is a bug.
  *
  * Camera model: cam = (x, y, z) is the world point at the viewport center plus
@@ -210,7 +210,7 @@ public final class CanvasMath {
      * Validate/repair a saved layout. Never throws: a structurally broken record
      * returns null (caller starts fresh); per-field problems are repaired - unknown
      * card ids dropped, missing ids restored to defaults, zoom and camera position
-     * clamped. (The intodo React original did not clamp the loaded camera; both
+     * clamped. (The tindak React original did not clamp the loaded camera; both
      * native ports do - stored state is untrusted input.)
      */
     public static Saved sanitize(Cam cam, Map<String, Pos> rawPos) {

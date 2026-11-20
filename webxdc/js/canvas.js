@@ -1,11 +1,11 @@
-// canvas.js - intodo review canvas. Plain-DOM port of the intodo React canvas
+// canvas.js - tindak review canvas. Plain-DOM port of the tindak React canvas
 // (web/src/App.tsx): same world, cards, gestures, minimap and on-device
 // layout persistence, adapted to the webxdc dark theme. No dependencies;
 // camera math lives in js/canvas-math.js (shared with the Node test suite).
 //
 // Layout persistence is local to this device (localStorage); it is not sent
 // as webxdc updates and not synced between chat members - same honesty as the
-// intodo page: implemented, per-device, cleared with webview storage.
+// tindak page: implemented, per-device, cleared with webview storage.
 
 (function () {
   'use strict';
@@ -78,7 +78,7 @@
         { ul: [
           'Independent check of the reported property tests (7 Java + 9 JS, run by the builders).',
           'Any proof - none exists.',
-          'Real cross-client sync: v0.1 failed your DeltaChat / ArcaneChat test (Nov 12) - add, delete and done were dead because the page never loaded the webxdc API script. v0.2 fixed that load, and you confirmed real DeltaChat/ArcaneChat sync on-device Nov 12 (add, done, delete all synced). v0.2\'s remaining gap - vague chat notices - is fixed in v0.3 (current build v0.3.1 keeps conflict history collapsed inside an open pick-one sheet too); both pass a 24-check two-peer simulator test; the on-device retest is still pending. The v0.2 fix source is public in the repo intodo (commit 715c86b).',
+          'Real cross-client sync: v0.1 failed your DeltaChat / ArcaneChat test (Nov 12) - add, delete and done were dead because the page never loaded the webxdc API script. v0.2 fixed that load, and you confirmed real DeltaChat/ArcaneChat sync on-device Nov 12 (add, done, delete all synced). v0.2\'s remaining gap - vague chat notices - is fixed in v0.3 (current build v0.3.1 keeps conflict history collapsed inside an open pick-one sheet too); both pass a 24-check two-peer simulator test; the on-device retest is still pending. The v0.2 fix source is public in the repo tindak (commit 715c86b).',
         ] },
       ],
     },
@@ -86,7 +86,7 @@
       tag: 'Evidence - reported', title: 'Property testing',
       blocks: [
         { p: ['Random operation sequences; merge invariants must hold (convergence, no lost items).'] },
-        { muted: ['Reported run by the builders on the public merge source (repo intodo, commit 715c86b): 7 Java + 9 JS tests pass. Not independently verified here. Samples cases - weaker than a proof.'] },
+        { muted: ['Reported run by the builders on the public merge source (repo tindak, commit 715c86b): 7 Java + 9 JS tests pass. Not independently verified here. Samples cases - weaker than a proof.'] },
       ],
     },
     mutation: {

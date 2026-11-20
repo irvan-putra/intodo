@@ -11,7 +11,7 @@ type Saved = { cam: Cam; pos: Record<string, Pos>; reviews?: Record<string, Mark
 const WORLD = { w: 3200, h: 3200 };
 const ZMIN = 0.07, ZMAX = 2.5;
 // Zoom bands, C4-style progressive disclosure (c4model.com):
-//   z < SYS_Z    system context: people + the intodo system + external systems
+//   z < SYS_Z    system context: people + the tindak system + external systems
 //   z < GROUP_Z  container level: the repo's runnable units + code-evidenced
 //                relationships; tap a container to open its sections
 //   z < COMP_Z   component level: bounded component overview tiles (fixed
@@ -92,7 +92,7 @@ const DEFAULT_POS: Record<string, Pos> = {
 
 // C4 model, grounded in the public repo at the pinned snapshot (see
 // sections.ts COMMIT; each relationship names its evidence file). Runnable
-// containers: intodo, intodo, intodo and the feed encryption CLI. Tests
+// containers: tindak, tindak, tindak and the feed encryption CLI. Tests
 // attach to the containers they verify; build/CI and repo docs stay one
 // honestly-labeled supporting group; the developer and the draft GitHub
 // Actions workflows appear as people/external systems, not runtime boxes.
@@ -106,11 +106,11 @@ const DEFAULT_POS: Record<string, Pos> = {
 // size at every zoom level, and edges route around unrelated boxes.
 type C4Node = { id: string; label: string; sub: string; kind: 'container' | 'support' | 'external' | 'person' | 'system'; members?: string[]; attached?: string[]; frac: { fx: number; fy: number } };
 const C4_CONTAINERS: C4Node[] = [
-    { id: 'c-app', label: 'intodo Android - Android app', sub: 'Java/Kotlin + Chaquopy', kind: 'container', frac: { fx: 0.5, fy: 0.15 },
+    { id: 'c-app', label: 'tindak Android - Android app', sub: 'Java/Kotlin + Chaquopy', kind: 'container', frac: { fx: 0.5, fy: 0.15 },
       members: ['list-ui', 'feed-sync', 'self-update', 'native-canvas', 'merge-core', 'bot-app', 'bot-runtime', 'bot-delivery', 'witness'],
       attached: ['tests-android', 'tests-bot'] },
-    { id: 'c-xdc', label: 'intodo webxdc - webxdc app', sub: 'JavaScript in DeltaChat', kind: 'container', frac: { fx: 0.22, fy: 0.44 }, members: ['xdc-app', 'xdc-canvas'], attached: ['tests-xdc'] },
-    { id: 'c-web', label: 'intodo web - review page', sub: 'static GitHub Pages site', kind: 'container', frac: { fx: 0.72, fy: 0.48 },
+    { id: 'c-xdc', label: 'tindak webxdc - webxdc app', sub: 'JavaScript in DeltaChat', kind: 'container', frac: { fx: 0.22, fy: 0.44 }, members: ['xdc-app', 'xdc-canvas'], attached: ['tests-xdc'] },
+    { id: 'c-web', label: 'tindak web - review page', sub: 'static GitHub Pages site', kind: 'container', frac: { fx: 0.72, fy: 0.48 },
       members: ['this-page', 'review-src'], attached: ['howto', 'rule', 'permanence', 'progress'] },
     // The feed encryption tool is a runnable container in C4 terms (a CLI
     // application): it reads feed JSON on stdin and prints the IFW1 payload.
@@ -206,7 +206,7 @@ const C4_RELS: C4Rel[] = [
     { a: 'c-app', b: 'x-github', label: 'update check + APK download' },                // app/.../UpdateCheck.java
     { a: 'c-app', b: 'x-dc', label: 'bot bridge + webxdc (RPC)' },                      // app/src/main/python/bot.py, bot_runtime.py, delivery_bot.py
     { a: 'c-xdc', b: 'x-dc', label: 'webxdc updates' },                                 // webxdc/js/app.js
-    { a: 'c-web', b: 'x-github', label: 'links at pinned commit' },                     // intodo web/src/sections.ts
+    { a: 'c-web', b: 'x-github', label: 'links at pinned commit' },                     // tindak web/src/sections.ts
     { a: 'c-app', b: 'c-xdc', label: 'same merge algorithm, no runtime link', dashed: true, plain: true }, // app/.../merge/MergeDoc.java vs webxdc/js/mergedoc.js
     { a: 'p-dev', b: 'c-app', label: 'builds + tests (Gradle)' },              // gradlew, app/build.gradle, app/src/test
     { a: 'p-dev', b: 'c-feedtool', label: 'feed JSON in, IFW1 payload out' },  // tools/encrypt_feed.py (stdin -> stdout, print-only)
@@ -215,7 +215,7 @@ const SYS_NODES: C4Node[] = [
     { id: 'p-owner', label: 'Owner', sub: 'personal user', kind: 'person', frac: { fx: 0.22, fy: 0.2 } },
     { id: 'p-members', label: 'Group members', sub: 'DeltaChat chat', kind: 'person', frac: { fx: 0.78, fy: 0.2 } },
     { id: 'p-dev', label: 'Developer', sub: 'builds + publishes', kind: 'person', frac: { fx: 0.5, fy: 0.1 } },
-    { id: 's-intodo', label: 'intodo', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
+    { id: 's-intodo', label: 'tindak', sub: 'reminders + lists', kind: 'system', frac: { fx: 0.5, fy: 0.44 } },
     { id: 'x-gha', label: 'GitHub Actions', sub: 'build + deploy on push', kind: 'external', frac: { fx: 0.84, fy: 0.44 } },
     { id: 'x-files', label: 'Instinct Files', sub: 'feed page', kind: 'external', frac: { fx: 0.18, fy: 0.7 } },
     { id: 'x-github', label: 'GitHub', sub: 'releases + Pages', kind: 'external', frac: { fx: 0.82, fy: 0.7 } },
@@ -243,10 +243,10 @@ const SYS_RELS: C4Rel[] = [
 // step names its repo evidence. Public repo content only.
 // Scenario 1: a shared-list edit syncs to the group (webxdc ops path).
 const FLOW_NODES: C4Node[] = [
-    { id: 'f-xdc', label: 'intodo webxdc - webxdc app', sub: "a member's shared list", kind: 'container', frac: { fx: 0.14, fy: 0.28 } },
+    { id: 'f-xdc', label: 'tindak webxdc - webxdc app', sub: "a member's shared list", kind: 'container', frac: { fx: 0.14, fy: 0.28 } },
     { id: 'f-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.16 } },
-    { id: 'f-app', label: 'intodo Android bot host', sub: 'Android app, python bot', kind: 'container', frac: { fx: 0.86, fy: 0.28 } },
-    { id: 'f-xdc2', label: "Other members' intodo webxdc apps", sub: 'their shared lists', kind: 'container', frac: { fx: 0.5, fy: 0.74 } },
+    { id: 'f-app', label: 'tindak Android bot host', sub: 'Android app, python bot', kind: 'container', frac: { fx: 0.86, fy: 0.28 } },
+    { id: 'f-xdc2', label: "Other members' tindak webxdc apps", sub: 'their shared lists', kind: 'container', frac: { fx: 0.5, fy: 0.74 } },
 ];
 const FLOW_STEPS: C4Rel[] = [
     { a: 'f-xdc', b: 'f-dc', label: 'member edit sent as one webxdc status update {ops} · webxdc/js/app.js sendOps' },
@@ -260,23 +260,23 @@ const FEED_NODES: C4Node[] = [
     { id: 'g-dev', label: 'Developer', sub: 'build + publish', kind: 'person', frac: { fx: 0.12, fy: 0.5 } },
     { id: 'g-tool', label: 'feed encryption tool', sub: 'Python CLI', kind: 'container', frac: { fx: 0.4, fy: 0.22 } },
     { id: 'g-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.68, fy: 0.22 } },
-    { id: 'g-app', label: 'intodo Android', sub: 'Android app', kind: 'container', frac: { fx: 0.88, fy: 0.6 } },
+    { id: 'g-app', label: 'tindak Android', sub: 'Android app', kind: 'container', frac: { fx: 0.88, fy: 0.6 } },
 ];
 const FEED_STEPS: C4Rel[] = [
     { a: 'g-dev', b: 'g-tool', label: 'feed JSON in, encrypted payload printed · tools/encrypt_feed.py (print-only)' },
     { a: 'g-dev', b: 'g-files', label: 'payload published to the feed page by hand' },
-    { a: 'g-files', b: 'g-app', label: 'intodo Android GETs the feed when paired; the encrypted feed is returned and decrypted on device with the paired key · FeedSyncWorker.java + SyncEngine.java' },
+    { a: 'g-files', b: 'g-app', label: 'tindak Android GETs the feed when paired; the encrypted feed is returned and decrypted on device with the paired key · FeedSyncWorker.java + SyncEngine.java' },
 ];
 const DEPLOY_NODES: C4Node[] = [
-    { id: 'd-phone', label: 'Android phone', sub: 'intodo Android · intodo webxdc in DeltaChat', kind: 'container', frac: { fx: 0.5, fy: 0.14 } },
+    { id: 'd-phone', label: 'Android phone', sub: 'tindak Android · tindak webxdc in DeltaChat', kind: 'container', frac: { fx: 0.5, fy: 0.14 } },
     { id: 'd-devmachine', label: 'Developer machine', sub: 'Gradle build · feed CLI', kind: 'container', frac: { fx: 0.22, fy: 0.5 } },
-    { id: 'd-github', label: 'GitHub', sub: 'Pages: intodo web · Releases: APK', kind: 'external', frac: { fx: 0.76, fy: 0.3 } },
+    { id: 'd-github', label: 'GitHub', sub: 'Pages: tindak web · Releases: APK', kind: 'external', frac: { fx: 0.76, fy: 0.3 } },
     { id: 'd-files', label: 'Instinct Files', sub: 'encrypted feed page', kind: 'external', frac: { fx: 0.76, fy: 0.68 } },
     { id: 'd-dc', label: 'DeltaChat network', sub: 'messages + webxdc', kind: 'external', frac: { fx: 0.5, fy: 0.84 } },
 ];
 const DEPLOY_RELS: C4Rel[] = [
     { a: 'd-phone', b: 'd-dc', label: 'messages + webxdc (RPC)' },                   // app/src/main/python/bot.py
-    { a: 'd-phone', b: 'd-github', label: 'APK updates + review page (HTTPS)' },     // app/.../UpdateCheck.java, intodo web/
+    { a: 'd-phone', b: 'd-github', label: 'APK updates + review page (HTTPS)' },     // app/.../UpdateCheck.java, tindak web/
     { a: 'd-phone', b: 'd-files', label: 'fetches encrypted feed (HTTPS)' },         // app/.../SyncEngine.java
     { a: 'd-devmachine', b: 'd-github', label: 'git push + release upload' },        // gradlew, GitHub Releases
     { a: 'd-devmachine', b: 'd-files', label: 'publishes feed page (manual)' },      // tools/encrypt_feed.py output handoff
@@ -1656,7 +1656,7 @@ const compTileSize = (gid: string, n: number) => {
                     })}
                 </div>
 
-                {/* system context level: people + the intodo system + external
+                {/* system context level: people + the tindak system + external
                     systems, furthest zoomed out. Tapping the system drops
                     into the container level. */}
                 <svg className="rc-sysedges" width={WORLD.w} height={WORLD.h}>
@@ -1923,7 +1923,7 @@ const compTileSize = (gid: string, n: number) => {
             {(() => {
                 const cap = view === 'flow' ? 'Understand - a shared list edit, step by step' :
                     view === 'flowfeed' ? 'Understand - the app list feed, step by step' :
-                    view === 'deploy' ? 'Understand - where intodo runs' :
+                    view === 'deploy' ? 'Understand - where tindak runs' :
                     band === 'sys' ? 'Understand - the system context' :
                     band === 'grp' ? 'Understand - the containers' :
                     focusedComp ? `Component + code layer: ${COMP_NAME[focusedComp] ?? focusedComp} - tap elsewhere to close` :

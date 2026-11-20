@@ -32,7 +32,7 @@ jobs:
     # patuh pre-publish source gate: package, version format, label,
     # permission/license drift, family icon geometry. Runs on the tree being
     # released (pre-stamp state, which must itself stay clean).
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@4e064163e62a3cf677e11de016ffbb6f4041816b
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@a37a4724b0cc314e96c0e3060cb06555dcf0db7f
     with:
       app: intodo
       published: false
@@ -186,7 +186,7 @@ jobs:
     # the stamped candidate version) before anything is published. This is the
     # preventive boundary.
     needs: build
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@4e064163e62a3cf677e11de016ffbb6f4041816b
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@a37a4724b0cc314e96c0e3060cb06555dcf0db7f
     with:
       app: intodo
       published: false
@@ -213,14 +213,14 @@ jobs:
           set -euo pipefail
           gh release create "v$IN_NAME" "dist/intodo-v$IN_NAME.apk" dist/SHA256SUMS \
             --target "$STAMP_SHA" \
-            --title "intodo v$IN_NAME" \
+            --title "tindak v$IN_NAME" \
             --notes-file "docs/releases/$IN_NAME.md"
 
   verify:
     # post-publish: verifies the live release (tag, APK name, checksum,
     # gallery card, downloaded sha256, packaged icon). Detects, cannot undo.
     needs: publish
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@4e064163e62a3cf677e11de016ffbb6f4041816b
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@a37a4724b0cc314e96c0e3060cb06555dcf0db7f
     with:
       app: intodo
       published: true

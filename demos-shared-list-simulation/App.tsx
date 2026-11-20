@@ -92,7 +92,7 @@ function PhoneView({ phone, bus, color }: { phone: Phone; bus: Bus; color: strin
     <div>
       <h2 style={{ fontSize: 14, color }}>{phone.addr}</h2>
       <div data-xdev={phone.addr.includes(" A ") ? "A" : "B"} style={css.phone}>
-        <div style={css.head}>intodo</div>
+        <div style={css.head}>tindak</div>
         <div style={css.sub}>local-first prototype - merges offline edits, you pick what survives a conflict</div>
         {ids.length === 0 && <div style={{ color: '#98A2B3', fontSize: 13, padding: 16, textAlign: 'center' }}>Nothing here yet.</div>}
         {ids.map((id: string) => {
@@ -179,7 +179,7 @@ export default function App() {
   }, []);
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', background: '#0B1220', color: '#fff', minHeight: '100vh', padding: 16 }}>
-      <h1 style={{ fontSize: 20 }}>intodo - webxdc shared list (prototype demo)</h1>
+      <h1 style={{ fontSize: 20 }}>tindak - webxdc shared list (prototype demo)</h1>
       <p style={{ color: '#98A2B3', fontSize: 13, maxWidth: 720 }}>
         Two SIMULATED phones in one page so the sync is visible without DeltaChat: what you do on
         Phone A appears on Phone B through the same merge engine and update flow the real mini app
@@ -193,13 +193,13 @@ export default function App() {
       </p>
       <p style={{ fontSize: 13 }}>
         <a href={xdcZip} download="intodo-v0.4.zip" style={{ color: '#7A5AF8' }}>
-          Download intodo v0.4 (intodo-v0.4.zip, contains intodo-v0.4.xdc)
+          Download tindak v0.4 (intodo-v0.4.zip, contains intodo-v0.4.xdc)
         </a>
         <span style={{ color: '#98A2B3', fontSize: 12 }}> Archived v0.4 package, retained for historical reproduction, not the current release. Each .xdc message is a separate app instance; this download does not upgrade an existing list.</span>
       </p>
       <p style={{ fontSize: 13 }}>
         <a href="https://github.com/irvan-putra/intodo/commit/dcc8257cb1d43b45cb4ec1fd7b784bb5b8558b37" target="_blank" rel="noreferrer" style={{ color: '#7A5AF8' }}>
-          Historical source: Intodo at dcc8257
+          Historical source: tindak at dcc8257
         </a>
         <span style={{ color: '#98A2B3', fontSize: 12 }}>
           {' '}- public prototype source; this page ships the built v0.4 package.

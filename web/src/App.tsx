@@ -451,9 +451,9 @@ function Canvas() {
 export function App() {
     return <FileCard>
         <Header
-            title="Review intodo in sections"
+            title="Review tindak in sections"
             fact={`Working review surface - repo ${COMMIT_SHORT}`}
-            intro="The whole intodo repository, split into 18 pieces small enough to review one sitting at a time. Each card names its files, pins the exact commit, says what nobody has checked yet, and remembers your marks in this browser for your signed-in account."
+            intro="The whole tindak repository, split into 18 pieces small enough to review one sitting at a time. Each card names its files, pins the exact commit, says what nobody has checked yet, and remembers your marks in this browser for your signed-in account."
         />
         <Photos label="The review canvas" title="Review canvas concept" items={[{ src: hero, alt: 'Illustration of a phone showing a change card with review, test and proof markers' }]} />
         <Caption>Illustrative concept art, not a screenshot of a working feature.</Caption>

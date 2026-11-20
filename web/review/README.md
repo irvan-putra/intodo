@@ -9,10 +9,10 @@ Full-screen, FreeForm/Miro-style: the canvas fills the whole window - no
 page framing, no square viewport, and no navigation controls or minimap.
 Drag the background or a fixed card to pan; pinch to zoom. The zoomed-out
 levels follow the C4 model (c4model.com): furthest out is the system context
-(people - including the owner in the developer role - the intodo system, and
+(people - including the owner in the developer role - the tindak system, and
 external systems: Instinct Files, GitHub, GitHub Actions draft workflows, and
 the DeltaChat network); one level in is the container view - the repo's
-runnable units (intodo, intodo, intodo, and the feed encryption CLI), with
+runnable units (tindak, tindak, tindak, and the feed encryption CLI), with
 test suites attached to the containers they verify and build/CI plus repo
 docs kept as one honestly-labeled supporting group. Relationships on that
 level are labeled and code-evidenced at the pinned commit: solid lines are

@@ -6,7 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Card content for the review canvas, verbatim from the intodo page source
+ * Card content for the review canvas, verbatim from the tindak page source
  * (web/src/App.tsx). Pure data, no Android imports.
  *
  * A card body is a list of blocks: PARA (paragraph, optionally muted), LIST
