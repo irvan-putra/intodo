@@ -106,6 +106,7 @@ public class Prefs {
     public static void resetForRepair(Context c) {
         android.content.SharedPreferences.Editor e = get(c).edit();
         for (String key : FEED_KEYS) e.remove(key).remove("demo_" + key).remove("legacy_" + key);
+        if (builtInDemo(c)) e.putString("demo_feed", DemoFeed.BUILT_IN).putString("demo_status", "built-in demo, offline");
         e.putLong("mode_epoch", modeEpoch(c) + 1).commit();
         saveStatus(c, "pairing pending: send the new public key to your assistant's WhatsApp chat");
     }
